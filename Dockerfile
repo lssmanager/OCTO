@@ -21,10 +21,16 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /app
 
 # ─────────────────────────────────────────────
-# Stage 1: pruner — sub-repo mínimo para @octo/api
+# Stage 1: pruner — genera lockfile y sub-repo mínimo para @octo/api
+#
+# IMPORTANTE: pnpm-lock.yaml no está commiteado en el repo.
+# Ejecutamos `pnpm install --no-frozen-lockfile` aquí para generarlo
+# antes de llamar a `turbo prune`, que requiere el lockfile para
+# poder resolver el workspace graph.
 # ─────────────────────────────────────────────
 FROM base AS pruner
 COPY . .
+RUN pnpm install --no-frozen-lockfile
 RUN pnpm dlx turbo@2.3.0 prune @octo/api --docker
 
 # ─────────────────────────────────────────────
@@ -37,7 +43,7 @@ ENV NODE_ENV=development
 
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 COPY --from=pruner /app/out/full/ .
 
@@ -55,7 +61,7 @@ FROM node:22.12.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
 
 RUN addgroup --system --gid 1001 octo \
-    && adduser --system --uid 1001 --ingroup octo octo
+ && adduser --system --uid 1001 --ingroup octo octo
 
 WORKDIR /app
 
