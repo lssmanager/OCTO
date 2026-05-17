@@ -1,29 +1,30 @@
 // OCTO Control Plane — NestJS API
-//
-// Responsibilities (Architecture Principle #1):
-//   Orchestration, scheduling, state management, approvals, policies,
-//   graph persistence, execution coordination, governance, topology management.
-//
-// FORBIDDEN HERE:
-//   Runtime AI execution, tool execution, LLM interaction, reasoning, planning.
-
 import { NestFactory } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { loadApiConfig } from '@octo/config';
+import { bootstrapTelemetry, createLogger } from '@octo/observability';
 import { AppModule } from './app.module';
 
-// Validate env BEFORE NestJS bootstrap.
-// Process exits immediately with descriptive errors if any variable is invalid.
-// This ensures Coolify healthchecks never see a half-booted service.
 const config = loadApiConfig();
+
+bootstrapTelemetry({
+  serviceName: 'api',
+  serviceVersion: config.BUILD_VERSION,
+  otlpEndpoint: process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'http://otel-collector:4318/v1/traces',
+  enablePrometheus: true,
+  prometheusPort: 9464,
+});
+
+const logger = createLogger({
+  service: 'api',
+  version: config.BUILD_VERSION,
+});
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({
-      logger: config.NODE_ENV !== 'production',
-    }),
+    new FastifyAdapter({ logger: false }),
   );
 
   app.enableCors({
@@ -35,13 +36,17 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(config.PORT, '0.0.0.0');
 
-  console.log(
-    `\n\u2705 OCTO Control Plane started`,
-    `\n   Port:    ${config.PORT}`,
-    `\n   Env:     ${config.NODE_ENV}`,
-    `\n   Version: ${config.BUILD_VERSION} (${config.BUILD_PHASE})`,
-    `\n   Commit:  ${config.BUILD_COMMIT}\n`,
-  );
+  logger.info({
+    event: 'api_started',
+    trace_id: 'bootstrap',
+    run_id: 'bootstrap',
+    msg: 'OCTO Control Plane started',
+    port: config.PORT,
+    env: config.NODE_ENV,
+    version: config.BUILD_VERSION,
+    phase: config.BUILD_PHASE,
+    commit: config.BUILD_COMMIT,
+  });
 }
 
 void bootstrap();

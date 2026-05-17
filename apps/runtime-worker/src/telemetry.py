@@ -7,7 +7,7 @@ import logging
 
 import structlog
 from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -15,23 +15,18 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from .config import Settings
 
+AGENT_SPAN_ATTRS = {
+    "agent.id": "agent_id",
+    "agent.role": "agent_role",
+    "llm.model": "model",
+    "llm.prompt_tokens": "prompt_tokens",
+    "llm.completion_tokens": "completion_tokens",
+    "governance.token_budget": "token_budget",
+    "governance.iterations": "iterations",
+}
 
-def configure_telemetry(settings: Settings) -> None:
-    """Initialise OTEL tracing + structlog structured logging."""
-    # ── Tracing ───────────────────────────────────────────────────────────────
-    if settings.otel_enabled:
-        resource = Resource.create(
-            {
-                "service.name": settings.otel_service_name,
-                "service.version": settings.otel_service_version,
-            }
-        )
-        exporter = OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint)
-        provider = TracerProvider(resource=resource)
-        provider.add_span_processor(BatchSpanProcessor(exporter))
-        trace.set_tracer_provider(provider)
 
-    # ── Structured logging (structlog) ────────────────────────────────────────
+def setup_logging(settings: Settings) -> None:
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
@@ -40,10 +35,7 @@ def configure_telemetry(settings: Settings) -> None:
         structlog.processors.StackInfoRenderer(),
     ]
 
-    if settings.log_format == "json":
-        renderer: structlog.types.Processor = structlog.processors.JSONRenderer()
-    else:
-        renderer = structlog.dev.ConsoleRenderer(colors=True)
+    renderer: structlog.types.Processor = structlog.processors.JSONRenderer()
 
     structlog.configure(
         processors=[
@@ -70,6 +62,28 @@ def configure_telemetry(settings: Settings) -> None:
     root_logger.setLevel(settings.log_level.upper())
 
 
+def setup_tracing(settings: Settings) -> None:
+    if not settings.otel_enabled:
+        return
+
+    resource = Resource.create(
+        {
+            "service.name": settings.otel_service_name,
+            "service.version": settings.otel_service_version,
+        }
+    )
+    exporter = OTLPSpanExporter(
+        endpoint=f"{settings.otel_exporter_otlp_endpoint}/v1/traces"
+    )
+    provider = TracerProvider(resource=resource)
+    provider.add_span_processor(BatchSpanProcessor(exporter))
+    trace.set_tracer_provider(provider)
+
+
+def configure_telemetry(settings: Settings) -> None:
+    setup_logging(settings)
+    setup_tracing(settings)
+
+
 def instrument_app(app: object) -> None:
-    """Apply FastAPI auto-instrumentation (call after app is created)."""
     FastAPIInstrumentor.instrument_app(app)  # type: ignore[arg-type]

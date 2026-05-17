@@ -12,9 +12,11 @@
   "dependencies": {
     "@opentelemetry/api": "^1.8.0",
     "@opentelemetry/sdk-node": "^0.50.0",
-    "@opentelemetry/exporter-trace-otlp-grpc": "^0.50.0",
     "@opentelemetry/resources": "^1.24.0",
-    "@opentelemetry/semantic-conventions": "^1.24.0"
+    "@opentelemetry/semantic-conventions": "^1.24.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.50.0",
+    "@opentelemetry/exporter-prometheus": "^0.50.0",
+    "pino": "^9.3.2"
   },
   "devDependencies": {
     "@octo/config": "workspace:*",

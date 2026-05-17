@@ -21,10 +21,7 @@ from .config import Settings
 from .routers import execute, health, models
 from .telemetry import configure_telemetry, instrument_app
 
-# Instantiate settings at module level — pydantic-settings reads env/file here
 settings = Settings()
-
-# Bootstrap telemetry BEFORE any other I/O
 configure_telemetry(settings)
 
 log = structlog.get_logger(__name__)
@@ -32,16 +29,22 @@ log = structlog.get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
-    """Application lifespan: startup → yield → shutdown."""
     log.info(
         "octo_runtime_worker.startup",
+        service=settings.otel_service_name,
+        trace_id="bootstrap",
+        run_id="bootstrap",
         host=settings.host,
         port=settings.port,
-        service=settings.otel_service_name,
         version=settings.otel_service_version,
     )
     yield
-    log.info("octo_runtime_worker.shutdown")
+    log.info(
+        "octo_runtime_worker.shutdown",
+        service=settings.otel_service_name,
+        trace_id="bootstrap",
+        run_id="bootstrap",
+    )
 
 
 app = FastAPI(
@@ -52,12 +55,10 @@ app = FastAPI(
     ),
     version=settings.otel_service_version,
     lifespan=lifespan,
-    # Disable docs in production via env — override with FASTAPI_DOCS_URL
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# ── CORS: only allow the Control Plane origin ─────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.api_url],
@@ -65,10 +66,8 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
 
-# ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(health.router)
 app.include_router(execute.router)
 app.include_router(models.router)
 
-# ── OTEL FastAPI auto-instrumentation ────────────────────────────────────────
 instrument_app(app)
