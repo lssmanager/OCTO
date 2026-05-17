@@ -1,27 +1,47 @@
 // OCTO Control Plane — NestJS API
-// This process handles: orchestration, scheduling, state management, approvals,
-// policies, graph persistence, execution coordination, governance, topology.
-// FORBIDDEN here: runtime AI execution, tool execution, LLM interaction, reasoning.
+//
+// Responsibilities (Architecture Principle #1):
+//   Orchestration, scheduling, state management, approvals, policies,
+//   graph persistence, execution coordination, governance, topology management.
+//
+// FORBIDDEN HERE:
+//   Runtime AI execution, tool execution, LLM interaction, reasoning, planning.
 
 import { NestFactory } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
+import { loadApiConfig } from '@octo/config';
 import { AppModule } from './app.module';
+
+// Validate env BEFORE NestJS bootstrap.
+// Process exits immediately with descriptive errors if any variable is invalid.
+// This ensures Coolify healthchecks never see a half-booted service.
+const config = loadApiConfig();
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: true })
+    new FastifyAdapter({
+      logger: config.NODE_ENV !== 'production',
+    }),
   );
 
   app.enableCors({
-    origin: process.env['CORS_ORIGINS']?.split(',') ?? ['http://localhost:3000'],
+    origin: config.CORS_ORIGINS.split(',').map((o) => o.trim()),
     credentials: true,
   });
 
-  const port = parseInt(process.env['API_PORT'] ?? '3001', 10);
-  await app.listen(port, '0.0.0.0');
-  console.log(`OCTO Control Plane running on port ${port}`);
+  app.setGlobalPrefix('api');
+
+  await app.listen(config.PORT, '0.0.0.0');
+
+  console.log(
+    `\n\u2705 OCTO Control Plane started`,
+    `\n   Port:    ${config.PORT}`,
+    `\n   Env:     ${config.NODE_ENV}`,
+    `\n   Version: ${config.BUILD_VERSION} (${config.BUILD_PHASE})`,
+    `\n   Commit:  ${config.BUILD_COMMIT}\n`,
+  );
 }
 
 void bootstrap();
