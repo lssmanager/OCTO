@@ -1,0 +1,65 @@
+# .dockerignore — OCTO monorepo
+# Excluye archivos que NO deben entrar al build context de Docker
+# Crítico: .env y secretos nunca en imagen
+
+# Dependencias instaladas (se reinstalan en el builder)
+node_modules
+**/node_modules
+.pnpm-store
+
+# Secrets y configuración de entorno (NUNCA en imagen)
+.env
+.env.*
+!.env.example
+
+# Control de versiones
+.git
+.gitignore
+.gitattributes
+
+# Artefactos de build (se generan en el builder stage)
+dist
+build
+.next
+!.next/standalone
+!.next/static
+
+# Coverage y tests
+coverage
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Docs (no necesarios en imagen)
+docs
+*.md
+!README.md
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.mypy_cache
+venv
+.venv
+
+# Herramientas de desarrollo
+.turbo
+.eslintcache
+.cache
+tmp
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

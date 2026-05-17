@@ -1,0 +1,126 @@
+# docker-compose.yml
+# Desarrollo local únicamente — Producción usa Coolify (#13)
+# Levanta: api + web + runtime-worker + postgres + redis
+# ADR F0-014, F0-004
+
+services:
+
+  # ──────────────────────────────────────
+  # Control Plane — NestJS API
+  # ──────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        BUILD_VERSION: "0.0.1-f0-local"
+        BUILD_COMMIT: "local"
+        BUILD_PHASE: "F0"
+    env_file: .env
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # ──────────────────────────────────────
+  # Frontend — Next.js
+  # ──────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        BUILD_VERSION: "0.0.1-f0-local"
+        BUILD_COMMIT: "local"
+        BUILD_PHASE: "F0"
+    env_file: .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ──────────────────────────────────────
+  # Execution Plane — Python Runtime Worker
+  # Isolation: runtime failures no afectan el control plane
+  # ──────────────────────────────────────
+  runtime-worker:
+    build:
+      context: apps/runtime-worker
+      dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: "0.0.1-f0-local"
+        BUILD_COMMIT: "local"
+        BUILD_PHASE: "F0"
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ──────────────────────────────────────
+  # Infrastructure — PostgreSQL
+  # Sistema de registro (Principio Arquitectónico #12)
+  # ──────────────────────────────────────
+  postgres:
+    image: postgres:16.6-alpine3.21
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-octo}
+      POSTGRES_USER: ${POSTGRES_USER:-octo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-octo_dev_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-octo} -d ${POSTGRES_DB:-octo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ──────────────────────────────────────
+  # Infrastructure — Redis
+  # Solo para queue (BullMQ), cache y coordinación transient
+  # NUNCA como sistema de registro (Principio Arquitectónico #12)
+  # ──────────────────────────────────────
+  redis:
+    image: redis:7.4.2-alpine3.21
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
