@@ -1,15 +1,22 @@
-/**
- * @octo/queue — BullMQ queue primitives
- * Full implementation: see issue #7 (F0-006)
- */
-export const QUEUE_PACKAGE_VERSION = '0.0.1' as const;
+// @octo/queue — BullMQ queue primitives
+//
+// Design constraints (OCTO Architecture Principle #1):
+// - NO dependency on @nestjs/* — usable from any service (control plane, workers, scripts)
+// - NO dependency on @octo/database — control plane handles persistence
+// - Producers live in control plane (NestJS API)
+// - Consumers (Workers) live in runtime-worker (Python via bullmq-compatible protocol) or NestJS
+//
+// Redis is used ONLY for: BullMQ queues, transient locks, rate limiting, short-lived cache.
+// Redis is NOT for: execution persistence, memory records, sessions, event sourcing.
 
-export type QueueName = string;
-
-export interface QueueOptions {
-  readonly name: QueueName;
-  readonly connection: {
-    readonly host: string;
-    readonly port: number;
-  };
-}
+export { QUEUE_NAMES, type QueueName } from './queue-names';
+export { createQueue, type QueueConfig } from './create-queue';
+export { createWorker, type WorkerConfig } from './create-worker';
+export { createRedisConnection } from './connection';
+export type {
+  HealthJobData,
+  ExecutionJobData,
+  DelegationJobData,
+  ToolJobData,
+  MemoryJobData,
+} from './types';
