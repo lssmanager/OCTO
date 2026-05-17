@@ -1,0 +1,24 @@
+{
+  "name": "@octo/channel-telegram-worker",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs --dts",
+    "dev": "tsup src/index.ts --format cjs --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@octo/contracts": "workspace:*",
+    "@octo/queue": "workspace:*",
+    "@octo/observability": "workspace:*"
+  },
+  "devDependencies": {
+    "@octo/config": "workspace:*",
+    "@types/node": "^20.0.0",
+    "rimraf": "^5.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
+  }
+}
