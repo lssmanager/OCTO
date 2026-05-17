@@ -167,7 +167,7 @@ export interface ITemplateSyncConfig {
   repoUrl: string;
   /** Branch to sync from */
   branch: string;
-  /** Glob pattern for template files (e.g. 'agents/**/*.md') */
+  /** Glob pattern for template files (e.g. 'agents/ROLE/file.md') */
   filePattern: string;
   /** Cron expression for automatic sync (null = manual only) */
   cronExpression?: string | null;
