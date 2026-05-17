@@ -1,59 +1,64 @@
-"""Models router — proxy to LiteLLM /models endpoint.
+"""Models router — lista los modelos LLM disponibles via LiteLLM.
 
-Exposes the list of available LLM models registered in the LiteLLM proxy
-to the Control Plane. The Control Plane uses this to populate model
-selectors in the UI and validate LLMConfig.primary at agent creation time.
+F0: lista estática de modelos conocidos.
+F2: consulta dinámica al LiteLLM proxy /models endpoint.
 """
+from __future__ import annotations
+
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
-import httpx
-
-from ..config import Settings
-from ..schemas import ModelInfo
+from ..schemas.models import ModelInfo
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/models", tags=["models"])
-_settings = Settings()
+
+# F0: lista estática. F2: GET {litellm_url}/models
+_F0_MODELS: list[ModelInfo] = [
+    ModelInfo(
+        id="gpt-4o-mini",
+        provider="openai",
+        context_window=128_000,
+        supports_function_calling=True,
+        supports_streaming=True,
+    ),
+    ModelInfo(
+        id="gpt-4o",
+        provider="openai",
+        context_window=128_000,
+        supports_function_calling=True,
+        supports_streaming=True,
+    ),
+    ModelInfo(
+        id="anthropic/claude-3-5-haiku-20241022",
+        provider="anthropic",
+        context_window=200_000,
+        supports_function_calling=True,
+        supports_streaming=True,
+    ),
+    ModelInfo(
+        id="anthropic/claude-3-5-sonnet-20241022",
+        provider="anthropic",
+        context_window=200_000,
+        supports_function_calling=True,
+        supports_streaming=True,
+    ),
+    ModelInfo(
+        id="groq/llama-3.3-70b-versatile",
+        provider="groq",
+        context_window=128_000,
+        supports_function_calling=True,
+        supports_streaming=True,
+    ),
+]
 
 
 @router.get(
     "/",
     response_model=list[ModelInfo],
     summary="List available LLM models",
-    description="Proxies to the LiteLLM /models endpoint and returns typed model info.",
+    description="F0: lista estática. F2: dinámica via LiteLLM proxy.",
 )
 async def list_models() -> list[ModelInfo]:
-    """Return all models available through the LiteLLM proxy."""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(
-                f"{_settings.litellm_url}/models",
-                headers={"Authorization": f"Bearer {_settings.litellm_api_key}"},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-    except httpx.HTTPError as exc:
-        log.warning("models.litellm_unavailable", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"LiteLLM proxy unreachable: {exc}",
-        ) from exc
-
-    models: list[ModelInfo] = []
-    for item in data.get("data", []):
-        try:
-            models.append(
-                ModelInfo(
-                    id=item["id"],
-                    provider=item.get("owned_by", "unknown"),
-                    context_window=item.get("context_window"),
-                    supports_function_calling=item.get("supports_function_calling", False),
-                    supports_streaming=item.get("supports_streaming", True),
-                )
-            )
-        except Exception as exc:  # noqa: BLE001
-            log.warning("models.parse_error", item=item, error=str(exc))
-
-    log.info("models.listed", count=len(models))
-    return models
+    log.info("models.list", count=len(_F0_MODELS))
+    return _F0_MODELS

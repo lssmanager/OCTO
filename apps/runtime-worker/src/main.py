@@ -6,7 +6,7 @@ Architectural boundary (F0-002):
 
   ZERO imports from NestJS / Node / TypeScript land.
   Communication with the Control Plane is exclusively via:
-    - HTTP REST (inbound jobs from API)
+    - HTTP REST (inbound jobs from API) — prefix: /api/v1
     - BullMQ via Redis (async queue jobs)
     - WebSocket (streaming responses, future F2)
 """
@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
         host=settings.host,
         port=settings.port,
         version=settings.otel_service_version,
+        phase=settings.build_phase,
     )
     yield
     log.info(
@@ -66,8 +67,13 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
 
+# /health, /health/live, /health/ready, /health/version
 app.include_router(health.router)
-app.include_router(execute.router)
+
+# /api/v1/execute  — execution plane HTTP contract (F0-002)
+app.include_router(execute.router, prefix="/api/v1")
+
+# /models — LiteLLM model listing
 app.include_router(models.router)
 
 instrument_app(app)

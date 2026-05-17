@@ -23,6 +23,7 @@ _settings = Settings()
 
 _START_TIME = time.monotonic()
 _VERSION = _settings.otel_service_version
+_PHASE = _settings.build_phase
 
 
 @router.get("/live", summary="Liveness probe")
@@ -49,7 +50,11 @@ async def readiness() -> dict[str, str | bool]:
     summary="Full health status",
 )
 async def health_status() -> HealthResponse:
-    """Full health check with individual dependency statuses."""
+    """Full health check with individual dependency statuses.
+
+    Returns phase field so consumers can identify the platform milestone.
+    issue #10 criterion: GET /health must include {phase: "F0"}.
+    """
     redis_check = await _check_redis_detail()
     litellm_check = await _check_litellm_detail()
     api_check = await _check_api_detail()
@@ -64,6 +69,7 @@ async def health_status() -> HealthResponse:
         status=overall,
         version=_VERSION,
         service=_settings.otel_service_name,
+        phase=_PHASE,
         checks=[redis_check, litellm_check, api_check],
     )
 
@@ -74,6 +80,7 @@ async def version_info() -> dict[str, str | float]:
     return {
         "service": _settings.otel_service_name,
         "version": _VERSION,
+        "phase": _PHASE,
         "uptime_seconds": round(time.monotonic() - _START_TIME, 2),
         "timestamp": datetime.now(UTC).isoformat(),
     }
