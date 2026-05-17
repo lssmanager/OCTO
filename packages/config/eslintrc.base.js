@@ -1,0 +1,42 @@
+module.exports = {
+  parser: '@typescript-eslint/parser',
+  parserOptions: {
+    ecmaVersion: 2022,
+    sourceType: 'module',
+    project: true,
+    tsconfigRootDir: __dirname,
+  },
+  env: { node: true, es2022: true },
+  plugins: ['@typescript-eslint', 'import', 'unused-imports'],
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+    'plugin:@typescript-eslint/recommended-requiring-type-checking',
+    'plugin:@typescript-eslint/strict',
+    'plugin:import/recommended',
+    'plugin:import/typescript',
+    'prettier',
+  ],
+  rules: {
+    '@typescript-eslint/no-explicit-any': 'error',
+    '@typescript-eslint/explicit-function-return-type': 'warn',
+    '@typescript-eslint/explicit-module-boundary-types': 'warn',
+    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    '@typescript-eslint/no-floating-promises': 'error',
+    '@typescript-eslint/await-thenable': 'error',
+    '@typescript-eslint/no-misused-promises': 'error',
+    '@typescript-eslint/no-non-null-assertion': 'error',
+    '@typescript-eslint/consistent-type-imports': 'error',
+    '@typescript-eslint/prefer-nullish-coalescing': 'error',
+    '@typescript-eslint/prefer-optional-chain': 'error',
+    'unused-imports/no-unused-imports': 'error',
+    'import/order': ['error', { alphabetize: { order: 'asc' } }],
+    'no-console': ['warn', { allow: ['warn', 'error'] }],
+  },
+  settings: {
+    'import/resolver': {
+      typescript: { alwaysTryTypes: true, project: ['./apps/*/tsconfig.json', './packages/*/tsconfig.json'] },
+    },
+  },
+  ignorePatterns: ['dist', 'node_modules', 'coverage', '.turbo', '*.js', '*.d.ts'],
+};

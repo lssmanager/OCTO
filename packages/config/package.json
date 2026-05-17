@@ -1,0 +1,20 @@
+{
+  "name": "@octo/config",
+  "version": "0.0.1",
+  "private": true,
+  "main": "tsconfig.base.json",
+  "exports": {
+    "./tsconfig/base": "./tsconfig.base.json",
+    "./tsconfig/node": "./tsconfig.node.json",
+    "./tsconfig/react": "./tsconfig.react.json",
+    "./eslint": "./eslintrc.base.js",
+    "./.prettierrc": "./.prettierrc"
+  },
+  "files": [
+    "tsconfig.base.json",
+    "tsconfig.node.json",
+    "tsconfig.react.json",
+    "eslintrc.base.js",
+    ".prettierrc"
+  ]
+}
