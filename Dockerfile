@@ -21,19 +21,22 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /app
 
 # ─────────────────────────────────────────────
-# Stage 1: pruner — genera lockfile y sub-repo mínimo para @octo/api
+# Stage 1: pruner — genera sub-repo mínimo para @octo/api
 #
 # IMPORTANTE: pnpm-lock.yaml no está commiteado en el repo.
-# Ejecutamos `pnpm install --no-frozen-lockfile` aquí para generarlo
-# antes de llamar a `turbo prune`, que requiere el lockfile para
-# poder resolver el workspace graph.
+# Ejecutamos `pnpm install` aquí para generarlo antes de llamar
+# a `turbo prune`, que requiere el lockfile para resolver el
+# workspace graph.
 #
+# HUSKY=0 — deshabilita husky en Docker (no hay .git)
+# TURBO_TELEMETRY_DISABLED=1 — evita prompt interactivo en CI
 # VERSIÓN DE TURBO: debe coincidir con la devDependency en
 # package.json raíz para evitar errores de parseo del turbo.json.
 # ─────────────────────────────────────────────
 FROM base AS pruner
 COPY . .
-RUN pnpm install --no-frozen-lockfile
+RUN HUSKY=0 pnpm install --frozen-lockfile
+ENV TURBO_TELEMETRY_DISABLED=1
 RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 
 # ─────────────────────────────────────────────
@@ -43,10 +46,11 @@ RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 FROM base AS builder
 
 ENV NODE_ENV=development
+ENV TURBO_TELEMETRY_DISABLED=1
 
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN pnpm install --no-frozen-lockfile
+RUN HUSKY=0 pnpm install --frozen-lockfile
 
 COPY --from=pruner /app/out/full/ .
 
