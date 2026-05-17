@@ -1,20 +1,41 @@
-import { pgTable, text, timestamp, boolean, pgEnum } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  text,
+  timestamp,
+  jsonb,
+  index,
+  pgEnum,
+} from 'drizzle-orm/pg-core';
 
-export const agentLevelEnum = pgEnum('agent_level', [
-  'agency',
-  'department',
-  'workspace',
-  'agent',
-  'subagent',
+export const agentStatusEnum = pgEnum('agent_status', [
+  'active',
+  'inactive',
+  'suspended',
+  'error',
 ]);
 
-export const agentsTable = pgTable('agents', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
-  level: agentLevelEnum('level').notNull(),
-  parentId: text('parent_id'),
-  isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
+// eslint-disable-next-line @typescript-eslint/no-use-before-define
+export const agents = pgTable(
+  'agents',
+  {
+    id: text('id').primaryKey(), // UUID v7
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    role: text('role').notNull(), // CrewAI: agent.role
+    goal: text('goal').notNull(), // CrewAI: agent.goal
+    parentId: text('parent_id').references((): ReturnType<typeof text> => agents.id),
+    capabilities: jsonb('capabilities').notNull().default([]),
+    governancePolicy: jsonb('governance_policy').notNull().default({}), // Paperclip budget
+    status: agentStatusEnum('status').notNull().default('active'),
+    metadata: jsonb('metadata').notNull().default({}),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    parentIdx: index('agents_parent_id_idx').on(t.parentId),
+    statusIdx: index('agents_status_idx').on(t.status),
+  }),
+);
+
+export type Agent = typeof agents.$inferSelect;
+export type NewAgent = typeof agents.$inferInsert;
