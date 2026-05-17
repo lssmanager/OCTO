@@ -1,0 +1,63 @@
+# .dockerignore — raíz del monorepo
+#
+# Propósito: evitar copiar archivos que:
+#   1. Inflan el contexto de build (lentifica docker build)
+#   2. Pueden filtrar secrets (.env, credenciales)
+#   3. Son regenerables y no pertenecen a la imagen (dist, .next, __pycache__)
+#
+# Regla crítica: .env NUNCA debe entrar en una imagen Docker.
+# Los secrets se pasan en runtime via env_file o variables de entorno del orquestador.
+
+# Dependencias instaladas (se reinstalan en la imagen)
+node_modules
+.pnpm-store
+
+# Artifacts de build (se regeneran en la imagen)
+dist
+build
+.next
+.turbo
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.mypy_cache
+venv
+.venv
+*.egg-info
+
+# Secrets y configuración local — NUNCA en imagen
+.env
+.env.*
+!.env.example
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Coverage y tests
+coverage
+.coverage
+htmlcov
+junit.xml
+
+# Editors y OS
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+*.swp
+*.swo
+
+# Docs (no necesarios en runtime)
+*.md
+docs
+
+# CI config (no necesario en runtime)
+.github
+.gitlab-ci.yml

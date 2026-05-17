@@ -1,0 +1,126 @@
+# docker-compose.yml
+# USO: solo desarrollo local.
+# Producción usa Coolify (issue #13).
+#
+# Principio: UN contenedor por app, ciclo de vida independiente (F0-008).
+# Todos los servicios de app tienen depends_on con condition: service_healthy
+# para garantizar que postgres y redis estén listos antes del startup.
+#
+# Puertos expuestos:
+#   3001 — api (NestJS Control Plane)
+#   3000 — web (Next.js Frontend)
+#   8000 — runtime-worker (FastAPI Execution Plane)
+#   5432 — postgres
+#   6379 — redis
+
+services:
+
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16.2-alpine3.19
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-octo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-octo_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-octo}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-octo} -d ${POSTGRES_DB:-octo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2.4-alpine3.19
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - redis_data:/data
+      - ./infra/docker/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # ── Applications ────────────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        BUILD_VERSION: "0.0.1-f0-local"
+        BUILD_COMMIT: "local"
+        BUILD_PHASE: "F0"
+    env_file: .env
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        BUILD_VERSION: "0.0.1-f0-local"
+        BUILD_COMMIT: "local"
+        BUILD_PHASE: "F0"
+        NEXT_PUBLIC_API_URL: "http://localhost:3001"
+    env_file: .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  runtime-worker:
+    build:
+      # El contexto es apps/runtime-worker porque el Dockerfile Python
+      # usa un contexto mínimo (solo su propio directorio)
+      context: apps/runtime-worker
+      dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: "0.0.1-f0-local"
+        BUILD_COMMIT: "local"
+        BUILD_PHASE: "F0"
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
