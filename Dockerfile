@@ -27,11 +27,14 @@ WORKDIR /app
 # Ejecutamos `pnpm install --no-frozen-lockfile` aquí para generarlo
 # antes de llamar a `turbo prune`, que requiere el lockfile para
 # poder resolver el workspace graph.
+#
+# VERSIÓN DE TURBO: debe coincidir con la devDependency en
+# package.json raíz para evitar errores de parseo del turbo.json.
 # ─────────────────────────────────────────────
 FROM base AS pruner
 COPY . .
 RUN pnpm install --no-frozen-lockfile
-RUN pnpm dlx turbo@2.3.0 prune @octo/api --docker
+RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 
 # ─────────────────────────────────────────────
 # Stage 2: builder — instala deps del sub-repo y compila
