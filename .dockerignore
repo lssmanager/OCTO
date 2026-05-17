@@ -1,24 +1,43 @@
-# .dockerignore — raíz del monorepo
-#
-# Propósito: evitar copiar archivos que:
-#   1. Inflan el contexto de build (lentifica docker build)
-#   2. Pueden filtrar secrets (.env, credenciales)
-#   3. Son regenerables y no pertenecen a la imagen (dist, .next, __pycache__)
-#
-# Regla crítica: .env NUNCA debe entrar en una imagen Docker.
-# Los secrets se pasan en runtime via env_file o variables de entorno del orquestador.
+# .dockerignore — OCTO monorepo
+# Excluye archivos que NO deben entrar al build context de Docker
+# Crítico: .env y secretos nunca en imagen
 
-# Dependencias instaladas (se reinstalan en la imagen)
+# Dependencias instaladas (se reinstalan en el builder)
 node_modules
+**/node_modules
 .pnpm-store
 
-# Artifacts de build (se regeneran en la imagen)
+# Secrets y configuración de entorno (NUNCA en imagen)
+.env
+.env.*
+!.env.example
+
+# Control de versiones
+.git
+.gitignore
+.gitattributes
+
+# Artefactos de build (se generan en el builder stage)
 dist
 build
 .next
-.turbo
+!.next/standalone
+!.next/static
 
-# Python artifacts
+# Coverage y tests
+coverage
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Docs (no necesarios en imagen)
+docs
+*.md
+!README.md
+
+# Python
 __pycache__
 *.pyc
 *.pyo
@@ -28,36 +47,19 @@ __pycache__
 .mypy_cache
 venv
 .venv
-*.egg-info
 
-# Secrets y configuración local — NUNCA en imagen
-.env
-.env.*
-!.env.example
+# Herramientas de desarrollo
+.turbo
+.eslintcache
+.cache
+tmp
 
-# Version control
-.git
-.gitignore
-.gitattributes
-
-# Coverage y tests
-coverage
-.coverage
-htmlcov
-junit.xml
-
-# Editors y OS
-.DS_Store
-Thumbs.db
+# IDE
 .vscode
 .idea
 *.swp
 *.swo
 
-# Docs (no necesarios en runtime)
-*.md
-docs
-
-# CI config (no necesario en runtime)
-.github
-.gitlab-ci.yml
+# OS
+.DS_Store
+Thumbs.db
