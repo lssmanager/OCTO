@@ -23,10 +23,15 @@ WORKDIR /app
 # ─────────────────────────────────────────────
 # Stage 1: pruner — genera sub-repo mínimo para @octo/api
 #
-# IMPORTANTE: pnpm-lock.yaml no está commiteado en el repo.
-# Ejecutamos `pnpm install` aquí para generarlo antes de llamar
-# a `turbo prune`, que requiere el lockfile para resolver el
-# workspace graph.
+# REQUISITO: pnpm-lock.yaml DEBE estar commiteado en el repo.
+# --frozen-lockfile garantiza builds reproducibles y evita
+# dependency drift entre builds de Coolify/CI.
+#
+# Si este step falla con ERR_PNPM_NO_LOCKFILE, genera el lockfile
+# localmente y commitéalo:
+#   $env:HUSKY="0"; pnpm install   # PowerShell
+#   HUSKY=0 pnpm install           # bash/zsh
+#   git add pnpm-lock.yaml && git commit -m "chore: add pnpm lockfile"
 #
 # HUSKY=0 — deshabilita husky en Docker (no hay .git)
 # TURBO_TELEMETRY_DISABLED=1 — evita prompt interactivo en CI
@@ -34,9 +39,9 @@ WORKDIR /app
 # package.json raíz para evitar errores de parseo del turbo.json.
 # ─────────────────────────────────────────────
 FROM base AS pruner
+ENV TURBO_TELEMETRY_DISABLED=1
 COPY . .
 RUN HUSKY=0 pnpm install --frozen-lockfile
-ENV TURBO_TELEMETRY_DISABLED=1
 RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 
 # ─────────────────────────────────────────────
