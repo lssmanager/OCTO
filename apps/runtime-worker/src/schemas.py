@@ -62,7 +62,11 @@ class ExecutionLimitsSchema(OctoModel):
 
 
 class ExecutionRequest(OctoModel):
-    """Inbound job payload from the Control Plane."""
+    """Inbound job payload from the Control Plane.
+
+    trace_id and run_id are REQUIRED for OTEL propagation (F0-002).
+    Every log entry and span in the worker must carry these two values.
+    """
 
     execution_id: str = Field(description="UUIDv7 assigned by the Control Plane")
     agent_id: str
@@ -73,6 +77,9 @@ class ExecutionRequest(OctoModel):
     limits: ExecutionLimitsSchema = Field(default_factory=ExecutionLimitsSchema)
     tools: list[str] = Field(default_factory=list, description="Tool IDs to activate")
     streaming: bool = Field(default=False)
+    # OTEL propagation — mandatory, no default (F0-002 contract)
+    trace_id: str = Field(description="OTEL trace_id, propagated to all spans and logs")
+    run_id: str = Field(description="Monotonic run counter for this execution")
 
 
 class ExecutionResult(OctoModel):
@@ -85,6 +92,10 @@ class ExecutionResult(OctoModel):
     usage: dict[str, int] = Field(default_factory=dict, description="Token usage stats")
     error: str | None = None
     duration_ms: int = Field(ge=0)
+    checkpoint: dict[str, Any] | None = Field(
+        default=None,
+        description="LangGraph pause/resume state — populated in F2",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -105,9 +116,14 @@ class HealthDetail(OctoModel):
 
 
 class HealthResponse(OctoModel):
+    """Full health status including phase marker (F0, F1, F2 ...)."""
+
     status: DependencyStatus
     version: str
     service: str
+    # phase identifies which platform milestone this build belongs to.
+    # Required by issue #10: GET /health must return {phase: "F0"}.
+    phase: str = Field(default="F0", description="Platform phase (F0, F1, F2 ...)")
     checks: list[HealthDetail] = Field(default_factory=list)
 
 

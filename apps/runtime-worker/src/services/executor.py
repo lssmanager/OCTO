@@ -1,157 +1,139 @@
-"""ExecutionService — Execution Plane core service.
+"""ExecutionService — core execution logic for the AI Execution Plane.
 
-REGLA ABSOLUTA (Principio Arquitectónico #1 + #2):
-  Este servicio NUNCA debe:
-    - Contener lógica de orquestación o scheduling
-    - Evaluar governance policies (eso es el Control Plane)
-    - Persistir estado con autoridad (escribe solo vía callback al CP)
-    - Importar nada de apps/api o packages/database
+F0 implementation: stateless stub that validates the request contract
+and returns a structured ExecutionResult with status=completed.
 
-  Este servicio SÍ puede:
-    - Ejecutar tasks recibidas del Control Plane
-    - Llamar LLMs via LiteLLM (F2)
-    - Invocar tools registradas (F3)
-    - Recuperar memoria via Qdrant (F4)
-    - Reportar progreso via HTTP callback al Control Plane
-    - Retornar ExecutionResult
+F1+ will replace the stub body with:
+  - LangGraph StateGraph execution
+  - CrewAI agent materialisation from AgentDefinition
+  - LiteLLM provider calls via the proxy
+  - Checkpoint serialisation for pause/resume
 
-F0: retorna stub. Implementación real (LangGraph StateGraph) en F2.
+Architectural rules (F0-002, F0-009):
+  - This service NEVER imports from apps/api (control plane)
+  - This service NEVER writes to agents or topology tables
+  - This service NEVER evaluates governance policies (control plane's job)
+  - All state that must persist lives in PostgreSQL via the control plane
+  - trace_id propagation is mandatory for every log entry and span
 """
 from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import TYPE_CHECKING
 
 import structlog
 
-from ..config import get_settings
-from ..schemas.execution import (
-    AgentDefinition,
-    ExecutionRequest,
-    ExecutionResult,
-    ExecutionStatus,
-    TokenUsage,
-)
+from ..schemas import ExecutionRequest, ExecutionResult, ExecutionStatus
+
+if TYPE_CHECKING:
+    from ..config import Settings
 
 log = structlog.get_logger(__name__)
 
 
 class ExecutionService:
-    """Stateless executor — recibe ExecutionRequest, retorna ExecutionResult.
+    """Stateless execution service.
 
-    Stateless: todo el estado vive en PostgreSQL/Redis (Principio #12).
-    El worker puede reiniciarse en cualquier momento sin perder estado.
-
-    F0: stub de ejecución.
-    F2: LangGraph StateGraph con checkpointing.
+    Instantiated once at module load (singleton via router module globals).
+    Must remain stateless: every run() call is independent.
     """
 
-    def __init__(self) -> None:
-        self._settings = get_settings()
-        self._timeout_secs = self._settings.execution_timeout_secs
+    def __init__(self, settings: Settings) -> None:
+        self._timeout_ms = settings.max_execution_timeout_ms
+        self._phase = settings.build_phase
 
-    async def execute(self, request: ExecutionRequest) -> ExecutionResult:
-        """Ejecuta un ExecutionRequest y retorna ExecutionResult.
+    async def run(self, request: ExecutionRequest) -> ExecutionResult:
+        """Execute a task and return a structured result.
 
-        El trace_id se inyecta en el contexto de structlog para que
-        TODOS los logs de esta ejecución incluyan el trace_id automáticamente.
-        Esto satisface el criterio: 'trace_id se propaga a todos los logs y spans'.
+        F0: returns a stub immediately.
+        F1+: will call _execute_langgraph() or _execute_crewai().
+
+        Timeout is enforced via asyncio.wait_for using max_execution_timeout_ms.
         """
-        # Bind trace context a todos los logs de esta ejecución
         bound_log = log.bind(
-            execution_id=request.execution_id,
             trace_id=request.trace_id,
             run_id=request.run_id,
-            agent_id=request.agent.id,
-            agent_role=request.agent.role,
+            execution_id=request.execution_id,
+            agent_id=request.agent_id,
         )
 
-        bound_log.info(
-            "executor.start",
-            model=request.agent.model,
-            token_budget=request.agent.token_budget,
-            max_iterations=request.agent.max_iterations,
-            has_checkpoint=request.checkpoint is not None,
-        )
-
+        bound_log.info("executor.run.start", phase=self._phase)
         start = time.monotonic()
 
         try:
             result = await asyncio.wait_for(
-                self._run(request, bound_log),
-                timeout=self._timeout_secs,
+                self._run_stub(request),
+                timeout=self._timeout_ms / 1000,
             )
         except asyncio.TimeoutError:
             duration_ms = int((time.monotonic() - start) * 1000)
             bound_log.error(
-                "executor.timeout",
-                timeout_secs=self._timeout_secs,
+                "executor.run.timeout",
+                timeout_ms=self._timeout_ms,
                 duration_ms=duration_ms,
             )
             return ExecutionResult(
                 execution_id=request.execution_id,
                 status=ExecutionStatus.FAILED,
-                result=None,
-                error=f"Execution timed out after {self._timeout_secs}s",
-                token_usage=None,
+                output=None,
+                error=f"Execution timed out after {self._timeout_ms}ms",
+                usage={},
                 duration_ms=duration_ms,
-                checkpoint=None,
+            )
+        except Exception as exc:  # noqa: BLE001
+            duration_ms = int((time.monotonic() - start) * 1000)
+            bound_log.exception(
+                "executor.run.error",
+                error=str(exc),
+                duration_ms=duration_ms,
+            )
+            return ExecutionResult(
+                execution_id=request.execution_id,
+                status=ExecutionStatus.FAILED,
+                output=None,
+                error=str(exc),
+                usage={},
+                duration_ms=duration_ms,
             )
 
-        duration_ms = int((time.monotonic() - start) * 1000)
-        result = ExecutionResult(
-            execution_id=result.execution_id,
-            status=result.status,
-            result=result.result,
-            error=result.error,
-            token_usage=result.token_usage,
-            duration_ms=duration_ms,
-            checkpoint=result.checkpoint,
-        )
-
         bound_log.info(
-            "executor.complete",
+            "executor.run.complete",
             status=result.status,
-            duration_ms=duration_ms,
+            duration_ms=result.duration_ms,
         )
-
         return result
 
-    async def _run(
-        self,
-        request: ExecutionRequest,
-        bound_log: Any,
-    ) -> ExecutionResult:
-        """Core execution logic.
+    # ------------------------------------------------------------------
+    # F0 stub — replace with LangGraph/CrewAI engine in F1/F2
+    # ------------------------------------------------------------------
 
-        F0: stub — retorna {result: stub, status: completed}.
-        F2: LangGraph StateGraph con ReAct loop, tool calls, checkpointing.
+    async def _run_stub(self, request: ExecutionRequest) -> ExecutionResult:
+        """F0 stub executor.
 
-        El stub cumple el criterio de aceptación:
-        'F0: el executor retorna un stub {result: stub, status: completed}'
+        Returns a minimal valid ExecutionResult so the full HTTP contract
+        can be exercised end-to-end before the real engine exists.
+        Replace this method body in F1 with the LangGraph StateGraph call.
         """
-        bound_log.info(
-            "executor.f0_stub",
-            note="Real LangGraph execution engine wired in F2",
-        )
+        start = time.monotonic()
 
-        # F0 STUB — reemplazar en F2 con LangGraph StateGraph
+        # Simulate minimal async work so the event loop stays non-blocking.
+        await asyncio.sleep(0)
+
         return ExecutionResult(
             execution_id=request.execution_id,
             status=ExecutionStatus.COMPLETED,
-            result={
-                "result": "stub",
-                "message": "[F0 stub] Execution engine not yet wired. Implement in F2.",
-                "agent_role": request.agent.role,
-                "agent_goal": request.agent.goal,
+            output=(
+                f"[{self._phase} stub] Execution engine not yet wired. "
+                "Implement LangGraph StateGraph in F2."
+            ),
+            tool_calls=[],
+            usage={
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
             },
             error=None,
-            token_usage=TokenUsage(
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
-            ),
-            duration_ms=0,  # sobreescrito por execute()
+            duration_ms=int((time.monotonic() - start) * 1000),
             checkpoint=None,
         )

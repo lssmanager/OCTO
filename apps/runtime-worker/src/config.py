@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     # Architecture Principle #1: Execution Plane never self-authorizes.
     api_internal_secret: str = Field(min_length=32)
 
+    # ── Control Plane URL ─────────────────────────────────────────────────────
+    # Required for health check connectivity probe towards the API.
+    # health.py uses this to verify the control plane is reachable.
+    api_url: str = Field(
+        default="http://api:3001/api",
+        description="Base URL of the NestJS Control Plane API",
+    )
+
     # ── Database ──────────────────────────────────────────────────────────────
     # NOTE: runtime-worker reads DB only for health checks.
     # Orchestration and writes go through the control plane (Principle #1).
@@ -55,6 +63,14 @@ class Settings(BaseSettings):
     # ── Execution limits ──────────────────────────────────────────────────────
     max_concurrent_executions: int = Field(default=10, ge=1, le=100)
     execution_timeout_secs: int = Field(default=300, ge=30)
+    # MAX_EXECUTION_TIMEOUT_MS — issue #10 criterion.
+    # Exposed as milliseconds for callers; internally maps to execution_timeout_secs.
+    # env var: MAX_EXECUTION_TIMEOUT_MS (takes precedence if set).
+    max_execution_timeout_ms: int = Field(
+        default=300_000,
+        ge=30_000,
+        description="Hard execution timeout in milliseconds (env: MAX_EXECUTION_TIMEOUT_MS)",
+    )
 
     # ── Build info ────────────────────────────────────────────────────────────
     build_version: str = Field(default="0.0.1-f0")
