@@ -1,7 +1,14 @@
 {
-  "extends": "@octo/config/tsconfig/react",
+  "extends": "@octo/config/tsconfig.base.json",
   "compilerOptions": {
-    "plugins": [{ "name": "next" }],
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noUncheckedIndexedAccess": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{"name": "next"}],
     "paths": {
       "@/*": ["./src/*"]
     }
