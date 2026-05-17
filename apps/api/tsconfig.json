@@ -1,11 +1,14 @@
 {
-  "extends": "@octo/config/tsconfig/node",
+  "extends": "@octo/config/tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "experimentalDecorators": true,
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "noUncheckedIndexedAccess": true,
     "emitDecoratorMetadata": true,
-    "strictPropertyInitialization": false
+    "experimentalDecorators": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
 }
