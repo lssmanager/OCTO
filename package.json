@@ -2,7 +2,7 @@
   "name": "octo",
   "private": true,
   "version": "0.0.0",
-  "description": "OCTO — Distributed Cognitive Execution System",
+  "description": "OCTO \u2014 Distributed Cognitive Execution System",
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
@@ -13,26 +13,26 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "clean": "turbo clean && rimraf node_modules",
-    "prepare": "husky install"
+    "prepare": "husky"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
-    "eslint": "^8.57.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-import-resolver-typescript": "^3.6.1",
-    "eslint-plugin-import": "^2.29.1",
-    "eslint-plugin-unused-imports": "^3.1.0",
-    "husky": "^9.0.11",
-    "lint-staged": "^15.2.2",
-    "prettier": "^3.2.5",
-    "rimraf": "^5.0.0",
-    "turbo": "^2.0.0",
-    "typescript": "^5.4.0"
+    "@typescript-eslint/eslint-plugin": "8.32.1",
+    "@typescript-eslint/parser": "8.32.1",
+    "eslint": "9.27.0",
+    "eslint-config-prettier": "10.1.5",
+    "eslint-import-resolver-typescript": "4.4.4",
+    "eslint-plugin-import": "2.32.0",
+    "eslint-plugin-unused-imports": "4.1.4",
+    "husky": "9.1.7",
+    "lint-staged": "15.5.2",
+    "prettier": "3.5.3",
+    "rimraf": "5.0.10",
+    "turbo": "2.9.14",
+    "typescript": "5.9.3"
   },
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=20.0.0",
-    "pnpm": ">=8.0.0"
+    "pnpm": ">=9.12.0"
   }
 }

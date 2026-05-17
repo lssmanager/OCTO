@@ -10,17 +10,18 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
+    "db:push": "drizzle-kit push",
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "drizzle-orm": "^0.30.0",
-    "postgres": "^3.4.0"
+    "drizzle-orm": "0.43.3",
+    "postgres": "3.4.5"
   },
   "devDependencies": {
     "@octo/config": "workspace:*",
-    "drizzle-kit": "^0.21.0",
-    "rimraf": "^5.0.0",
-    "tsup": "^8.0.0",
-    "typescript": "^5.4.0"
+    "drizzle-kit": "0.30.6",
+    "rimraf": "5.0.10",
+    "tsup": "8.5.0",
+    "typescript": "5.9.3"
   }
 }
