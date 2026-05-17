@@ -5,5 +5,5 @@ export function getTracer(name: string, version?: string): Tracer {
 }
 
 export function getOctoTracer(): Tracer {
-  return getTracer('octo', '0.0.1');
+  return getTracer('octo', '0.0.1-f0');
 }

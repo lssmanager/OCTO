@@ -1,19 +1,36 @@
-// Structured logger stub — integrate with Loki/OTEL log exporter
-export interface Logger {
-  info(message: string, context?: Record<string, unknown>): void;
-  warn(message: string, context?: Record<string, unknown>): void;
-  error(message: string, context?: Record<string, unknown>): void;
-  debug(message: string, context?: Record<string, unknown>): void;
+import pino, { type Logger as PinoLogger } from 'pino';
+
+export interface LoggerContext {
+  service: string;
+  version?: string;
 }
 
-export function createLogger(service: string): Logger {
-  const format = (level: string, message: string, context?: Record<string, unknown>): string =>
-    JSON.stringify({ level, service, message, timestamp: new Date().toISOString(), ...context });
+export interface ExecutionLoggerContext {
+  trace_id: string;
+  execution_id?: string;
+  agent_id?: string;
+  run_id: string;
+}
 
-  return {
-    info: (msg, ctx) => console.log(format('info', msg, ctx)),
-    warn: (msg, ctx) => console.warn(format('warn', msg, ctx)),
-    error: (msg, ctx) => console.error(format('error', msg, ctx)),
-    debug: (msg, ctx) => console.log(format('debug', msg, ctx)),
-  };
+export function createLogger(context: LoggerContext): PinoLogger {
+  return pino({
+    level: process.env['LOG_LEVEL'] ?? 'info',
+    base: {
+      service: context.service,
+      version: context.version ?? '0.0.1-f0',
+      env: process.env['NODE_ENV'] ?? 'development',
+    },
+    timestamp: pino.stdTimeFunctions.isoTime,
+    formatters: {
+      level: (label) => ({ level: label }),
+    },
+    messageKey: 'msg',
+  });
+}
+
+export function createExecutionLogger(
+  base: PinoLogger,
+  context: ExecutionLoggerContext,
+): PinoLogger {
+  return base.child(context);
 }
