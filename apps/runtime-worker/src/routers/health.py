@@ -2,7 +2,7 @@
 
 Endpoints:
   GET /health/live    — liveness probe (is the process alive?)
-  GET /health/ready   — readiness probe (are all dependencies reachable?)
+  GET /health/ready   — readiness probe (503 when any critical dep is down)
   GET /health         — full status with dependency checks
   GET /health/version — service version info
 """
@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 import httpx
 import redis.asyncio as aioredis
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 
 from ..config import Settings
 from ..schemas import DependencyStatus, HealthDetail, HealthResponse
@@ -33,15 +33,28 @@ async def liveness() -> dict[str, str]:
 
 
 @router.get("/ready", summary="Readiness probe")
-async def readiness() -> dict[str, str | bool]:
-    """Returns 200 only if all critical dependencies are reachable."""
+async def readiness(response: Response) -> dict[str, object]:
+    """Returns 200 only if all critical dependencies are reachable.
+
+    Returns HTTP 503 Service Unavailable when any dependency is down.
+    Load balancers and Coolify use this to gate traffic to the worker.
+    """
     redis_ok = await _check_redis()
     litellm_ok = await _check_litellm()
+    all_ok = redis_ok and litellm_ok
 
-    if redis_ok and litellm_ok:
-        return {"status": "ready", "ready": True}
+    if not all_ok:
+        response.status_code = 503
 
-    return {"status": "not_ready", "ready": False, "redis": redis_ok, "litellm": litellm_ok}
+    return {
+        "status": "ready" if all_ok else "not_ready",
+        "ready": all_ok,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "checks": {
+            "redis": redis_ok,
+            "litellm": litellm_ok,
+        },
+    }
 
 
 @router.get(
@@ -53,7 +66,7 @@ async def health_status() -> HealthResponse:
     """Full health check with individual dependency statuses.
 
     Returns phase field so consumers can identify the platform milestone.
-    issue #10 criterion: GET /health must include {phase: "F0"}.
+    Issue #11 criterion: GET /health must include {phase: "F0"}.
     """
     redis_check = await _check_redis_detail()
     litellm_check = await _check_litellm_detail()
@@ -146,7 +159,7 @@ async def _check_api_detail() -> HealthDetail:
     t0 = time.monotonic()
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{_settings.api_url}/health/live")
+            resp = await client.get(f"{_settings.api_url}/api/health/live")
             latency = int((time.monotonic() - t0) * 1000)
             status = DependencyStatus.OK if resp.status_code == 200 else DependencyStatus.DEGRADED
             return HealthDetail(name="api", status=status, latency_ms=latency)

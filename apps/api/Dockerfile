@@ -56,17 +56,20 @@ USER octo
 EXPOSE 3001
 
 # Health check nativo Docker — liveness probe
+# Path corregido: incluye el global prefix 'api' (app.setGlobalPrefix('api') en main.ts)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3001/health || exit 1
+  CMD curl -f http://localhost:3001/api/health/live || exit 1
 
-# Build args para trazabilidad — visibles en /version endpoint
+# Build args para trazabilidad — visibles en /api/health/version
 ARG BUILD_VERSION=unknown
 ARG BUILD_COMMIT=unknown
 ARG BUILD_PHASE=F0
+ARG BUILD_TIME=unknown
 
 ENV BUILD_VERSION=${BUILD_VERSION} \
     BUILD_COMMIT=${BUILD_COMMIT} \
     BUILD_PHASE=${BUILD_PHASE} \
+    BUILD_TIME=${BUILD_TIME} \
     NODE_ENV=production
 
 CMD ["node", "dist/main.js"]
