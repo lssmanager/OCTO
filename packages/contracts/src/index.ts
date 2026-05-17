@@ -2,6 +2,7 @@
  * @octo/contracts — Public API
  *
  * Re-exports all contract interfaces and types from the OCTO platform.
+ * Zero runtime dependencies — pure TypeScript types only.
  * Organised by ADR source.
  */
 
@@ -23,7 +24,10 @@ export * from './governance/budget-governance';
 // F0-011 — agency-agents Template Format
 export * from './templates/agent-template';
 
-// Pre-existing primitive contracts
+// Core primitive contracts
+export * from './agent';
 export * from './execution';
-export * from './hierarchy';
 export * from './events';
+export * from './hierarchy';
+export * from './memory';
+export * from './policy';
