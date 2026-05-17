@@ -1,9 +1,13 @@
 """Runtime Worker configuration via pydantic-settings v2.
 
-All settings can be overridden via environment variables or .env file.
-Variable names are UPPER_CASE equivalents of the field names.
+Fails fast on startup: if any required variable is missing or invalid,
+pydantic raises ValidationError with a clear list of ALL problems at once.
+This replicates the n8n fail-fast pattern (F0-016-env-config-strategy.md).
+
+Variable names are UPPER_CASE env var names mapped to snake_case fields.
 """
-from pydantic import Field
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,8 +17,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # ── Server ────────────────────────────────────────────────────────────────
@@ -22,20 +26,26 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0")
     workers: int = Field(default=1, ge=1, le=16)
 
-    # ── Control Plane ─────────────────────────────────────────────────────────
-    api_url: str = Field(default="http://localhost:3001")
-    api_internal_secret: str = Field(default="change-me-in-production")
+    # ── Control Plane inter-service secret ────────────────────────────────────
+    # NO default — must be explicitly set. Matches RUNTIME_API_SECRET on API side.
+    # Architecture Principle #1: Execution Plane never self-authorizes.
+    api_internal_secret: str = Field(min_length=32)
+
+    # ── Database ──────────────────────────────────────────────────────────────
+    # NOTE: runtime-worker reads DB only for health checks.
+    # Orchestration and writes go through the control plane (Principle #1).
+    database_url: str = Field(pattern=r"^postgresql://")
 
     # ── Redis (BullMQ transport) ───────────────────────────────────────────────
-    redis_url: str = Field(default="redis://localhost:6379")
+    redis_url: str = Field(pattern=r"^redis://")
     redis_max_connections: int = Field(default=10, ge=1)
 
     # ── LiteLLM proxy ─────────────────────────────────────────────────────────
-    litellm_url: str = Field(default="http://localhost:4000")
-    litellm_api_key: str = Field(default="sk-litellm-local")
+    litellm_url: str = Field(default="http://litellm:4000")
+    litellm_api_key: str = Field(min_length=16)
 
     # ── Observability (OTEL) ──────────────────────────────────────────────────
-    otel_exporter_otlp_endpoint: str = Field(default="http://localhost:4317")
+    otel_exporter_otlp_endpoint: str = Field(default="http://otel-collector:4318")
     otel_service_name: str = Field(default="octo-runtime-worker")
     otel_service_version: str = Field(default="0.0.1-f0")
     otel_enabled: bool = Field(default=True)
@@ -45,3 +55,26 @@ class Settings(BaseSettings):
     # ── Execution limits ──────────────────────────────────────────────────────
     max_concurrent_executions: int = Field(default=10, ge=1, le=100)
     execution_timeout_secs: int = Field(default=300, ge=30)
+
+    # ── Build info ────────────────────────────────────────────────────────────
+    build_version: str = Field(default="0.0.1-f0")
+    build_commit: str = Field(default="unknown")
+    build_phase: str = Field(default="F0")
+
+    @field_validator("log_level")
+    @classmethod
+    def validate_log_level(cls, v: str) -> str:
+        valid = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        upper = v.upper()
+        if upper not in valid:
+            raise ValueError(f"log_level must be one of {valid}, got '{v}'")
+        return upper
+
+
+def get_settings() -> Settings:
+    """
+    Returns validated Settings singleton.
+    Raises pydantic.ValidationError on startup if any required field is
+    missing or invalid — lists ALL problems at once (fail-fast).
+    """
+    return Settings()

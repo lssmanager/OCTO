@@ -1,15 +1,24 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { loadApiConfig } from '@octo/config';
 import { HealthModule } from './health/health.module';
+
+// Called once at module load — exits process immediately if env is invalid.
+const config = loadApiConfig();
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
     HealthModule,
     // F1: RunsModule, ExecutionsModule
     // F2: HierarchyModule, AgentsModule
     // F3: AgentIntelligenceModule
-    // etc.
   ],
+  providers: [
+    {
+      // Typed config token — inject with @Inject('CONFIG')
+      provide: 'CONFIG',
+      useValue: config,
+    },
+  ],
+  exports: ['CONFIG'],
 })
 export class AppModule {}

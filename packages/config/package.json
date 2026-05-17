@@ -1,20 +1,39 @@
 {
   "name": "@octo/config",
   "version": "0.0.1",
-  "private": true,
-  "main": "tsconfig.base.json",
+  "description": "Zod-validated environment schemas for OCTO services",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
     "./tsconfig/base": "./tsconfig.base.json",
     "./tsconfig/node": "./tsconfig.node.json",
     "./tsconfig/react": "./tsconfig.react.json",
-    "./eslint": "./eslintrc.base.js",
-    "./.prettierrc": "./.prettierrc"
+    "./eslint": "./eslintrc.base.js"
   },
   "files": [
+    "dist",
     "tsconfig.base.json",
     "tsconfig.node.json",
     "tsconfig.react.json",
-    "eslintrc.base.js",
-    ".prettierrc"
-  ]
+    "eslintrc.base.js"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
+  }
 }
