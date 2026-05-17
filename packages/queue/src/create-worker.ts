@@ -1,4 +1,4 @@
-import { Worker, type Job, type Processor } from 'bullmq';
+import { Worker, type Processor } from 'bullmq';
 import { createRedisConnection } from './connection';
 import type { QueueName } from './queue-names';
 
