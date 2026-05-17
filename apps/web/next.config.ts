@@ -1,13 +1,27 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@octo/contracts'],
-  // output: 'standalone' es requerido por apps/web/Dockerfile.
-  // Genera .next/standalone/ con solo los archivos necesarios para produccion:
-  // el server.js de Next.js + node_modules mínimos (no el node_modules completo).
-  // Sin esto, la imagen Docker de web seria ~400MB en vez de ~120MB.
-  // Ver: https://nextjs.org/docs/app/api-reference/config/next-config-js/output
   output: 'standalone',
+  // Server-side env vars used in lib/health.ts
+  // These are NOT exposed to the browser (no NEXT_PUBLIC_ prefix)
+  // → enforces the architecture rule: no direct browser calls to runtime-worker
+  env: {
+    API_URL: process.env['API_URL'] ?? 'http://localhost:3001',
+    RUNTIME_WORKER_URL:
+      process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000',
+    GIT_COMMIT: process.env['GIT_COMMIT'] ?? 'local',
+    BUILD_TIME: process.env['BUILD_TIME'] ?? new Date().toISOString(),
+  },
+  // Disable x-powered-by header
+  poweredByHeader: false,
+  // React strict mode
+  reactStrictMode: true,
+  // Compress responses
+  compress: true,
+  // Allow images from internal services only
+  images: {
+    remotePatterns: [],
+  },
 };
 
 export default nextConfig;
