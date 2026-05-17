@@ -1,7 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "telemetry": false,
   "globalDependencies": [".env.local"],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
