@@ -423,6 +423,9 @@ importers:
         specifier: workspace:*
         version: link:../contracts
     devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.15.21
       rimraf:
         specifier: ^5.0.0
         version: 5.0.10
