@@ -60,7 +60,7 @@ export class DlqHandler {
         connection: createRedisConnection(
           // Connection string comes from the QueueEvents connection config;
           // we reconstruct from the stored redisUrl via closure.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           (this.events as any).opts?.connection?.options?.url ??
           (this.events as any).opts?.connection ?? {},
         ),

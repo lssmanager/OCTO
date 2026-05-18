@@ -51,7 +51,7 @@ import type {
   WorkerEventMap,
 } from './interfaces';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 type AnyData = Record<string, any>;
 
 const logger = createLogger({ service: 'queue:bullmq-adapter' });

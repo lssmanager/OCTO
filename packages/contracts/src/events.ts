@@ -131,7 +131,7 @@ export type OtelCarrier = Record<string, string>;
  */
 export function injectOtelContext(): OtelCarrier {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { context, propagation } = require('@opentelemetry/api') as typeof import('@opentelemetry/api');
     const carrier: OtelCarrier = {};
     propagation.inject(context.active(), carrier);
@@ -148,11 +148,11 @@ export function injectOtelContext(): OtelCarrier {
  */
 export function extractOtelContext(carrier: OtelCarrier): import('@opentelemetry/api').Context {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { context, propagation } = require('@opentelemetry/api') as typeof import('@opentelemetry/api');
     return propagation.extract(context.active(), carrier);
   } catch {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { context } = require('@opentelemetry/api') as typeof import('@opentelemetry/api');
     return context.active();
   }

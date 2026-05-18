@@ -27,7 +27,7 @@ import { createQueue, type QueueConfig } from './create-queue';
 import { injectTraceparent, type WithTraceparent } from './traceparent';
 import type { QueueName } from './queue-names';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 type AnyJobData = Record<string, any>;
 
 export class InstrumentedQueue<T extends WithTraceparent = AnyJobData> {

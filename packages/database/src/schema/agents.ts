@@ -15,7 +15,7 @@ export const agentStatusEnum = pgEnum('agent_status', [
   'error',
 ]);
 
-// eslint-disable-next-line @typescript-eslint/no-use-before-define
+ 
 export const agents = pgTable(
   'agents',
   {

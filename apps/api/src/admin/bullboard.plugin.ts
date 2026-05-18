@@ -46,12 +46,12 @@ export class FastifyBullBoardPlugin {
     createBullBoard({ queues, serverAdapter });
 
     // Access the raw Fastify instance from the NestJS adapter
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const fastifyInstance = app.getHttpAdapter().getInstance() as any;
 
     // Register the bull-board UI as a Fastify plugin
     await fastifyInstance.register(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+       
       serverAdapter.registerPlugin(),
       {
         prefix: BULLBOARD_BASEPATH,
