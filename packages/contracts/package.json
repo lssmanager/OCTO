@@ -9,19 +9,34 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.mjs",
+      "require": "./dist/schemas/index.js"
+    },
+    "./generated": {
+      "types": "./generated/contracts.d.ts"
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "build": "tsup src/index.ts src/schemas/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts src/schemas/index.ts --format cjs,esm --dts --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist"
+    "codegen": "GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo dev) ts-node --esm scripts/generate-python.ts",
+    "clean": "rimraf dist generated"
+  },
+  "dependencies": {
+    "zod": "3.25.23"
   },
   "devDependencies": {
     "@octo/config": "workspace:*",
     "@types/json-schema": "^7.0.15",
+    "@types/node": "^22.0.0",
     "rimraf": "5.0.10",
+    "ts-node": "10.9.2",
     "tsup": "8.5.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "zod-to-json-schema": "3.24.5"
   }
 }

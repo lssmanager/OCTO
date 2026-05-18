@@ -1,22 +1,20 @@
-// @octo/queue — BullMQ queue primitives
-//
-// Design constraints (OCTO Architecture Principle #1):
-// - NO dependency on @nestjs/* — usable from any service (control plane, workers, scripts)
-// - NO dependency on @octo/database — control plane handles persistence
-// - Producers live in control plane (NestJS API)
-// - Consumers (Workers) live in runtime-worker (Python via bullmq-compatible protocol) or NestJS
-//
-// Redis is used ONLY for: BullMQ queues, transient locks, rate limiting, short-lived cache.
-// Redis is NOT for: execution persistence, memory records, sessions, event sourcing.
+// packages/queue/src/index.ts
+export { createQueue }            from './create-queue';
+export { createWorker }           from './create-worker';
+export { createRedisConnection }  from './connection';
+export { QUEUE_NAMES }            from './queue-names';
+export type { QueueName }         from './queue-names';
+export type { QueueConfig }       from './create-queue';
+export type { WorkerConfig }      from './create-worker';
+export * from './types';
 
-export { QUEUE_NAMES, type QueueName } from './queue-names';
-export { createQueue, type QueueConfig } from './create-queue';
-export { createWorker, type WorkerConfig } from './create-worker';
-export { createRedisConnection } from './connection';
-export type {
-  HealthJobData,
-  ExecutionJobData,
-  DelegationJobData,
-  ToolJobData,
-  MemoryJobData,
-} from './types';
+// Fix 6 + 7 — instrumented variants (OTel + traceparent)
+export { InstrumentedQueue, createInstrumentedQueue } from './instrumented-queue';
+export { createInstrumentedWorker }                   from './instrumented-worker';
+export {
+  injectTraceparent,
+  extractTraceparent,
+  formatTraceparent,
+  parseTraceparent,
+} from './traceparent';
+export type { WithTraceparent } from './traceparent';
