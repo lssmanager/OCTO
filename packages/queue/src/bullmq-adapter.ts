@@ -146,8 +146,8 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
   }
 
   async pause():  Promise<void> { await this.bull.pause(); }
-  // BullQueue.resume() returns Promise<number> in bullmq v5 — discard the value.
-  async resume(): Promise<void> { void this.bull.resume(); }
+  // BullQueue.resume() returns Promise<number> in bullmq v5 — cast to satisfy IQueue<T>.
+  async resume(): Promise<void> { await (this.bull.resume() as Promise<unknown>); }
 
   async drain(delayed = false): Promise<void> {
     await this.bull.drain(delayed);
