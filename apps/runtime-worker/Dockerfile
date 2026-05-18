@@ -17,7 +17,9 @@
 
 FROM node:22.12.0-alpine3.21 AS base
 RUN apk add --no-cache libc6-compat
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+# Pin pnpm to the exact version declared in package.json#packageManager.
+# Corepack will use this pre-installed version and never attempt a download.
+RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 ENV PNPM_HOME="/root/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
