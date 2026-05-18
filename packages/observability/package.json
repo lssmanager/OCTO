@@ -18,8 +18,17 @@
     "@opentelemetry/exporter-prometheus": "0.57.0",
     "pino": "9.7.0"
   },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.30.0"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@octo/config": "workspace:*",
+    "drizzle-orm": "workspace:*",
     "rimraf": "5.0.10",
     "tsup": "8.5.0",
     "typescript": "5.9.3"
