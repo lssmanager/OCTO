@@ -1,8 +1,15 @@
-# apps/api/Dockerfile — SOURCE OF TRUTH
+# apps/api/Dockerfile — canonical source of truth for the API image
 # ─────────────────────────────────────────────────────────────────
-# Keep in sync with root Dockerfile (used by Coolify).
-# Build context must be the repo root (not apps/api/) so that
-# turbo prune can access pnpm-lock.yaml and all workspace package.json.
+# The root Dockerfile is a mirror of this file for Coolify's
+# single-Dockerfile deployment model. Worker Dockerfiles live in
+# docker/<worker-name>/Dockerfile and follow the same 4-stage pattern.
+#
+# SECURITY: Runtime secrets (DATABASE_URL, REDIS_URL, API keys, etc.)
+# must NEVER appear as ARG or ENV in any Dockerfile. Secrets declared
+# as ARG are stored in image layer history and can be extracted with
+# `docker history --no-trunc` (MITRE ATT&CK T1552.007).
+# Inject all runtime credentials via Coolify → Application →
+# Environment Variables (Runtime tab, NOT Build-time).
 # ─────────────────────────────────────────────────────────────────
 
 # syntax=docker/dockerfile:1.4
@@ -18,7 +25,7 @@ ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
 
 # ─────────────────────────────────────────────
-# Stage 1: pruner
+# Stage 1: pruner — generates minimal sub-repo for @octo/api
 # ─────────────────────────────────────────────
 FROM base AS pruner
 ENV TURBO_TELEMETRY_DISABLED=1
@@ -50,7 +57,7 @@ ARG BUILD_TIME=unknown
 RUN pnpm turbo build --filter=@octo/api
 
 # ─────────────────────────────────────────────
-# Stage 3: runner — minimal production image
+# Stage 3: runner
 # ─────────────────────────────────────────────
 FROM node:22.12.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
@@ -77,8 +84,6 @@ ARG BUILD_COMMIT=unknown
 ARG BUILD_PHASE=F0
 ARG BUILD_TIME=unknown
 
-# DB_POOL_MAX injected at runtime via Coolify Environment Variables.
-# Never set as build ARG — it has no business being in an image layer.
 ENV BUILD_VERSION=${BUILD_VERSION} \
     BUILD_COMMIT=${BUILD_COMMIT} \
     BUILD_PHASE=${BUILD_PHASE} \
@@ -86,6 +91,4 @@ ENV BUILD_VERSION=${BUILD_VERSION} \
     NODE_ENV=production \
     DB_POOL_MAX=${DB_POOL_MAX:-20}
 
-# migrate.js runs first: applies pending migrations then starts the API.
-# If migrate.js exits non-zero, main.js is never started.
 CMD ["sh", "-c", "node dist/migrate.js && node dist/main.js"]

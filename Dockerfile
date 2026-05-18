@@ -1,4 +1,4 @@
-# Root Dockerfile — Coolify deployment proxy
+# Root Dockerfile — Coolify deployment proxy for @octo/api
 # ─────────────────────────────────────────────────────────────────
 # Coolify clones the repo and executes:
 #   docker build -f /artifacts/<hash>/Dockerfile /artifacts/<hash>
@@ -7,9 +7,15 @@
 # turbo prune requires pnpm-lock.yaml and all workspace package.json
 # files to be present — they live at the repo root, not in apps/api/.
 #
-# This file is a verbatim copy of apps/api/Dockerfile.
-# SOURCE OF TRUTH: apps/api/Dockerfile
-# Keep in sync manually or via CI lint rule.
+# SOURCE OF TRUTH: apps/api/Dockerfile (canonical for the API)
+# Worker Dockerfiles live in docker/<service-name>/Dockerfile.
+#
+# SECURITY: Runtime secrets (DATABASE_URL, REDIS_URL, API keys, etc.)
+# must NEVER appear as ARG or ENV in any Dockerfile. Secrets declared
+# as ARG are stored in image layer history and can be extracted with
+# `docker history --no-trunc` (MITRE ATT&CK T1552.007).
+# Inject all runtime credentials via Coolify → Application →
+# Environment Variables (Runtime tab, NOT Build-time).
 # ─────────────────────────────────────────────────────────────────
 
 # syntax=docker/dockerfile:1.4
@@ -25,14 +31,12 @@ ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
 
 # ─────────────────────────────────────────────
-# Stage 1: pruner — genera sub-repo mínimo para @octo/api
+# Stage 1: pruner — generates minimal sub-repo for @octo/api
 #
-# REQUISITO: pnpm-lock.yaml DEBE estar commiteado en el repo.
-# --frozen-lockfile garantiza builds reproducibles y evita
-# dependency drift entre builds de Coolify/CI.
-#
-# HUSKY=0 — deshabilita husky en Docker (no hay .git)
-# TURBO_TELEMETRY_DISABLED=1 — evita prompt interactivo en CI
+# pnpm-lock.yaml MUST be committed in the repo.
+# --frozen-lockfile guarantees reproducible builds.
+# HUSKY=0 — disables husky in Docker (no .git)
+# TURBO_TELEMETRY_DISABLED=1 — avoids interactive prompt in CI
 # ─────────────────────────────────────────────
 FROM base AS pruner
 ENV TURBO_TELEMETRY_DISABLED=1
@@ -42,8 +46,8 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 
 # ─────────────────────────────────────────────
-# Stage 2: builder — instala deps del sub-repo y compila
-# NODE_ENV=development es OBLIGATORIO para instalar devDependencies.
+# Stage 2: builder — installs sub-repo deps and compiles
+# NODE_ENV=development is REQUIRED to install devDependencies.
 # ─────────────────────────────────────────────
 FROM base AS builder
 
@@ -65,7 +69,7 @@ ARG BUILD_TIME=unknown
 RUN pnpm turbo build --filter=@octo/api
 
 # ─────────────────────────────────────────────
-# Stage 3: runner — imagen final mínima
+# Stage 3: runner — minimal final image
 # ─────────────────────────────────────────────
 FROM node:22.12.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
@@ -87,13 +91,13 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:3001/api/health/live || exit 1
 
+# Build-time metadata only — safe as ARG/ENV.
+# Runtime secrets must NEVER appear here. See security note at top.
 ARG BUILD_VERSION=unknown
 ARG BUILD_COMMIT=unknown
 ARG BUILD_PHASE=F0
 ARG BUILD_TIME=unknown
 
-# DB_POOL_MAX injected at runtime via Coolify Environment Variables.
-# Never set as build ARG — it has no business being in an image layer.
 ENV BUILD_VERSION=${BUILD_VERSION} \
     BUILD_COMMIT=${BUILD_COMMIT} \
     BUILD_PHASE=${BUILD_PHASE} \
