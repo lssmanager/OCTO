@@ -42,11 +42,9 @@ export type {
   HandoffTool,
   HandoffResult,
 } from './protocols/mcp-a2a';
-// Protocol-specific ExecutionContext aliased to avoid collision with domain type
 export type { ExecutionContext as McpExecutionContext } from './protocols/mcp-a2a';
 
 // F0-007 — AutoGen GroupChat Message & Event Contracts
-// Explicit exports to avoid TS2308 ambiguity with mcp-a2a (MessageRole)
 export type {
   TokenUsage,
   IMessage,
@@ -72,8 +70,6 @@ export * from './agents/agent-profile';
 export * from './coordination/coordinator';
 
 // F0-010 — Paperclip Budget, Governance & Eval Contracts
-// GovernancePolicy also lives in execution.ts (runtime value-object) and policy.ts
-// (persistent config entity). Export budget-governance explicitly to avoid TS2308.
 export type {
   BudgetScope,
   IBudgetPolicy,
@@ -103,26 +99,72 @@ export type {
 // F0-011 — agency-agents Template Format
 export * from './templates/agent-template';
 
-// Core primitive contracts (canonical domain types — source of truth)
+// Core primitive contracts
 export * from './agent';
 
-// execution.ts exports GovernancePolicy (runtime value-object VO).
-// policy.ts also exports GovernancePolicy (persistent config entity).
-// Both are valid but ambiguous under export *. Alias policy.ts version to avoid TS2308.
+// ─── execution.ts exports ────────────────────────────────────────────────────
+// Canonical source of truth for execution state machine, enums, and types.
+// TokenUsage also exported from messaging/messages.ts — aliased here to avoid TS2308.
 export type {
+  // Enums (const objects + type aliases)
+  ExecutionStatus,
+  StepType,
+  StepStatus,
+  TriggerSource,
+  DlqReason,
+  IdempotencyScope,
+  // Value arrays (for Zod .enum() and iteration)
+  ExecutionStatusValues,
+  StepTypeValues,
+  // State machine maps
+  // (exported as values, not types, so the const object is importable at runtime)
+  // Type-only consumers use `typeof VALID_TRANSITIONS`
+  // Runtime consumers import the object directly.
+} from './execution';
+
+export {
+  // Runtime-available const enum objects
+  ExecutionStatus,
+  StepType,
+  StepStatus,
+  TriggerSource,
+  DlqReason,
+  IdempotencyScope,
+  ExecutionStatusValues,
+  StepTypeValues,
+  // State machine
+  VALID_TRANSITIONS,
+  VALID_STEP_TRANSITIONS,
+  // Validators
+  assertValidTransition,
+  canTransition,
+  canTransitionStep,
+  // Status predicates
+  isTerminalStatus,
+  isActiveStatus,
+  isBlockedStatus,
+  // Error class
+  ExecutionTransitionError,
+} from './execution';
+
+export type {
+  // Interfaces
+  GovernancePolicy,
   TaskDefinition,
   ExecutionContext,
   ExecutionRequest,
   Execution,
-  ExecutionStatus,
+  ExecutionSummary,
   TaskResult,
   ExecutionError,
   TokenUsage as ExecutionTokenUsage,
+  CostUsage,
   TaskType,
   Task,
   ToolInvocation,
+  StepTransition,
 } from './execution';
-// GovernancePolicy from execution.ts = runtime value-object (canonical for workers)
+
 export type { GovernancePolicy } from './execution';
 
 // policy.ts GovernancePolicy = persistent config entity — aliased to avoid collision
