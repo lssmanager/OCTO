@@ -12,12 +12,16 @@
 # Keep in sync manually or via CI lint rule.
 # ─────────────────────────────────────────────────────────────────
 
+# syntax=docker/dockerfile:1.4
+
 # ─────────────────────────────────────────────
 # Stage 0: base — Node.js Alpine + pnpm
 # ─────────────────────────────────────────────
 FROM node:22.12.0-alpine3.21 AS base
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+ENV PNPM_HOME="/root/.local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
 
 # ─────────────────────────────────────────────
@@ -27,21 +31,14 @@ WORKDIR /app
 # --frozen-lockfile garantiza builds reproducibles y evita
 # dependency drift entre builds de Coolify/CI.
 #
-# Si este step falla con ERR_PNPM_NO_LOCKFILE, genera el lockfile
-# localmente y commitéalo:
-#   $env:HUSKY="0"; pnpm install   # PowerShell
-#   HUSKY=0 pnpm install           # bash/zsh
-#   git add pnpm-lock.yaml && git commit -m "chore: add pnpm lockfile"
-#
 # HUSKY=0 — deshabilita husky en Docker (no hay .git)
 # TURBO_TELEMETRY_DISABLED=1 — evita prompt interactivo en CI
-# VERSIÓN DE TURBO: debe coincidir con la devDependency en
-# package.json raíz para evitar errores de parseo del turbo.json.
 # ─────────────────────────────────────────────
 FROM base AS pruner
 ENV TURBO_TELEMETRY_DISABLED=1
 COPY . .
-RUN HUSKY=0 pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    HUSKY=0 pnpm install --frozen-lockfile
 RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 
 # ─────────────────────────────────────────────
@@ -55,7 +52,8 @@ ENV TURBO_TELEMETRY_DISABLED=1
 
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN HUSKY=0 pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    HUSKY=0 pnpm install --frozen-lockfile
 
 COPY --from=pruner /app/out/full/ .
 
