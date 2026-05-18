@@ -1,5 +1,4 @@
-// This file is intentionally left as a no-op redirect.
+// This file is intentionally a no-op.
 // ESLint 9 flat config is in eslint.config.js.
-// This file exists only to satisfy older tooling that looks for .eslintrc.*
-// It will be ignored by ESLint 9+ when eslint.config.js is present.
+// When eslint.config.js is present, ESLint 9 ignores this file automatically.
 module.exports = {};
