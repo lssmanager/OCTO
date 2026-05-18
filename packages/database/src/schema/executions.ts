@@ -83,6 +83,10 @@ export const executions = pgTable(
     runId:          text('run_id').notNull(),
     tokenUsage:     jsonb('token_usage'),
     costUsd:        jsonb('cost_usd'),
+    // F2: LangGraph checkpoint support (pause/resume)
+    // Stores the serialized graph state blob inline.
+    // lastCheckpointId references an external checkpoint store ID.
+    checkpoint:       jsonb('checkpoint'),
     lastCheckpointId: text('last_checkpoint_id'),
     startedAt:      timestamp('started_at'),
     completedAt:    timestamp('completed_at'),
