@@ -29,6 +29,14 @@
       "outputs": [],
       "cache": true
     },
+    "db:generate": {
+      "inputs": ["src/schema/**/*.ts", "drizzle.config.ts"],
+      "outputs": ["migrations/**"],
+      "cache": true
+    },
+    "db:migrate": {
+      "cache": false
+    },
     "clean": {
       "cache": false
     }
