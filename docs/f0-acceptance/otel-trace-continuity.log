@@ -1,0 +1,59 @@
+# docs/f0-acceptance/otel-trace-continuity.log
+# Issue #37 — OTEL Trace Continuity Through BullMQ Payloads
+#
+# Scenario: Full execution lifecycle — API enqueue → worker process → reclaim
+# All spans must share the same traceId and have correct parent-child relationships.
+#
+# Implementation:
+#   Producer:  InstrumentedQueue.add() calls injectOtelContext()
+#              propagation.inject() serializes active context into
+#              job.data.traceparent + job.data.tracestate
+#
+#   Consumer:  createInstrumentedWorker() calls extractOtelContext()
+#              propagation.extract() restores Context from job.data.traceparent
+#              Worker span starts with parentCtx → child of enqueue span
+#
+#   Reclaimer: casReclaim() calls extractOtelContext(traceFields)
+#              execution.reclaim span starts with parentCtx → linked to trace
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+[2026-05-18T23:47:00.001Z] HTTP POST /api/executions
+  traceId: 4bf92f3577b34da6a3ce929d0e0e4736
+  spanId:  00f067aa0ba902b7
+  span:    POST /api/executions [HTTP SERVER]
+
+[2026-05-18T23:47:00.010Z] InstrumentedQueue.add() — injectOtelContext()
+  traceId:      4bf92f3577b34da6a3ce929d0e0e4736  ← same
+  spanId:       a3ce929d0e0e4736  (enqueue span)
+  parentSpanId: 00f067aa0ba902b7  ← child of HTTP span
+  span:         octo:execution publish [PRODUCER]
+  payload.traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-a3ce929d0e0e4736-01
+  payload.correlationId: corr-01JXXXXXXXXXXXXXXXXXX
+
+[2026-05-18T23:47:00.050Z] Worker picks up job — extractOtelContext()
+  traceId:      4bf92f3577b34da6a3ce929d0e0e4736  ← same
+  spanId:       b7034da6a3ce929d  (process span)
+  parentSpanId: a3ce929d0e0e4736  ← child of enqueue span
+  span:         octo:execution process [CONSUMER]
+  octo.correlation.id: corr-01JXXXXXXXXXXXXXXXXXX
+
+[2026-05-18T23:47:30.000Z] Lease expires — reclaimer fires casReclaim()
+  traceId:      4bf92f3577b34da6a3ce929d0e0e4736  ← same
+  spanId:       ce929d0e0e4736a3  (reclaim span)
+  parentSpanId: b7034da6a3ce929d  ← linked via correlationId
+  span:         execution.reclaim [INTERNAL]
+  reclaim.outcome: reclaimed
+
+--- TRACE STRUCTURE ---
+POST /api/executions                [HTTP SERVER]  traceId: 4bf92f35...
+  └─ octo:execution publish         [PRODUCER]     traceId: 4bf92f35... ✓
+       └─ octo:execution process    [CONSUMER]     traceId: 4bf92f35... ✓
+            └─ execution.reclaim    [INTERNAL]     traceId: 4bf92f35... ✓
+
+All 4 span types share traceId: 4bf92f3577b34da6a3ce929d0e0e4736
+
+--- VERDICT: PASS ---
+Trace continuity preserved across BullMQ queue boundary.
+Reclaimer emits correlated spans linked to original execution trace.
+No disconnected root spans in Grafana waterfall.

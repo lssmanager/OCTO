@@ -1,61 +1,93 @@
 /**
  * apps/reclaimer-worker/src/cas-reclaim.ts
- * Issue #34 — Zombie execution recovery
+ * Issue #34 + #37 — CAS reclaim with correlated OTEL span
  *
- * CAS-safe reclaim of a single zombie execution.
+ * Emits an 'execution.reclaim' OTEL span linked to the original
+ * execution trace via the traceparent stored in the job payload.
+ * This makes reclaim spans appear as children in the full trace waterfall.
  *
- * PATTERN:
- *   UPDATE executions
- *   SET    status = 'retrying',
- *          lease_expires_at = NULL,
- *          reclaimed_at = NOW(),
- *          reclaim_count = reclaim_count + 1
- *   WHERE  id = $executionId
- *     AND  status = 'running'
- *     AND  lease_expires_at < NOW()
- *   RETURNING id
- *
- *   0 rows → 'already_taken' (another reclaimer won) or 'not_found'
- *   1 row  → 'reclaimed' (this instance wins, proceeds to re-enqueue)
+ * Span attributes:
+ *   execution.id           — the reclaimed execution ID
+ *   reclaim.outcome        — 'reclaimed' | 'already_taken' | 'not_found'
+ *   octo.correlation.id    — from job payload (if present)
+ *   messaging.system       — 'bullmq'
  */
 
 import { and, eq, lt, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
 import { executions } from '@octo/database';
+import { extractOtelContext } from '@octo/queue';
+import type { OtelTraceFields } from '@octo/queue';
 
 export type ReclaimOutcome = 'reclaimed' | 'already_taken' | 'not_found';
 
 export async function casReclaim(
   db:          NodePgDatabase,
   executionId: string,
+  traceFields?: OtelTraceFields,
 ): Promise<ReclaimOutcome> {
-  // First check if the execution exists at all
-  const exists = await db
-    .select({ id: executions.id })
-    .from(executions)
-    .where(eq(executions.id, executionId))
-    .limit(1);
+  // Restore trace context from original job payload (if available)
+  const parentCtx = traceFields ? extractOtelContext(traceFields) : context.active();
+  const tracer    = trace.getTracer('octo.reclaimer', '0.1.0');
 
-  if (exists.length === 0) return 'not_found';
+  return tracer.startActiveSpan(
+    'execution.reclaim',
+    {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        'execution.id':         executionId,
+        'messaging.system':     'bullmq',
+        'octo.correlation.id':  traceFields?.correlationId ?? 'none',
+      },
+    },
+    parentCtx,
+    async (span) => {
+      try {
+        // Check existence first
+        const exists = await db
+          .select({ id: executions.id })
+          .from(executions)
+          .where(eq(executions.id, executionId))
+          .limit(1);
 
-  // CAS UPDATE: only wins if status is still 'running' AND lease is still expired
-  const result = await db
-    .update(executions)
-    .set({
-      status:         'retrying',
-      leaseExpiresAt: null,
-      reclaimedAt:    sql`NOW()`,
-      reclaimCount:   sql`reclaim_count + 1`,
-      updatedAt:      new Date(),
-    })
-    .where(
-      and(
-        eq(executions.id, executionId),
-        eq(executions.status, 'running'),
-        lt(executions.leaseExpiresAt, sql`NOW()`),
-      ),
-    )
-    .returning({ id: executions.id });
+        if (exists.length === 0) {
+          span.setAttribute('reclaim.outcome', 'not_found');
+          span.setStatus({ code: SpanStatusCode.OK });
+          return 'not_found';
+        }
 
-  return result.length > 0 ? 'reclaimed' : 'already_taken';
+        // CAS UPDATE: only wins if status='running' AND lease expired
+        const result = await db
+          .update(executions)
+          .set({
+            status:         'retrying',
+            leaseExpiresAt: null,
+            reclaimedAt:    sql`NOW()`,
+            reclaimCount:   sql`reclaim_count + 1`,
+            updatedAt:      new Date(),
+          })
+          .where(
+            and(
+              eq(executions.id, executionId),
+              eq(executions.status, 'running'),
+              lt(executions.leaseExpiresAt, sql`NOW()`),
+            ),
+          )
+          .returning({ id: executions.id });
+
+        const outcome: ReclaimOutcome = result.length > 0 ? 'reclaimed' : 'already_taken';
+        span.setAttribute('reclaim.outcome', outcome);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return outcome;
+
+      } catch (err) {
+        span.recordException(err as Error);
+        span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
+        throw err;
+      } finally {
+        span.end();
+      }
+    },
+  );
 }
