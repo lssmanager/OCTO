@@ -20,7 +20,14 @@ import { createQueue, type QueueConfig } from './create-queue';
 import { injectTraceparent } from './traceparent';
 import type { QueueName } from './queue-names';
 
-export class InstrumentedQueue<T extends object = Record<string, unknown>> {
+// BullMQ 5.x tightened Queue<T>.add() to require
+// ExtractNameType<T, string> for the job name parameter.
+// When T is a plain object (no discriminated name field),
+// ExtractNameType resolves to `string` — but only after the
+// cast below makes the generic relationship explicit.
+type AnyJobData = Record<string, unknown>;
+
+export class InstrumentedQueue<T extends AnyJobData = AnyJobData> {
   private readonly queue: Queue<T & { traceparent?: string }>;
   private readonly tracer: Tracer;
   private readonly queueName: string;
@@ -48,7 +55,7 @@ export class InstrumentedQueue<T extends object = Record<string, unknown>> {
           'messaging.system':            'bullmq',
           'messaging.operation':         'publish',
           'messaging.destination.name':  this.queueName,
-          'messaging.message.id':        (data as Record<string, unknown>)['executionId'] as string ?? jobName,
+          'messaging.message.id':        (data as AnyJobData)['executionId'] as string ?? jobName,
           'octo.job.name':               jobName,
         },
       },
@@ -56,7 +63,15 @@ export class InstrumentedQueue<T extends object = Record<string, unknown>> {
         try {
           // Inject active span context as W3C traceparent in job data
           const instrumentedData = injectTraceparent(data);
-          const job = await this.queue.add(jobName, instrumentedData, opts);
+
+          // Cast jobName: when T has no discriminated name literal,
+          // ExtractNameType<T & { traceparent? }, string> == string.
+          // The explicit cast satisfies the BullMQ 5.x overload.
+          const job = await this.queue.add(
+            jobName as Parameters<typeof this.queue.add>[0],
+            instrumentedData,
+            opts,
+          );
 
           span.setAttribute('messaging.message.id', job.id ?? jobName);
           span.setStatus({ code: SpanStatusCode.OK });
@@ -85,7 +100,7 @@ export class InstrumentedQueue<T extends object = Record<string, unknown>> {
 /**
  * Factory function — mirrors createQueue() ergonomics.
  */
-export function createInstrumentedQueue<T extends object = Record<string, unknown>>(
+export function createInstrumentedQueue<T extends AnyJobData = AnyJobData>(
   name: QueueName | string,
   config: QueueConfig,
 ): InstrumentedQueue<T> {
