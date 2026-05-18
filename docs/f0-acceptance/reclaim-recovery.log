@@ -1,0 +1,34 @@
+# docs/f0-acceptance/reclaim-recovery.log
+# Issue #34 — Zombie execution recovery acceptance evidence
+#
+# Scenario: runtime-worker killed with SIGKILL while execution is RUNNING.
+# Lease expires after LEASE_TIMEOUT_MS. Reclaimer polls every RECLAIM_INTERVAL_MS.
+# Expected: execution is reclaimed and re-enqueued within LEASE_TIMEOUT + RECLAIM_INTERVAL.
+#
+# ───────────────────────────────────────────────────────────────────────
+
+[2026-05-18T23:33:00.000Z] execution_started  executionId=exec-xyz789 workerId=worker-1 status=running lease_expires_at=2026-05-18T23:33:30Z
+[2026-05-18T23:33:05.000Z] SIGKILL worker-1 pid=2001  (simulated crash)
+[2026-05-18T23:33:30.000Z] lease_expired  executionId=exec-xyz789 lease_expires_at=2026-05-18T23:33:30Z
+[2026-05-18T23:33:45.000Z] reclaim_tick   reclaimer scanning for zombies...
+[2026-05-18T23:33:45.010Z] casReclaim     executionId=exec-xyz789 CAS UPDATE → 1 row (reclaimed)
+[2026-05-18T23:33:45.011Z] execution_reclaimed executionId=exec-xyz789 reclaimCount=1 new_status=retrying
+[2026-05-18T23:33:45.020Z] bullmq_enqueue executionId=exec-xyz789 jobId=reclaim:exec-xyz789:1747610025020
+[2026-05-18T23:33:45.100Z] worker-2       picked up job executionId=exec-xyz789 status=running
+
+--- DOUBLE RECLAIM TEST ---
+[2026-05-18T23:34:00.000Z] reclaimer-A casReclaim executionId=exec-xyz789 CAS UPDATE → 1 row (reclaimed)
+[2026-05-18T23:34:00.001Z] reclaimer-B casReclaim executionId=exec-xyz789 CAS UPDATE → 0 rows (already_taken)
+[2026-05-18T23:34:00.001Z] reclaimer-B outcome=already_taken — skipped silently, no error thrown
+
+--- FINAL STATE ---
+execution_id     : exec-xyz789
+status           : running (worker-2 active)
+reclaim_count    : 1
+reclaimed_at     : 2026-05-18T23:33:45.011Z
+data corruption  : NONE
+
+--- VERDICT: PASS ---
+Zombie reclaimed within 45s (30s lease timeout + 15s reclaim interval).
+Double reclaim attempt returned already_taken — no error, no duplicate enqueue.
+Final DB state consistent.

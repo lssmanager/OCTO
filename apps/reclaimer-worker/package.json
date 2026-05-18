@@ -1,0 +1,25 @@
+{
+  "name": "@octo/reclaimer-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "start": "node --enable-source-maps dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@octo/database": "workspace:*",
+    "@octo/contracts": "workspace:*",
+    "@octo/queue": "workspace:*",
+    "@octo/observability": "workspace:*",
+    "@opentelemetry/api": "^1.9.0",
+    "drizzle-orm": "^0.40.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}
