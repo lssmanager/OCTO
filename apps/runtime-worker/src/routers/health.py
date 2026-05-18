@@ -1,171 +1,266 @@
-"""Health router — liveness, readiness, and status probes.
+"""Health endpoints for OCTO Runtime Worker (C4).
 
 Endpoints:
-  GET /health/live    — liveness probe (is the process alive?)
-  GET /health/ready   — readiness probe (503 when any critical dep is down)
-  GET /health         — full status with dependency checks
-  GET /health/version — service version info
+  GET /health           — full status (Redis + DB + LiteLLM + process)
+  GET /health/live      — liveness probe (always 200 if process alive)
+  GET /health/ready     — readiness probe (503 if any dependency down)
+  GET /health/worker    — process-level snapshot (pid, uptime, memory, active jobs)
+  GET /health/version   — build metadata
+  GET /health/metrics-url — Prometheus scrape URL for Grafana auto-discovery
+
+All endpoints are unauthenticated — consumed by Coolify, Docker HEALTHCHECK,
+and Grafana. No sensitive data is exposed.
 """
+from __future__ import annotations
+
+import asyncio
+import os
 import time
-from datetime import UTC, datetime
+from typing import Any
 
 import httpx
-import redis.asyncio as aioredis
 import structlog
-from fastapi import APIRouter, Response
-
-from ..config import Settings
-from ..schemas import DependencyStatus, HealthDetail, HealthResponse
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 log = structlog.get_logger(__name__)
+
+# Process start time for uptime calculation.
+_PROCESS_START: float = time.monotonic()
+
+# Active execution counter — incremented/decremented by the execution service.
+# A simple int is used here; in F1+ this will be a proper async counter
+# backed by the ExecutionService.
+_active_executions: int = 0
+
 router = APIRouter(prefix="/health", tags=["health"])
-_settings = Settings()
-
-_START_TIME = time.monotonic()
-_VERSION = _settings.otel_service_version
-_PHASE = _settings.build_phase
 
 
-@router.get("/live", summary="Liveness probe")
-async def liveness() -> dict[str, str]:
-    """Returns 200 if the process is alive."""
-    return {"status": "ok"}
+# ── Pydantic response models ───────────────────────────────────────────────────
+
+class DependencyCheck(BaseModel):
+    status: str          # 'ok' | 'error' | 'degraded'
+    latency_ms: float | None = None
+    detail: str | None = None
 
 
-@router.get("/ready", summary="Readiness probe")
-async def readiness(response: Response) -> dict[str, object]:
-    """Returns 200 only if all critical dependencies are reachable.
+class HealthResponse(BaseModel):
+    status: str          # 'ok' | 'error' | 'degraded'
+    timestamp: str
+    service: str
+    version: str
+    phase: str
+    checks: dict[str, DependencyCheck]
 
-    Returns HTTP 503 Service Unavailable when any dependency is down.
-    Load balancers and Coolify use this to gate traffic to the worker.
-    """
-    redis_ok = await _check_redis()
-    litellm_ok = await _check_litellm()
-    all_ok = redis_ok and litellm_ok
 
-    if not all_ok:
-        response.status_code = 503
+class WorkerHealthResponse(BaseModel):
+    status: str
+    pid: int
+    uptime_secs: float
+    memory_rss_mb: float
+    active_executions: int
+    max_concurrent_executions: int
+    worker_id: str
+    version: str
+    commit: str
+    phase: str
+    metrics_port: int
+    timestamp: str
 
+
+# ── Dependency probe helpers ───────────────────────────────────────────────────
+
+async def _check_redis() -> DependencyCheck:
+    redis_url = os.environ.get("REDIS_URL", "redis://redis:6379")
+    import importlib
+    try:
+        redis_lib = importlib.import_module("redis.asyncio")
+        client = redis_lib.from_url(redis_url, socket_connect_timeout=2)
+        t0 = time.monotonic()
+        await client.ping()
+        latency = (time.monotonic() - t0) * 1000
+        await client.aclose()
+        return DependencyCheck(status="ok", latency_ms=round(latency, 2))
+    except Exception as exc:  # noqa: BLE001
+        return DependencyCheck(status="error", detail=str(exc))
+
+
+async def _check_database() -> DependencyCheck:
+    db_url = os.environ.get("DATABASE_URL", "")
+    if not db_url:
+        return DependencyCheck(status="error", detail="DATABASE_URL not configured")
+    try:
+        import asyncpg  # type: ignore[import-untyped]
+        t0 = time.monotonic()
+        conn = await asyncpg.connect(db_url, timeout=3)
+        await conn.fetchval("SELECT 1")
+        latency = (time.monotonic() - t0) * 1000
+        await conn.close()
+        return DependencyCheck(status="ok", latency_ms=round(latency, 2))
+    except Exception as exc:  # noqa: BLE001
+        return DependencyCheck(status="error", detail=str(exc))
+
+
+async def _check_litellm() -> DependencyCheck:
+    litellm_url = os.environ.get("LITELLM_URL", "http://litellm:4000")
+    try:
+        t0 = time.monotonic()
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{litellm_url}/health")
+        latency = (time.monotonic() - t0) * 1000
+        if resp.status_code < 400:
+            return DependencyCheck(status="ok", latency_ms=round(latency, 2))
+        return DependencyCheck(
+            status="degraded",
+            latency_ms=round(latency, 2),
+            detail=f"HTTP {resp.status_code}",
+        )
+    except Exception as exc:  # noqa: BLE001
+        return DependencyCheck(status="error", detail=str(exc))
+
+
+async def _check_control_plane() -> DependencyCheck:
+    api_url = os.environ.get("API_URL", "http://api:3001/api")
+    try:
+        t0 = time.monotonic()
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{api_url}/health/live")
+        latency = (time.monotonic() - t0) * 1000
+        if resp.status_code == 200:
+            return DependencyCheck(status="ok", latency_ms=round(latency, 2))
+        return DependencyCheck(
+            status="degraded",
+            latency_ms=round(latency, 2),
+            detail=f"HTTP {resp.status_code}",
+        )
+    except Exception as exc:  # noqa: BLE001
+        return DependencyCheck(status="error", detail=str(exc))
+
+
+async def _run_all_checks() -> dict[str, DependencyCheck]:
+    redis_check, db_check, litellm_check, cp_check = await asyncio.gather(
+        _check_redis(),
+        _check_database(),
+        _check_litellm(),
+        _check_control_plane(),
+    )
     return {
-        "status": "ready" if all_ok else "not_ready",
-        "ready": all_ok,
-        "timestamp": datetime.now(UTC).isoformat(),
-        "checks": {
-            "redis": redis_ok,
-            "litellm": litellm_ok,
-        },
+        "redis":          redis_check,
+        "database":       db_check,
+        "litellm":        litellm_check,
+        "control_plane":  cp_check,
+        "runtime_worker": DependencyCheck(status="ok"),  # this process is alive
     }
 
 
-@router.get(
-    "",
-    response_model=HealthResponse,
-    summary="Full health status",
-)
-async def health_status() -> HealthResponse:
-    """Full health check with individual dependency statuses.
+def _overall_status(checks: dict[str, DependencyCheck]) -> str:
+    statuses = {c.status for c in checks.values()}
+    if "error" in statuses:
+        return "error"
+    if "degraded" in statuses:
+        return "degraded"
+    return "ok"
 
-    Returns phase field so consumers can identify the platform milestone.
-    Issue #11 criterion: GET /health must include {phase: "F0"}.
-    """
-    redis_check = await _check_redis_detail()
-    litellm_check = await _check_litellm_detail()
-    api_check = await _check_api_detail()
 
-    all_ok = all(
-        c.status == DependencyStatus.OK
-        for c in [redis_check, litellm_check, api_check]
-    )
-    overall = DependencyStatus.OK if all_ok else DependencyStatus.DEGRADED
+# ── Endpoints ─────────────────────────────────────────────────────────────────
 
+@router.get("", response_model=HealthResponse)
+async def health_check() -> HealthResponse:
+    """Full dependency health. Always returns 200 — consumers check .status."""
+    import datetime
+    checks = await _run_all_checks()
     return HealthResponse(
-        status=overall,
-        version=_VERSION,
-        service=_settings.otel_service_name,
-        phase=_PHASE,
-        checks=[redis_check, litellm_check, api_check],
+        status=_overall_status(checks),
+        timestamp=datetime.datetime.utcnow().isoformat() + "Z",
+        service=os.environ.get("OTEL_SERVICE_NAME", "octo-runtime-worker"),
+        version=os.environ.get("BUILD_VERSION", "unknown"),
+        phase=os.environ.get("BUILD_PHASE", "F0"),
+        checks=checks,
     )
 
 
-@router.get("/version", summary="Service version")
-async def version_info() -> dict[str, str | float]:
-    """Returns version and uptime information."""
+@router.get("/live")
+async def liveness() -> dict[str, str]:
+    """Liveness probe — 200 if the process is alive."""
+    import datetime
+    return {"status": "ok", "timestamp": datetime.datetime.utcnow().isoformat() + "Z"}
+
+
+@router.get("/ready")
+async def readiness() -> JSONResponse:
+    """Readiness probe — 200 when all dependencies healthy, 503 otherwise."""
+    import datetime
+    checks = await _run_all_checks()
+    all_ok = all(c.status == "ok" for c in checks.values())
+    status_code = 200 if all_ok else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status":    "ok" if all_ok else "error",
+            "ready":     all_ok,
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "checks":    {k: v.model_dump() for k, v in checks.items()},
+        },
+    )
+
+
+@router.get("/worker", response_model=WorkerHealthResponse)
+async def worker_health() -> WorkerHealthResponse:
+    """Process-level health snapshot.
+
+    Returns runtime metrics for this specific worker process:
+    - pid and uptime for process identity
+    - memory_rss_mb for leak detection
+    - active_executions for saturation monitoring
+    - worker_id for multi-replica correlation in Grafana
+    """
+    import datetime
+    import psutil  # type: ignore[import-untyped]
+
+    proc = psutil.Process()
+    mem_info = proc.memory_info()
+    memory_rss_mb = mem_info.rss / (1024 * 1024)
+
+    return WorkerHealthResponse(
+        status="ok",
+        pid=os.getpid(),
+        uptime_secs=round(time.monotonic() - _PROCESS_START, 2),
+        memory_rss_mb=round(memory_rss_mb, 2),
+        active_executions=_active_executions,
+        max_concurrent_executions=int(
+            os.environ.get("MAX_CONCURRENT_EXECUTIONS", "10")
+        ),
+        worker_id=os.environ.get("WORKER_ID", f"worker-{os.getpid()}"),
+        version=os.environ.get("BUILD_VERSION", "unknown"),
+        commit=os.environ.get("BUILD_COMMIT", "unknown"),
+        phase=os.environ.get("BUILD_PHASE", "F0"),
+        metrics_port=int(os.environ.get("METRICS_PORT", "9464")),
+        timestamp=datetime.datetime.utcnow().isoformat() + "Z",
+    )
+
+
+@router.get("/version")
+async def version_info() -> dict[str, str]:
+    """Build metadata. Exposes image build-time ARG/ENV vars."""
+    import sys
     return {
-        "service": _settings.otel_service_name,
-        "version": _VERSION,
-        "phase": _PHASE,
-        "uptime_seconds": round(time.monotonic() - _START_TIME, 2),
-        "timestamp": datetime.now(UTC).isoformat(),
+        "service":    os.environ.get("OTEL_SERVICE_NAME", "octo-runtime-worker"),
+        "version":    os.environ.get("BUILD_VERSION", "unknown"),
+        "commit":     os.environ.get("BUILD_COMMIT", "unknown"),
+        "phase":      os.environ.get("BUILD_PHASE", "F0"),
+        "built_at":   os.environ.get("BUILD_TIME", "unknown"),
+        "python":     sys.version,
     }
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-async def _check_redis() -> bool:
-    try:
-        r = aioredis.from_url(_settings.redis_url, socket_connect_timeout=2)
-        await r.ping()
-        await r.aclose()
-        return True
-    except Exception:  # noqa: BLE001
-        return False
-
-
-async def _check_litellm() -> bool:
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{_settings.litellm_url}/health")
-            return resp.status_code < 500
-    except Exception:  # noqa: BLE001
-        return False
-
-
-async def _check_redis_detail() -> HealthDetail:
-    t0 = time.monotonic()
-    try:
-        r = aioredis.from_url(_settings.redis_url, socket_connect_timeout=2)
-        await r.ping()
-        await r.aclose()
-        latency = int((time.monotonic() - t0) * 1000)
-        return HealthDetail(name="redis", status=DependencyStatus.OK, latency_ms=latency)
-    except Exception as exc:  # noqa: BLE001
-        return HealthDetail(
-            name="redis",
-            status=DependencyStatus.DOWN,
-            error=str(exc),
-        )
-
-
-async def _check_litellm_detail() -> HealthDetail:
-    t0 = time.monotonic()
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{_settings.litellm_url}/health")
-            latency = int((time.monotonic() - t0) * 1000)
-            status = DependencyStatus.OK if resp.status_code < 500 else DependencyStatus.DEGRADED
-            return HealthDetail(name="litellm", status=status, latency_ms=latency)
-    except Exception as exc:  # noqa: BLE001
-        return HealthDetail(
-            name="litellm",
-            status=DependencyStatus.DOWN,
-            error=str(exc),
-        )
-
-
-async def _check_api_detail() -> HealthDetail:
-    """Check connectivity to the Control Plane API."""
-    t0 = time.monotonic()
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{_settings.api_url}/api/health/live")
-            latency = int((time.monotonic() - t0) * 1000)
-            status = DependencyStatus.OK if resp.status_code == 200 else DependencyStatus.DEGRADED
-            return HealthDetail(name="api", status=status, latency_ms=latency)
-    except Exception as exc:  # noqa: BLE001
-        return HealthDetail(
-            name="api",
-            status=DependencyStatus.DEGRADED,
-            error=str(exc),
-        )
+@router.get("/metrics-url")
+async def metrics_url() -> dict[str, str]:
+    """Returns the Prometheus scrape URL for Grafana auto-discovery."""
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("METRICS_PORT", "9464"))
+    return {
+        "url":     f"http://{host}:{port}/metrics",
+        "format":  "prometheus",
+        "note":    "Scraped by Prometheus via prometheus_client.start_http_server()",
+    }
