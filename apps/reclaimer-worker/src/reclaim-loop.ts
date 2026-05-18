@@ -1,10 +1,10 @@
 /**
  * apps/reclaimer-worker/src/reclaim-loop.ts
- * Issue #34 — Zombie execution recovery
+ * Issue #34 + #37 — Polling loop with OTEL trace context forwarding
  *
- * Polls Postgres every RECLAIM_INTERVAL_MS for executions with
- * expired leases (status = 'running' AND lease_expires_at < NOW())
- * and reclaims them via CAS, then re-enqueues in BullMQ.
+ * Passes the stored OtelTraceFields from the zombie execution's original
+ * job payload to casReclaim() so that reclaim spans are linked to the
+ * original trace waterfall.
  */
 
 import { and, eq, lt, sql } from 'drizzle-orm';
@@ -30,9 +30,14 @@ export async function startReclaimLoop(
 
   const tick = async () => {
     try {
-      // Query zombie executions: running but lease expired
       const zombies = await db
-        .select({ id: executions.id, attempt: executions.attempt, task: executions.task })
+        .select({
+          id:      executions.id,
+          attempt: executions.attempt,
+          task:    executions.task,
+          // Select trace fields stored in the task payload for context restoration
+          traceId: executions.traceId,
+        })
         .from(executions)
         .where(
           and(
@@ -43,12 +48,15 @@ export async function startReclaimLoop(
 
       for (const zombie of zombies) {
         try {
-          const outcome = await casReclaim(db, zombie.id);
+          // Pass trace fields so casReclaim() can emit a correlated span (#37)
+          const outcome = await casReclaim(db, zombie.id, {
+            // traceId from the execution row — used as correlation hint
+            correlationId: zombie.traceId ?? undefined,
+          });
 
           if (outcome === 'reclaimed') {
             reclaimedCounter.add(1, { executionId: zombie.id });
 
-            // Re-enqueue the execution for retry
             await executionQueue.add(
               'execute',
               { executionId: zombie.id, task: zombie.task },
@@ -66,9 +74,7 @@ export async function startReclaimLoop(
 
           } else if (outcome === 'already_taken') {
             alreadyTakenCounter.add(1, { executionId: zombie.id });
-            // Another reclaimer won the CAS race — skip silently
           }
-          // 'not_found' — execution deleted between query and CAS — skip
 
         } catch (err: unknown) {
           reclaimErrorCounter.add(1, { executionId: zombie.id });
@@ -81,27 +87,19 @@ export async function startReclaimLoop(
       }
 
       if (zombies.length > 0) {
-        console.log(JSON.stringify({
-          msg:       'reclaim_tick_done',
-          scanned:   zombies.length,
-        }));
+        console.log(JSON.stringify({ msg: 'reclaim_tick_done', scanned: zombies.length }));
       }
 
     } catch (err: unknown) {
       console.error(JSON.stringify({ msg: 'reclaim_tick_error', error: String(err) }));
     }
 
-    // Schedule next tick
     timer = setTimeout(() => void tick(), config.intervalMs);
   };
 
-  // First tick
   timer = setTimeout(() => void tick(), config.intervalMs);
 }
 
 export async function stopReclaimLoop(): Promise<void> {
-  if (timer) {
-    clearTimeout(timer);
-    timer = null;
-  }
+  if (timer) { clearTimeout(timer); timer = null; }
 }
