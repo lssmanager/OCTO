@@ -360,6 +360,9 @@ importers:
       '@octo/config':
         specifier: workspace:*
         version: link:../config
+      '@types/json-schema':
+        specifier: ^7.0.15
+        version: 7.0.15
       rimraf:
         specifier: 5.0.10
         version: 5.0.10
