@@ -5,6 +5,7 @@ import { FastifyAdapter } from '@nestjs/platform-fastify';
 import { loadApiConfig } from '@octo/config';
 import { bootstrapTelemetry, createLogger } from '@octo/observability';
 import { AppModule } from './app.module';
+import { BULLBOARD_BASEPATH, FastifyBullBoardPlugin } from './admin/bullboard.plugin';
 
 const config = loadApiConfig();
 
@@ -34,6 +35,13 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix('api');
 
+  // Initialise NestJS DI graph before registering Fastify plugins
+  await app.init();
+
+  // Register BullBoard UI on raw Fastify instance
+  // Must run after app.init() (DI ready) and before app.listen()
+  await FastifyBullBoardPlugin.register(app);
+
   await app.listen(config.PORT, '0.0.0.0');
 
   logger.info({
@@ -46,6 +54,7 @@ async function bootstrap(): Promise<void> {
     version: config.BUILD_VERSION,
     phase: config.BUILD_PHASE,
     commit: config.BUILD_COMMIT,
+    bullboard_ui: BULLBOARD_BASEPATH,
   });
 }
 
