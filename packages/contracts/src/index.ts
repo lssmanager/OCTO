@@ -7,7 +7,6 @@
  */
 
 // F0-006 — MCP & A2A Protocol Contracts
-// Explicit exports to avoid TS2308 ambiguity with domain types
 export type {
   MCPTool,
   MCPServerConfig,
@@ -102,28 +101,13 @@ export * from './templates/agent-template';
 // Core primitive contracts
 export * from './agent';
 
-// ─── execution.ts exports ────────────────────────────────────────────────────
-// Canonical source of truth for execution state machine, enums, and types.
-// TokenUsage also exported from messaging/messages.ts — aliased here to avoid TS2308.
-export type {
-  // Enums (const objects + type aliases)
-  ExecutionStatus,
-  StepType,
-  StepStatus,
-  TriggerSource,
-  DlqReason,
-  IdempotencyScope,
-  // Value arrays (for Zod .enum() and iteration)
-  ExecutionStatusValues,
-  StepTypeValues,
-  // State machine maps
-  // (exported as values, not types, so the const object is importable at runtime)
-  // Type-only consumers use `typeof VALID_TRANSITIONS`
-  // Runtime consumers import the object directly.
-} from './execution';
-
+// ─── execution.ts ─────────────────────────────────────────────────────────────
+// Single export block for both runtime values (const objects) and types.
+// FIX: removed the duplicate `export type { ... }` block that caused TS2300.
+// Const objects (ExecutionStatus, StepType, etc.) satisfy both the type and
+// value contract — TypeScript consumers use them as types via `typeof` inference.
 export {
-  // Runtime-available const enum objects
+  // Const enum objects (runtime values + inferred types)
   ExecutionStatus,
   StepType,
   StepStatus,
@@ -148,7 +132,7 @@ export {
 } from './execution';
 
 export type {
-  // Interfaces
+  // Pure interfaces
   GovernancePolicy,
   TaskDefinition,
   ExecutionContext,
@@ -165,9 +149,7 @@ export type {
   StepTransition,
 } from './execution';
 
-export type { GovernancePolicy } from './execution';
-
-// policy.ts GovernancePolicy = persistent config entity — aliased to avoid collision
+// policy.ts GovernancePolicy aliased to avoid collision with execution.ts GovernancePolicy
 export type {
   GovernancePolicy as PersistentGovernancePolicy,
   TokenBudget,

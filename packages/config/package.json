@@ -1,40 +1,31 @@
 {
   "name": "@octo/config",
   "version": "0.0.1",
-  "description": "Zod-validated environment schemas for OCTO services",
+  "private": true,
+  "description": "Shared config, tsconfig bases, and ESLint presets for the OCTO monorepo.",
   "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     },
-    "./tsconfig/base": "./tsconfig.base.json",
-    "./tsconfig/node": "./tsconfig.node.json",
-    "./tsconfig/react": "./tsconfig.react.json",
-    "./eslint": "./eslintrc.base.js"
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.node.json": "./tsconfig.node.json",
+    "./tsconfig.react.json": "./tsconfig.react.json",
+    "./tsconfig.json": "./tsconfig.json",
+    "./eslintrc.base.js": "./eslintrc.base.js"
   },
-  "files": [
-    "dist",
-    "tsconfig.base.json",
-    "tsconfig.node.json",
-    "tsconfig.react.json",
-    "eslintrc.base.js"
-  ],
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist"
-  },
-  "dependencies": {
-    "zod": "^3.22.0"
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch --clean"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "rimraf": "^5.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.9.3"
   }
 }
