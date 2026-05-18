@@ -1,0 +1,21 @@
+# docker/compose.base.yml — Shared network and named volumes
+# Extended by compose.dev.yml and imported by docker-compose.yml.
+#
+# All OCTO compose files share this network so that containers can
+# resolve each other by service name (api, redis-queue, postgres, etc.)
+# regardless of which compose file brought them up.
+#
+# ADR F0-014 (Dockerfile strategy)
+
+networks:
+  openclawnet:
+    driver: bridge
+    name: openclawnet
+
+volumes:
+  octo_postgres_dev:
+    name: octo_postgres_dev
+  octo_redis_queue:
+    name: octo_redis_queue
+  octo_redis_cache:
+    name: octo_redis_cache

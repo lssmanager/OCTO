@@ -1,0 +1,101 @@
+# docker/compose.dev.yml — Infrastructure for local development
+#
+# Usage:
+#   docker compose -f docker/compose.dev.yml up -d
+#
+# Redis split design:
+#   redis-queue :6380 — BullMQ job queue. AOF persistence enabled.
+#                        Jobs must survive Redis restart.
+#   redis-cache :6381 — Transient cache. LRU eviction, no persistence.
+#                        Losing the cache is acceptable; no AOF overhead.
+#
+# To connect from .env.local:
+#   REDIS_URL=redis://localhost:6380
+#   REDIS_CACHE_URL=redis://localhost:6381
+#   DATABASE_URL=postgresql://octo:octo_dev@localhost:5432/octo
+#
+# ADR F0-016 (env config), F0-014 (Dockerfile strategy)
+# OCTO Architectural Principle #12: Redis for queue/cache only
+
+include:
+  - path: compose.base.yml
+
+services:
+
+  # ──────────────────────────────────────────────────────
+  # PostgreSQL — system of record (Principle #12)
+  # ──────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16.6-alpine3.21
+    container_name: octo-postgres-dev
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-octo}
+      POSTGRES_USER: ${POSTGRES_USER:-octo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-octo_dev}
+    volumes:
+      - octo_postgres_dev:/var/lib/postgresql/data
+    networks:
+      - openclawnet
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-octo} -d ${POSTGRES_DB:-octo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────
+  # Redis Queue — BullMQ job persistence (port 6380)
+  # AOF enabled: jobs survive Redis restart.
+  # appendfsync everysec: 1-second durability window, balanced performance.
+  # ──────────────────────────────────────────────────────
+  redis-queue:
+    image: redis:7.4.2-alpine3.21
+    container_name: octo-redis-queue
+    command: >-
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --requirepass ${REDIS_QUEUE_PASSWORD:-}
+    ports:
+      - "6380:6379"
+    volumes:
+      - octo_redis_queue:/data
+    networks:
+      - openclawnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_QUEUE_PASSWORD:-}", "--no-auth-warning", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────
+  # Redis Cache — transient cache (port 6381)
+  # No persistence: losing the cache is acceptable, avoids AOF overhead.
+  # allkeys-lru: evict least-recently-used keys when maxmemory is hit.
+  # ──────────────────────────────────────────────────────
+  redis-cache:
+    image: redis:7.4.2-alpine3.21
+    container_name: octo-redis-cache
+    command: >-
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_CACHE_PASSWORD:-}
+    ports:
+      - "6381:6379"
+    volumes:
+      - octo_redis_cache:/data
+    networks:
+      - openclawnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_CACHE_PASSWORD:-}", "--no-auth-warning", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
