@@ -44,19 +44,28 @@ export class HealthController {
    * Returns 200 when all dependencies are healthy.
    * Returns 503 Service Unavailable when any dependency is down or degraded.
    * Load balancers and Coolify use this to gate traffic.
+   *
+   * PATCH 6: Migrated from @Res() to @Res({ passthrough: true }).
+   * With bare @Res(), NestJS hands full response control to the handler
+   * and bypasses interceptors, logging middleware, and trace propagation.
+   * passthrough: true restores the full NestJS pipeline while still
+   * allowing us to set a custom HTTP status code (200 vs 503).
    */
   @Get('ready')
-  async ready(@Res() res: FastifyReply): Promise<void> {
+  async ready(
+    @Res({ passthrough: true }) res: FastifyReply,
+  ): Promise<Record<string, unknown>> {
     const checks = await this.healthService.runChecks();
     const allOk = Object.values(checks).every((c) => c.status === 'ok');
     const httpStatus = allOk ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE;
 
-    void res.status(httpStatus).send({
+    res.status(httpStatus);
+    return {
       status: allOk ? 'ok' : 'error',
       ready: allOk,
       timestamp: new Date().toISOString(),
       checks,
-    });
+    };
   }
 
   /** Enqueue a BullMQ health job to validate end-to-end queue connectivity. */

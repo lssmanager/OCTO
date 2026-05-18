@@ -45,7 +45,7 @@ export { createWorker }           from './create-worker';
 export { createDlq }              from './create-dlq';
 export { DlqHandler }             from './dlq-handler';
 export { createRedisConnection }  from './connection';
-export { QUEUE_NAMES }            from './queue-names';
+export { QUEUE_NAMES, MONITORED_QUEUES } from './queue-names';
 export { DLQ_NAMES, getDlqName }  from './dlq-names';
 export type { QueueName }         from './queue-names';
 export type { DlqName, DlqNames } from './dlq-names';

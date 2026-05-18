@@ -122,13 +122,18 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
     try {
       await withTimeout(redis.ping(), CHECK_TIMEOUT_MS);
       const latencyMs = Date.now() - start;
-      await redis.quit();
+      // P4 NOTE: quit() is intentionally NOT here — it lives in finally
+      // to guarantee cleanup even when ping() times out or throws.
       return { status: 'ok', latencyMs };
     } catch (err) {
       return {
         status: 'error',
         error: err instanceof Error ? err.message : String(err),
       };
+    } finally {
+      // PATCH 4: guaranteed cleanup — never throw secondary errors.
+      // .catch(() => undefined) silences quit() errors (e.g. already closed).
+      await redis.quit().catch(() => undefined);
     }
   }
 

@@ -2,12 +2,11 @@
  * FastifyBullBoardPlugin — integrates @bull-board/fastify with the
  * NestJS FastifyAdapter without ejecting to Express.
  *
- * How it works:
- *   1. Creates a BullMQAdapter for each registered queue.
- *   2. Creates a BullBoard ServerAdapter for Fastify.
- *   3. Sets the basePath for the UI: /admin/queues/board
- *   4. Registers the adapter as a Fastify plugin on the raw Fastify
- *      instance obtained from app.getHttpAdapter().getInstance().
+ * PATCH 2: Redis config now uses REDIS_URL via IORedis — eliminates
+ * manual REDIS_HOST/PORT/PASSWORD parsing. TLS-compatible (rediss://).
+ *
+ * PATCH 3: Queue names from MONITORED_QUEUES registry — zero magic
+ * strings, zero drift when new queues are added to queue-names.ts.
  *
  * Call FastifyBullBoardPlugin.register(app) in main.ts AFTER
  * app.init() but BEFORE app.listen().
@@ -21,26 +20,23 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { createBullBoard } from '@bull-board/api';
 import { FastifyAdapter as BullBoardFastifyAdapter } from '@bull-board/fastify';
 import { Queue } from 'bullmq';
+import IORedis from 'ioredis';
+import { MONITORED_QUEUES } from '@octo/queue';
 
 export const BULLBOARD_BASEPATH = '/admin/queues/board';
 
-const QUEUE_NAMES = [
-  'executions',
-  'delegations',
-  'tool-invocations',
-  'approvals',
-  'dlq-executions',
-] as const;
-
 export class FastifyBullBoardPlugin {
   static async register(app: NestFastifyApplication): Promise<void> {
-    const connection = {
-      host: process.env['REDIS_HOST'] ?? 'localhost',
-      port: Number(process.env['REDIS_PORT'] ?? 6379),
-      password: process.env['REDIS_PASSWORD'] ?? undefined,
-    };
+    // PATCH 2: single REDIS_URL — matches all other system consumers.
+    // IORedis parses the URL natively; rediss:// enables TLS automatically.
+    const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
+    const connection = new IORedis(redisUrl, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    });
 
-    const queues = QUEUE_NAMES.map(
+    // PATCH 3: names from MONITORED_QUEUES registry — no hardcoded strings.
+    const queues = MONITORED_QUEUES.map(
       (name) => new BullMQAdapter(new Queue(name, { connection })),
     );
 
@@ -54,21 +50,22 @@ export class FastifyBullBoardPlugin {
     const fastifyInstance = app.getHttpAdapter().getInstance() as any;
 
     // Register the bull-board UI as a Fastify plugin
-    // preHandler applies the internal secret guard outside NestJS middleware
     await fastifyInstance.register(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       serverAdapter.registerPlugin(),
       {
         prefix: BULLBOARD_BASEPATH,
-        // Fastify plugin options
         logLevel: 'warn',
       },
     );
 
-    // Attach a preHandler hook on the board prefix to enforce secret
+    // Enforce X-Internal-Secret on all BullBoard routes outside development
     fastifyInstance.addHook(
       'preHandler',
-      async (request: { url: string; headers: Record<string, string | undefined> }, reply: { code: (n: number) => { send: (b: unknown) => void } }) => {
+      async (
+        request: { url: string; headers: Record<string, string | undefined> },
+        reply: { code: (n: number) => { send: (b: unknown) => void } },
+      ) => {
         if (!request.url.startsWith(BULLBOARD_BASEPATH)) return;
         if (process.env['NODE_ENV'] === 'development') return;
 

@@ -1,6 +1,11 @@
-import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
+// PATCH 7: Replace new Logger() (NestJS built-in, no trace correlation,
+// plain text format) with createLogger() from @octo/observability.
+// All log events now emit structured JSON with trace_id, worker_id,
+// execution_id — consistent with OTel trace propagation across the system.
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Worker } from 'bullmq';
 import { createWorker, QUEUE_NAMES, type HealthJobData } from '@octo/queue';
+import { createLogger } from '@octo/observability';
 
 /**
  * Health job worker — F0 validation that BullMQ is operational.
@@ -13,7 +18,8 @@ import { createWorker, QUEUE_NAMES, type HealthJobData } from '@octo/queue';
  */
 @Injectable()
 export class HealthWorker implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(HealthWorker.name);
+  // Module-level logger — structured, pino-backed, trace-correlation ready.
+  private readonly logger = createLogger({ service: 'health-worker' });
   private worker!: Worker<HealthJobData>;
 
   onModuleInit(): void {
@@ -23,32 +29,63 @@ export class HealthWorker implements OnModuleInit, OnModuleDestroy {
     this.worker = createWorker<HealthJobData>(
       QUEUE_NAMES.HEALTH,
       async (job) => {
-        this.logger.log(
-          { jobId: job.id, data: job.data },
-          'Health job processed',
-        );
+        this.logger.info({
+          event:        'health_job_processed',
+          trace_id:     'job',
+          worker_id:    'health-worker',
+          execution_id: job.id,
+          job_data:     job.data,
+          msg:          'Health job processed',
+        });
         return { status: 'ok', processedAt: new Date().toISOString() };
       },
       { redisUrl, concurrency },
     );
 
     this.worker.on('failed', (job, err) => {
-      this.logger.error(
-        { jobId: job?.id, error: err.message, stack: err.stack },
-        'Health job failed',
-      );
+      this.logger.error({
+        event:        'health_job_failed',
+        trace_id:     'job',
+        worker_id:    'health-worker',
+        execution_id: job?.id,
+        error:        err.message,
+        stack:        err.stack,
+        msg:          'Health job failed',
+      });
     });
 
     this.worker.on('error', (err) => {
-      this.logger.error({ error: err.message }, 'Health worker error');
+      this.logger.error({
+        event:     'health_worker_error',
+        trace_id:  'system',
+        worker_id: 'health-worker',
+        error:     err.message,
+        msg:       'Health worker error',
+      });
     });
 
-    this.logger.log(`Health worker started (concurrency=${concurrency})`);
+    this.logger.info({
+      event:       'health_worker_started',
+      trace_id:    'bootstrap',
+      worker_id:   'health-worker',
+      concurrency,
+      msg:         `Health worker started (concurrency=${concurrency})`,
+    });
   }
 
   async onModuleDestroy(): Promise<void> {
-    this.logger.log('Closing health worker (graceful shutdown)...');
+    this.logger.info({
+      event:     'health_worker_closing',
+      trace_id:  'shutdown',
+      worker_id: 'health-worker',
+      msg:       'Closing health worker (graceful shutdown)',
+    });
     await this.worker.close();
-    this.logger.log('Health worker closed.');
+    this.logger.info({
+      event:     'health_worker_closed',
+      trace_id:  'shutdown',
+      worker_id: 'health-worker',
+      msg:       'Health worker closed',
+    });
   }
 }

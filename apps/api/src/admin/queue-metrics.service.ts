@@ -1,19 +1,21 @@
 /**
  * QueueMetricsService — real-time BullMQ queue health snapshots.
  *
- * Reads job counts directly from Redis via BullMQ Queue.getJobCounts().
- * Returns one QueueMetricsSnapshot per registered queue.
+ * PATCH 9: Redis config now uses REDIS_URL via a single shared IORedis
+ * connection (consistent with all system consumers). Eliminates the
+ * manual REDIS_HOST/PORT/PASSWORD pattern.
  *
- * Queues monitored (mirrors @octo/queue QUEUE_NAMES):
- *   executions, delegations, tool-invocations, approvals, dlq-executions
+ * PATCH 3: Queue names consumed from MONITORED_QUEUES registry —
+ * no magic strings, zero drift when new queues are added.
  *
  * Architectural note:
  *   This service is read-only. It NEVER modifies queue state.
- *   It lives in the Control Plane (Principle 1) because queue health
- *   is an orchestration concern, not an execution concern.
+ *   Lives in the Control Plane (Principle 1).
  */
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Queue } from 'bullmq';
+import IORedis from 'ioredis';
+import { MONITORED_QUEUES, type QueueName } from '@octo/queue';
 
 export interface QueueMetricsSnapshot {
   queue: string;
@@ -26,29 +28,26 @@ export interface QueueMetricsSnapshot {
   timestamp: string;
 }
 
-const QUEUE_NAMES = [
-  'executions',
-  'delegations',
-  'tool-invocations',
-  'approvals',
-  'dlq-executions',
-] as const;
-
 @Injectable()
 export class QueueMetricsService implements OnModuleDestroy {
-  private readonly queues: Map<string, Queue>;
+  private readonly connection: IORedis;
+  private readonly queues: Map<QueueName, Queue>;
 
   constructor() {
-    const connection = {
-      host: process.env['REDIS_HOST'] ?? 'localhost',
-      port: Number(process.env['REDIS_PORT'] ?? 6379),
-      password: process.env['REDIS_PASSWORD'] ?? undefined,
-    };
+    // PATCH 9: single REDIS_URL — same source of truth as all workers.
+    // IORedis parses the URL; rediss:// enables TLS for managed Redis.
+    const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
+    this.connection = new IORedis(redisUrl, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    });
 
+    // PATCH 3: names from registry — no magic strings.
+    // All Queue instances share the same IORedis connection.
     this.queues = new Map(
-      QUEUE_NAMES.map((name) => [
+      MONITORED_QUEUES.map((name) => [
         name,
-        new Queue(name, { connection }),
+        new Queue(name, { connection: this.connection }),
       ]),
     );
   }
@@ -81,6 +80,8 @@ export class QueueMetricsService implements OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    // Close all Queue instances first, then the shared connection
     await Promise.all([...this.queues.values()].map((q) => q.close()));
+    await this.connection.quit();
   }
 }
