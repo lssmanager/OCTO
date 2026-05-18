@@ -1,40 +1,34 @@
 {
   "name": "octo",
-  "private": true,
   "version": "0.0.0",
-  "description": "OCTO \u2014 Distributed Cognitive Execution System",
+  "private": true,
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "test": "turbo test",
-    "lint": "turbo lint",
-    "lint:fix": "turbo lint -- --fix",
-    "lint:boundaries": "eslint -c eslint.config.js packages/ apps/ --ext .ts",
     "typecheck": "turbo typecheck",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "clean": "turbo clean && rimraf node_modules",
-    "prepare": "husky"
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "clean": "turbo clean",
+    "db:generate": "pnpm --filter @octo/database db:generate",
+    "db:migrate": "pnpm --filter @octo/database db:migrate",
+    "db:studio": "pnpm --filter @octo/database db:studio"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "8.32.1",
-    "@typescript-eslint/parser": "8.32.1",
-    "eslint": "9.27.0",
-    "eslint-config-prettier": "10.1.5",
-    "eslint-import-resolver-typescript": "4.4.4",
-    "eslint-plugin-boundaries": "5.0.1",
-    "eslint-plugin-import": "2.32.0",
-    "eslint-plugin-unused-imports": "4.1.4",
-    "husky": "9.1.7",
-    "lint-staged": "15.5.2",
-    "prettier": "3.5.3",
-    "rimraf": "5.0.10",
-    "turbo": "2.9.14",
-    "typescript": "5.9.3"
+    "@typescript-eslint/eslint-plugin": "^8.33.0",
+    "@typescript-eslint/parser": "^8.33.0",
+    "turbo": "^2.9.14",
+    "typescript": "^5.9.3",
+    "cross-env": "^7.0.3"
   },
-  "packageManager": "pnpm@9.12.0",
+  "pnpm": {
+    "overrides": {
+      "uuid": "^10.0.0",
+      "glob": "^11.0.0",
+      "source-map": "0.7.4"
+    }
+  },
   "engines": {
     "node": ">=20.0.0",
-    "pnpm": ">=9.12.0"
+    "pnpm": ">=9.0.0"
   }
 }
