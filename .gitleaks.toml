@@ -1,0 +1,21 @@
+# .gitleaks.toml
+# Gitleaks configuration for OCTO monorepo.
+# Allowlists prevent false positives on test fixtures, acceptance logs,
+# and documentation that contain placeholder or example values.
+
+title = "OCTO Gitleaks Config"
+
+[allowlist]
+  description = "Allow test fixtures, acceptance log stubs, and docs"
+  paths = [
+    # F0 acceptance evidence — placeholder log stubs, not real secrets
+    '''docs/f0-acceptance/.*\.log''',
+    # pnpm lockfile — contains package registry URLs, not secrets
+    '''pnpm-lock\.yaml''',
+    # Drizzle migration SQL files — may contain schema strings
+    '''drizzle/.*\.sql''',
+  ]
+  regexes = [
+    # Placeholder tokens used in test fixtures and docs
+    '''PLACEHOLDER''',
+  ]
