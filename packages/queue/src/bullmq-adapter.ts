@@ -145,9 +145,16 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
     return results.map((j) => j.id ?? '');
   }
 
-  async pause():  Promise<void> { await this.bull.pause(); }
-  // BullQueue.resume() returns Promise<number> in bullmq v5 — cast to satisfy IQueue<T>.
-  async resume(): Promise<void> { await (this.bull.resume() as Promise<unknown>); }
+  async pause(): Promise<void> { await this.bull.pause(); }
+
+  // BullQueue.resume() returns Promise<number> in bullmq v5 (number of resumed jobs).
+  // IQueue<T>.resume() is typed as Promise<void>.
+  // Wrapping in an explicit Promise<void> executor satisfies the DTS checker.
+  resume(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this.bull.resume().then(() => resolve(), reject);
+    });
+  }
 
   async drain(delayed = false): Promise<void> {
     await this.bull.drain(delayed);
