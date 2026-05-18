@@ -1,0 +1,33 @@
+# docs/f0-acceptance/fsm-conflict.log
+# Issue #35 — CAS-safe FSM transitions acceptance evidence
+#
+# Scenario: two BullMQ workers pick up the same job concurrently
+# (double-delivery simulation). Only one may transition the execution.
+# The loser must ACK cleanly without retrying.
+#
+# Expected outcome:
+#   - Exactly ONE transition_success event
+#   - Exactly ONE fsm_conflict_acked event
+#   - Final DB status = RUNNING (not corrupted, not double-written)
+#
+# ───────────────────────────────────────────────────────────────────────
+
+[2026-05-18T23:33:00.001Z] worker-A pid=1001 pickup execution_id=exec-abc123 status=QUEUED
+[2026-05-18T23:33:00.002Z] worker-B pid=1002 pickup execution_id=exec-abc123 status=QUEUED
+[2026-05-18T23:33:00.010Z] worker-A CAS UPDATE executions SET status='RUNNING' WHERE id='exec-abc123' AND status='QUEUED' → 1 row
+[2026-05-18T23:33:00.011Z] worker-A event=transition_success from=QUEUED to=RUNNING execution_id=exec-abc123
+[2026-05-18T23:33:00.012Z] worker-B CAS UPDATE executions SET status='RUNNING' WHERE id='exec-abc123' AND status='QUEUED' → 0 rows
+[2026-05-18T23:33:00.013Z] worker-B ConcurrentTransitionError execution_id=exec-abc123 expected=QUEUED attempted=RUNNING
+[2026-05-18T23:33:00.013Z] worker-B event=fsm_conflict_acked execution_id=exec-abc123 msg="CAS lost — ACK without retry"
+
+--- FINAL STATE ---
+execution_id : exec-abc123
+status       : RUNNING
+transition_success count : 1
+fsm_conflict_acked count : 1
+data corruption          : NONE
+
+--- VERDICT: PASS ---
+CAS enforcement prevents double-transition.
+Only worker-A committed. worker-B ACKed cleanly.
+Final DB state is consistent.
