@@ -23,6 +23,10 @@
     "@octo/events": "workspace:*",
     "@octo/observability": "workspace:*",
     "@octo/queue": "workspace:*",
+    "bullmq": "^5.0.0",
+    "drizzle-orm": "^0.45.0",
+    "fastify": "^4.0.0",
+    "postgres": "^3.0.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0"
   },
