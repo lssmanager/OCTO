@@ -72,17 +72,68 @@ export * from './agents/agent-profile';
 export * from './coordination/coordinator';
 
 // F0-010 — Paperclip Budget, Governance & Eval Contracts
-// GovernancePolicy is the canonical export from execution.ts (via export * below).
-// Re-exporting it here would cause TS2308 ambiguity — use named exclusion.
-export * from './governance/budget-governance';
+// GovernancePolicy also lives in execution.ts (runtime value-object) and policy.ts
+// (persistent config entity). Export budget-governance explicitly to avoid TS2308.
+export type {
+  BudgetScope,
+  IBudgetPolicy,
+  BudgetCheckResult,
+  CostEventType,
+  CostEvent,
+  ICostTracking,
+  ModelCapabilityMatrix,
+  IModelPolicy,
+  IModelResolver,
+  IGovernancePolicy,
+  GovernanceRuleType,
+  GovernanceRule,
+  ApprovalTicketStatus,
+  ApprovalTicket,
+  IApprovalFlow,
+  EvalMetricType,
+  EvalMetric,
+  IEvalCase,
+  IEvalBundle,
+  EvalCaseResult,
+  EvalRunResult,
+  ComparisonReport,
+  IEvalRunner,
+} from './governance/budget-governance';
 
 // F0-011 — agency-agents Template Format
 export * from './templates/agent-template';
 
 // Core primitive contracts (canonical domain types — source of truth)
 export * from './agent';
-export * from './execution'; // ExecutionContext, GovernancePolicy live here
+
+// execution.ts exports GovernancePolicy (runtime value-object VO).
+// policy.ts also exports GovernancePolicy (persistent config entity).
+// Both are valid but ambiguous under export *. Alias policy.ts version to avoid TS2308.
+export type {
+  TaskDefinition,
+  ExecutionContext,
+  ExecutionRequest,
+  Execution,
+  ExecutionStatus,
+  TaskResult,
+  ExecutionError,
+  TokenUsage as ExecutionTokenUsage,
+  TaskType,
+  Task,
+  ToolInvocation,
+} from './execution';
+// GovernancePolicy from execution.ts = runtime value-object (canonical for workers)
+export type { GovernancePolicy } from './execution';
+
+// policy.ts GovernancePolicy = persistent config entity — aliased to avoid collision
+export type {
+  GovernancePolicy as PersistentGovernancePolicy,
+  TokenBudget,
+  ExecutionBudget,
+  ToolPermission,
+  ApprovalTrigger,
+} from './policy';
+
 export * from './events';
 export * from './hierarchy';
 export * from './memory';
-export * from './policy';
