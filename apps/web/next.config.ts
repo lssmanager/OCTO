@@ -1,27 +1,5 @@
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
-  output: 'standalone',
-  // Server-side env vars used in lib/health.ts
-  // These are NOT exposed to the browser (no NEXT_PUBLIC_ prefix)
-  // → enforces the architecture rule: no direct browser calls to runtime-worker
-  env: {
-    API_URL: process.env['API_URL'] ?? 'http://localhost:3001',
-    RUNTIME_WORKER_URL:
-      process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000',
-    GIT_COMMIT: process.env['GIT_COMMIT'] ?? 'local',
-    BUILD_TIME: process.env['BUILD_TIME'] ?? new Date().toISOString(),
-  },
-  // Disable x-powered-by header
-  poweredByHeader: false,
-  // React strict mode
-  reactStrictMode: true,
-  // Compress responses
-  compress: true,
-  // Allow images from internal services only
-  images: {
-    remotePatterns: [],
-  },
-};
-
-export default nextConfig;
+// DEPRECATED — Next.js 14.2.x does not support .ts config files.
+// This file is intentionally left empty and superseded by next.config.mjs.
+// Remove this file entirely once Next.js is upgraded to 15+.
+// See: https://nextjs.org/docs/app/api-reference/config/next-config-js
+export {};
