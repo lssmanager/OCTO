@@ -50,7 +50,7 @@ ARG BUILD_TIME=unknown
 RUN pnpm turbo build --filter=@octo/api
 
 # ─────────────────────────────────────────────
-# Stage 3: runner
+# Stage 3: runner — minimal production image
 # ─────────────────────────────────────────────
 FROM node:22.12.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
@@ -77,10 +77,15 @@ ARG BUILD_COMMIT=unknown
 ARG BUILD_PHASE=F0
 ARG BUILD_TIME=unknown
 
+# DB_POOL_MAX injected at runtime via Coolify Environment Variables.
+# Never set as build ARG — it has no business being in an image layer.
 ENV BUILD_VERSION=${BUILD_VERSION} \
     BUILD_COMMIT=${BUILD_COMMIT} \
     BUILD_PHASE=${BUILD_PHASE} \
     BUILD_TIME=${BUILD_TIME} \
-    NODE_ENV=production
+    NODE_ENV=production \
+    DB_POOL_MAX=${DB_POOL_MAX:-20}
 
-CMD ["node", "dist/main.js"]
+# migrate.js runs first: applies pending migrations then starts the API.
+# If migrate.js exits non-zero, main.js is never started.
+CMD ["sh", "-c", "node dist/migrate.js && node dist/main.js"]
