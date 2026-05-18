@@ -1,5 +1,5 @@
 // packages/queue/src/traceparent.ts
-// Fix 7 — W3C traceparent injection/extraction for BullMQ job payloads.
+// W3C traceparent injection/extraction for BullMQ job payloads.
 //
 // Why W3C traceparent (not baggage, not custom headers):
 // BullMQ job data is serialized JSON stored in Redis. There's no HTTP header
@@ -17,28 +17,31 @@ import {
   type Context,
 } from '@opentelemetry/api';
 
+// The single canonical definition of the traceparent field.
+// Used as the constraint in InstrumentedQueue<T extends WithTraceparent>.
 export interface WithTraceparent {
   traceparent?: string;
 }
 
 /**
  * Injects the active OTel context into a job data object as a W3C traceparent.
- * Call this in the producer (enqueue side) just before queue.add().
+ * T is constrained to already include traceparent? — no intersection needed.
+ * Returns T (not T & WithTraceparent) so callers see a clean, non-intersected type.
  *
  * @example
- * const jobData = injectTraceparent({ executionId, agentId, traceId, ... });
+ * const jobData = injectTraceparent({ executionId, agentId });
  * await queue.add('execute', jobData);
  */
-export function injectTraceparent<T extends object>(data: T): T & WithTraceparent {
+export function injectTraceparent<T extends WithTraceparent>(data: T): T {
   const carrier: Record<string, string> = {};
   propagation.inject(context.active(), carrier);
 
   if (carrier['traceparent']) {
-    return { ...data, traceparent: carrier['traceparent'] };
+    (data as Record<string, unknown>)['traceparent'] = carrier['traceparent'];
   }
 
   // No active span (e.g. test env without SDK) — return data unchanged.
-  return data as T & WithTraceparent;
+  return data;
 }
 
 /**

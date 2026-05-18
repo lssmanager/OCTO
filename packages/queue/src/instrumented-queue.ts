@@ -2,14 +2,19 @@
 // OTel-instrumented wrapper around BullMQ Queue.
 //
 // BullMQ 5.x introduced strict ExtractNameType / ExtractDataType utility
-// types on Queue<T>.add(). When T is a generic that gets intersected with
-// WithTraceparent, TypeScript cannot prove T & WithTraceparent is assignable
-// to ExtractDataType<T & { traceparent? }, T & { traceparent? }>.
+// types on Queue<T>.add(). When the Queue is parametrized with an intersection
+// (e.g. Queue<T & WithTraceparent>), the DTS worker of tsup/tsc cannot resolve
+// ExtractDataType over that intersected type and raises TS2345.
 //
-// Solution: the internal BullMQ Queue instance is typed as Queue<AnyJobData>
-// (i.e. Record<string, unknown>). This is always assignable to BullMQ's
-// internal constraints. The public API of InstrumentedQueue<T> preserves
-// the caller's generic — the cast is contained inside this file.
+// Three-part fix:
+//   1. Internal Queue is Queue<AnyJobData> — decouples the public generic T
+//      from BullMQ's internal type machinery. No intersection on the Queue
+//      parameter ever reaches ExtractDataType.
+//   2. T extends WithTraceparent as the class constraint — traceparent? lives
+//      in T's definition, not as a runtime intersection. One canonical place.
+//   3. injectTraceparent<T extends WithTraceparent>(data: T): T — returns T
+//      directly (no T & WithTraceparent). Cast to AnyJobData is a single,
+//      contained line inside this file.
 
 import { type JobsOptions, Queue } from 'bullmq';
 import {
@@ -19,15 +24,15 @@ import {
 } from '@opentelemetry/api';
 import { getOctoTracer } from '@octo/observability';
 import { createQueue, type QueueConfig } from './create-queue';
-import { injectTraceparent } from './traceparent';
+import { injectTraceparent, type WithTraceparent } from './traceparent';
 import type { QueueName } from './queue-names';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyJobData = Record<string, any>;
 
-export class InstrumentedQueue<T extends AnyJobData = AnyJobData> {
-  // Typed as AnyJobData internally to satisfy BullMQ 5.x ExtractDataType.
-  // The public add() method still exposes T for callers.
+export class InstrumentedQueue<T extends WithTraceparent = AnyJobData> {
+  // Queue<AnyJobData>: BullMQ's ExtractDataType resolves trivially over
+  // Record<string, any> — no intersection ever enters BullMQ's type system.
   private readonly queue: Queue<AnyJobData>;
   private readonly tracer: Tracer;
   private readonly queueName: string;
@@ -61,10 +66,9 @@ export class InstrumentedQueue<T extends AnyJobData = AnyJobData> {
       },
       async (span) => {
         try {
-          // Inject active span context as W3C traceparent in job data.
-          // injectTraceparent returns T & WithTraceparent; cast to AnyJobData
-          // for the internal queue.add() call.
-          const instrumentedData = injectTraceparent(data) as AnyJobData;
+          // injectTraceparent returns T (not T & WithTraceparent).
+          // Single contained cast to AnyJobData for the internal queue.add().
+          const instrumentedData: AnyJobData = injectTraceparent(data);
           const job = await this.queue.add(jobName, instrumentedData, opts);
 
           span.setAttribute('messaging.message.id', job.id ?? jobName);
@@ -94,7 +98,7 @@ export class InstrumentedQueue<T extends AnyJobData = AnyJobData> {
 /**
  * Factory function — mirrors createQueue() ergonomics.
  */
-export function createInstrumentedQueue<T extends AnyJobData = AnyJobData>(
+export function createInstrumentedQueue<T extends WithTraceparent = AnyJobData>(
   name: QueueName | string,
   config: QueueConfig,
 ): InstrumentedQueue<T> {
