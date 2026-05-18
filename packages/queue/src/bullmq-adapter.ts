@@ -21,11 +21,12 @@ import crypto from 'node:crypto';
 import {
   type Job as BullJob,
   type JobsOptions,
+  type WorkerOptions,
   Queue as BullQueue,
   Worker as BullWorker,
 } from 'bullmq';
 import { DlqReason } from '@octo/contracts';
-import { getOctoLogger } from '@octo/observability';
+import { createLogger } from '@octo/observability';
 import {
   createRedisConnection,
 } from './connection';
@@ -53,7 +54,7 @@ import type {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyData = Record<string, any>;
 
-const logger = getOctoLogger('queue:bullmq-adapter');
+const logger = createLogger({ service: 'queue:bullmq-adapter' });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -116,7 +117,7 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
     this.name          = name;
     this.defaultPolicy = config.defaultRetryPolicy;
     this.workerId      = crypto.randomUUID();
-    const connection   = createRedisConnection({ url: config.redisUrl });
+    const connection   = createRedisConnection(config.redisUrl);
     this.bull          = new BullQueue<AnyData>(name, { connection });
   }
 
@@ -215,16 +216,18 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
     this.shutdownTimeoutMs = config.shutdownTimeoutMs ?? 30_000;
     this.emitter           = new EventEmitter();
 
-    const connection = createRedisConnection({ url: config.redisUrl });
+    const connection = createRedisConnection(config.redisUrl);
+
+    const workerOptions: WorkerOptions = {
+      connection,
+      concurrency: this.concurrency,
+      ...(config.retryPolicy ? retryPolicyToJobOptions(config.retryPolicy) as Partial<WorkerOptions> : {}),
+    };
 
     this.bull = new BullWorker<AnyData>(
       name,
       async (bullJob: BullJob<AnyData>) => this._process(bullJob, handler),
-      {
-        connection,
-        concurrency: this.concurrency,
-        ...(config.retryPolicy ? retryPolicyToJobOptions(config.retryPolicy) : {}),
-      },
+      workerOptions,
     );
 
     this._bindBullEvents();
@@ -235,15 +238,13 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
   async run(): Promise<void> {
     // BullMQ Worker starts automatically on construction.
     // run() is a no-op here but fulfills the IWorker contract.
-    // Subclasses or fakes can override with explicit start logic.
   }
 
   async pause():  Promise<void> { await this.bull.pause(); }
-  async resume(): Promise<void> { this.bull.resume(); }
+  async resume(): Promise<void> { await this.bull.resume(); }
 
   async close(timeoutMs?: number): Promise<void> {
     const timeout = timeoutMs ?? this.shutdownTimeoutMs;
-    // BullMQ Worker.close(force) — false = wait for current job to finish
     await Promise.race([
       this.bull.close(),
       new Promise<void>((_, reject) =>
@@ -293,7 +294,6 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
         'job handler threw unhandled error',
       );
       this.emitter.emit('job:failed', job, error);
-      // Re-throw so BullMQ marks the job as failed and applies retry policy.
       throw error;
     }
 
@@ -302,10 +302,8 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
       this.emitter.emit('job:failed', job, error);
 
       if (result.error?.retryable === false) {
-        // Non-retryable: emit dead event so the control plane can write to DLQ.
         const reason: DlqReason = result.error.dlqReason ?? DlqReason.NON_RETRYABLE_ERROR;
         this.emitter.emit('job:dead', job, reason);
-        // Throw to let BullMQ exhaust attempts (attempts: 1) so it moves to failed.
         throw Object.assign(error, { failedReason: reason });
       }
 
@@ -330,7 +328,6 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
       this.emitter.emit('worker:error', err);
     });
 
-    // 'failed' fires after all retries are exhausted.
     this.bull.on('failed', (bullJob, err) => {
       if (!bullJob) return;
       const meta: OctoJobMeta = {
