@@ -1,29 +1,27 @@
 # apps/runtime-worker/Dockerfile
 # Port: 3002 | Service: @octo/runtime-worker
 #
-# CRITICAL — This is the most important worker in the system.
-# The runtime worker executes agent graphs. It must never share a
-# process boundary with the API control plane.
-#
-# BUILD CONTEXT: Must be repo root (/), NOT apps/runtime-worker/.
-# turbo prune requires pnpm-lock.yaml and all workspace package.json
-# files which live at the repo root.
-#
-# SECURITY: Runtime secrets (DATABASE_URL, REDIS_URL, LLM API keys)
-# must NEVER appear as ARG or ENV here. Inject via Coolify →
-# Environment Variables → Runtime tab (NOT Build-time).
+# BUILD CONTEXT: Must be repo root — turbo prune needs the full monorepo.
+# SECURITY: Inject runtime secrets via Coolify env vars (Runtime tab).
 
 # syntax=docker/dockerfile:1.4
 
+# ─────────────────────────────────────────────
+# Stage 0: base — Node.js Alpine + pnpm
+# ─────────────────────────────────────────────
 FROM node:22.12.0-alpine3.21 AS base
 RUN apk add --no-cache libc6-compat
-# Pin pnpm to the exact version declared in package.json#packageManager.
-# Corepack will use this pre-installed version and never attempt a download.
-RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
+# Install pnpm directly via npm — bypasses Corepack entirely.
+# Corepack bundled in node:22.12.0 has stale verification keys and
+# cannot verify pnpm@10.x signatures (keyid rotation issue).
+RUN npm install -g pnpm@10.32.1
 ENV PNPM_HOME="/root/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
 
+# ─────────────────────────────────────────────
+# Stage 1: pruner
+# ─────────────────────────────────────────────
 FROM base AS pruner
 ENV TURBO_TELEMETRY_DISABLED=1
 COPY . .
@@ -31,6 +29,9 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     HUSKY=0 pnpm install --frozen-lockfile
 RUN pnpm dlx turbo@2.9.14 prune @octo/runtime-worker --docker
 
+# ─────────────────────────────────────────────
+# Stage 2: builder
+# ─────────────────────────────────────────────
 FROM base AS builder
 ENV NODE_ENV=development
 ENV TURBO_TELEMETRY_DISABLED=1
@@ -49,6 +50,9 @@ ARG BUILD_TIME=unknown
 
 RUN pnpm turbo build --filter=@octo/runtime-worker
 
+# ─────────────────────────────────────────────
+# Stage 3: runner
+# ─────────────────────────────────────────────
 FROM node:22.12.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
 
@@ -63,7 +67,6 @@ COPY --from=builder --chown=octo:octo /app/node_modules ./node_modules
 COPY --from=builder --chown=octo:octo /app/packages ./packages
 
 USER octo
-
 EXPOSE 3002
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

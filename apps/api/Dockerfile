@@ -1,15 +1,7 @@
 # apps/api/Dockerfile — canonical source of truth for the API image
 # ─────────────────────────────────────────────────────────────────
-# The root Dockerfile is a mirror of this file for Coolify's
-# single-Dockerfile deployment model. Worker Dockerfiles live in
-# docker/<worker-name>/Dockerfile and follow the same 4-stage pattern.
-#
-# SECURITY: Runtime secrets (DATABASE_URL, REDIS_URL, API keys, etc.)
-# must NEVER appear as ARG or ENV in any Dockerfile. Secrets declared
-# as ARG are stored in image layer history and can be extracted with
-# `docker history --no-trunc` (MITRE ATT&CK T1552.007).
-# Inject all runtime credentials via Coolify → Application →
-# Environment Variables (Runtime tab, NOT Build-time).
+# SECURITY: Runtime secrets must NEVER appear as ARG or ENV here.
+# Inject via Coolify → Application → Environment Variables (Runtime).
 # ─────────────────────────────────────────────────────────────────
 
 # syntax=docker/dockerfile:1.4
@@ -19,9 +11,10 @@
 # ─────────────────────────────────────────────
 FROM node:22.12.0-alpine3.21 AS base
 RUN apk add --no-cache libc6-compat
-# Pin pnpm to the exact version declared in package.json#packageManager.
-# Corepack will use this pre-installed version and never attempt a download.
-RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
+# Install pnpm directly via npm — bypasses Corepack entirely.
+# Corepack bundled in node:22.12.0 has stale verification keys and
+# cannot verify pnpm@10.x signatures (keyid rotation issue).
+RUN npm install -g pnpm@10.32.1
 ENV PNPM_HOME="/root/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
@@ -40,7 +33,6 @@ RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 # Stage 2: builder
 # ─────────────────────────────────────────────
 FROM base AS builder
-
 ENV NODE_ENV=development
 ENV TURBO_TELEMETRY_DISABLED=1
 
@@ -75,7 +67,6 @@ COPY --from=builder --chown=octo:octo /app/node_modules ./node_modules
 COPY --from=builder --chown=octo:octo /app/packages ./packages
 
 USER octo
-
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
