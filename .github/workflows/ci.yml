@@ -37,10 +37,74 @@ jobs:
       - name: Build
         run: pnpm build
 
+  # ─────────────────────────────────────────────────────────────────────────
+  # Contract Parity — must pass before tests run.
+  #
+  # What this job does:
+  #   1. Builds @octo/contracts (compiles Zod schemas to JS)
+  #   2. Runs codegen to emit packages/contracts/generated/contracts.py
+  #   3. Runs validate-contract-parity.py against all 5 fixtures
+  #
+  # Why it runs AFTER quality but BEFORE test:
+  #   - quality ensures the TS compiles; codegen needs compiled output
+  #   - test jobs consume queue jobs validated here; if contracts drift,
+  #     failing here gives a clearer signal than a cryptic Python traceback
+  #
+  # Failure scenarios this catches:
+  #   A) TypeScript schema changed, contracts.py not regenerated (drift)
+  #   B) contracts.py regenerated but fixture not updated (stale fixture)
+  #   C) contracts.py import error (codegen script broke)
+  #   D) Pydantic model rejects valid fixture (type mapping regression)
+  # ─────────────────────────────────────────────────────────────────────────
+  contract-parity:
+    name: Contract Parity
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @octo/contracts
+        run: pnpm turbo build --filter=@octo/contracts
+
+      - name: Generate contracts.py
+        run: |
+          cd packages/contracts
+          GIT_COMMIT=${{ github.sha }} pnpm codegen
+
+      - name: Install Python dependencies
+        run: pip install pydantic==2.11.5
+
+      - name: Validate contract parity
+        run: python packages/contracts/tests/validate-contract-parity.py
+
+      - name: Upload contracts.py artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contracts-py-${{ github.sha }}
+          path: packages/contracts/generated/contracts.py
+          retention-days: 30
+
   test:
     name: Tests
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, contract-parity]
     services:
       postgres:
         image: postgres:16-alpine

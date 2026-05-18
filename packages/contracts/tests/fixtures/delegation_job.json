@@ -1,0 +1,8 @@
+{
+  "delegationId": "01932b4c-1234-7abc-8def-000000000010",
+  "fromAgentId":  "01932b4c-1234-7abc-8def-000000000002",
+  "toAgentId":    "01932b4c-1234-7abc-8def-000000000004",
+  "executionId":  "01932b4c-1234-7abc-8def-000000000001",
+  "traceId":      "4bf92f3577b34da6a3ce929d0e0e4736",
+  "traceparent":  "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+}
