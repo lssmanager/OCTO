@@ -5,6 +5,7 @@ import {
   jsonb,
   index,
   pgEnum,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 export const agentStatusEnum = pgEnum('agent_status', [
@@ -23,7 +24,7 @@ export const agents = pgTable(
     description: text('description').notNull().default(''),
     role: text('role').notNull(), // CrewAI: agent.role
     goal: text('goal').notNull(), // CrewAI: agent.goal
-    parentId: text('parent_id').references((): ReturnType<typeof text> => agents.id),
+    parentId: text('parent_id').references((): AnyPgColumn => agents.id),
     capabilities: jsonb('capabilities').notNull().default([]),
     governancePolicy: jsonb('governance_policy').notNull().default({}), // Paperclip budget
     status: agentStatusEnum('status').notNull().default('active'),
