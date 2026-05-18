@@ -4,4 +4,7 @@
 
 export * from './agents';
 export * from './executions';
+export * from './execution-steps';
+export * from './execution-checkpoints';
+export * from './tool-invocations';
 export * from './events';
