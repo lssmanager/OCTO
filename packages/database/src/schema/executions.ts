@@ -9,6 +9,10 @@
 // heartbeat_at      -- refreshed every 30s by the active worker
 // lease_expires_at  -- NOW() + 90s; reclaim scanner fires when expired
 //
+// H2 HARDENING -- Reclaim tracking columns added (issue #34).
+// reclaim_count  -- incremented each time a zombie is reclaimed
+// reclaimed_at   -- timestamp of last successful reclaim
+//
 // STATE MACHINE INVARIANT:
 // ALL status mutations MUST go through:
 //   packages/runtime-state/src/execution-state.service.ts -> transition()
@@ -75,6 +79,12 @@ export const executions = pgTable(
     heartbeatAt:    timestamp('heartbeat_at',    { withTimezone: true }),
     leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
 
+    // H2: Reclaim tracking (issue #34)
+    // reclaimCount incremented on every successful casReclaim() call.
+    // reclaimedAt set to NOW() when status transitions running -> retrying via reclaimer.
+    reclaimCount:   integer('reclaim_count').notNull().default(0),
+    reclaimedAt:    timestamp('reclaimed_at', { withTimezone: true }),
+
     task:           jsonb('task').notNull(),
     governance:     jsonb('governance').notNull(),
     result:         jsonb('result'),
@@ -104,7 +114,7 @@ export const executions = pgTable(
     // H1 - reclaim scanner + heartbeat monitoring indexes
     leaseIdx:          index('idx_executions_lease').on(t.status, t.leaseExpiresAt),
     heartbeatIdx:      index('idx_executions_heartbeat').on(t.status, t.heartbeatAt),
-    // FIX: use sql`` template — text() returns PgTextBuilder, not SQL<unknown>
+    // FIX: use sql`` template -- text() returns PgTextBuilder, not SQL<unknown>
     idempotencyIdx:    uniqueIndex('executions_idempotency_key_uidx')
                          .on(t.tenantId, t.idempotencyKey)
                          .where(sql`idempotency_key IS NOT NULL`),
