@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@octo/config": "workspace:*",
+    "@types/node": "22.15.21",
     "drizzle-kit": "0.30.6",
     "rimraf": "5.0.10",
     "tsup": "8.5.0",
