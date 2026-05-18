@@ -42,11 +42,13 @@ export async function updateExecutionStatus(
 
 /**
  * Persists a LangGraph checkpoint for pause/resume support (F2).
- * Sets status to 'paused' and stores the serialized graph state.
+ * Sets status to 'suspended' and stores the serialized graph state.
+ * Note: the canonical status for a paused execution is 'suspended'
+ * per the executionStatusEnum definition in schema/executions.ts.
  */
 export async function saveCheckpoint(
   id: string,
   checkpoint: Record<string, unknown>,
 ) {
-  return updateExecutionStatus(id, 'paused', { checkpoint });
+  return updateExecutionStatus(id, 'suspended', { checkpoint });
 }

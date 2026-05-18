@@ -25,6 +25,7 @@ import {
   pgEnum,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { agents } from './agents';
 
 // --- STATUS ENUM ---
@@ -99,9 +100,10 @@ export const executions = pgTable(
     // H1 - reclaim scanner + heartbeat monitoring indexes
     leaseIdx:          index('idx_executions_lease').on(t.status, t.leaseExpiresAt),
     heartbeatIdx:      index('idx_executions_heartbeat').on(t.status, t.heartbeatAt),
+    // FIX: use sql`` template — text() returns PgTextBuilder, not SQL<unknown>
     idempotencyIdx:    uniqueIndex('executions_idempotency_key_uidx')
                          .on(t.tenantId, t.idempotencyKey)
-                         .where(text('idempotency_key IS NOT NULL')),
+                         .where(sql`idempotency_key IS NOT NULL`),
   }),
 );
 

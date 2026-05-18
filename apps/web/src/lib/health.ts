@@ -55,16 +55,28 @@ async function fetchHealth(
     }
 
     const data = (await res.json()) as Record<string, unknown>;
-    return {
-      status: 'ok',
-      service: typeof data['service'] === 'string' ? data['service'] : label,
-      version: typeof data['version'] === 'string' ? data['version'] : undefined,
-      phase: typeof data['phase'] === 'string' ? data['phase'] : undefined,
-      checks: typeof data['checks'] === 'object' && data['checks'] !== null
+
+    // Build result only with fields that are actually present.
+    // exactOptionalPropertyTypes requires optional props to be truly absent
+    // (not `undefined`) when not set — so we spread conditionally.
+    const result: ServiceHealth = { status: 'ok', latencyMs };
+
+    const svc = typeof data['service'] === 'string' ? data['service'] : label;
+    result.service = svc;
+
+    const ver = typeof data['version'] === 'string' ? data['version'] : undefined;
+    if (ver !== undefined) result.version = ver;
+
+    const phase = typeof data['phase'] === 'string' ? data['phase'] : undefined;
+    if (phase !== undefined) result.phase = phase;
+
+    const checks =
+      typeof data['checks'] === 'object' && data['checks'] !== null
         ? (data['checks'] as Record<string, unknown>)
-        : undefined,
-      latencyMs,
-    };
+        : undefined;
+    if (checks !== undefined) result.checks = checks;
+
+    return result;
   } catch (err) {
     const latencyMs = Date.now() - start;
     const message =

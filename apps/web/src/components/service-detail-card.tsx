@@ -1,7 +1,7 @@
 import type { ServiceHealth } from '@/lib/health';
 
 export function ServiceDetailCard({
-  service,
+  service: _service,
   label,
   data,
 }: {
