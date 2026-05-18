@@ -1,31 +1,34 @@
 # Runtime Worker dependencies
 # Pinned para builds reproducibles (F0-014)
-# uv pip install -r requirements.txt
+# pip install -r requirements.txt
 
-# ── Web framework ─────────────────────────────────────────────────────────────
+# ── Web framework ──────────────────────────────────────────────────────
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
 python-multipart==0.0.12
 
-# ── Config & validation ────────────────────────────────────────────────────────
+# ── Config & validation ─────────────────────────────────────────────
 pydantic==2.10.3
 pydantic-settings==2.6.1
 
-# ── Structured logging ────────────────────────────────────────────────────────
+# ── Structured logging ─────────────────────────────────────────────
 structlog==24.4.0
 
-# ── HTTP client (health checks + callbacks al Control Plane) ─────────────────
+# ── HTTP client ───────────────────────────────────────────────────
 httpx==0.28.1
 
-# ── Redis (BullMQ queue consumer, health check) ───────────────────────────────
+# ── Redis ──────────────────────────────────────────────────────────
 redis==5.2.1
 
-# ── OpenTelemetry (F0-015 observability) ─────────────────────────────────────
-opentelemetry-api==1.28.4
-opentelemetry-sdk==1.28.4
-opentelemetry-exporter-otlp-proto-http==1.28.4
-opentelemetry-instrumentation-fastapi==0.49b4
-opentelemetry-instrumentation-httpx==0.49b4
+# ── OpenTelemetry (F0-015 observability) ──────────────────────────
+# Core SDK: https://pypi.org/project/opentelemetry-api/#history
+# Instrumentation packages version = sdk_minor * 2 - 1 (b0)
+# otel 1.30.0 → instrumentation 0.51b0
+opentelemetry-api==1.30.0
+opentelemetry-sdk==1.30.0
+opentelemetry-exporter-otlp-proto-http==1.30.0
+opentelemetry-instrumentation-fastapi==0.51b0
+opentelemetry-instrumentation-httpx==0.51b0
 
-# ── LiteLLM proxy client (F2: real LLM calls) ────────────────────────────────
+# ── LiteLLM proxy client (F2: real LLM calls) ─────────────────────
 # litellm==1.55.0  # Uncomment in F2 when wiring real execution
