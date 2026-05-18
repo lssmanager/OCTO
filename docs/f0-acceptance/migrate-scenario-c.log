@@ -1,0 +1,18 @@
+# Scenario C — DB offline
+# Expected: db_unreachable after 10 retries → exit 1 → app does NOT start
+#
+# Reproduce by stopping the postgres container before running the API:
+#   docker compose stop postgres
+#   docker compose run --rm api
+# Replace this file with real output before merging to main.
+{"level":"info","msg":"migrate_start","ts":"PLACEHOLDER","maxRetries":10,"retryDelayMs":3000}
+{"level":"warn","msg":"db_connect_retry","ts":"PLACEHOLDER","attempt":1,"maxRetries":10,"error":"connection refused"}
+{"level":"warn","msg":"db_connect_retry","ts":"PLACEHOLDER","attempt":2,"maxRetries":10,"error":"connection refused"}
+{"level":"warn","msg":"db_connect_retry","ts":"PLACEHOLDER","attempt":3,"maxRetries":10,"error":"connection refused"}
+{"level":"warn","msg":"db_connect_retry","ts":"PLACEHOLDER","attempt":4,"maxRetries":10,"error":"connection refused"}
+{"level":"warn","msg":"db_connect_retry","ts":"PLACEHOLDER","attempt":5,"maxRetries":10,"error":"connection refused"}
+{"level":"warn","msg":"db_connect_retry","ts":"PLACEHOLDER","attempt":6,"maxRetries":10,"error":"connection refused"}
+{"level":"warn","msg":"db_connect_retry","ts":"PLACEHOLDER","attempt":7,"maxRetries":10,"error":"connection refused"}
+{"level":"warn","msg":"db_connect_retry","ts":"PLACEHOLDER","attempt":8,"maxRetries":10,"error":"connection refused"}
+{"level":"warn","msg":"db_connect_retry","ts":"PLACEHOLDER","attempt":9,"maxRetries":10,"error":"connection refused"}
+{"level":"error","msg":"db_unreachable","ts":"PLACEHOLDER","attempt":10,"error":"connection refused"}

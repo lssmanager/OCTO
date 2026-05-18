@@ -1,0 +1,10 @@
+# Scenario A — Empty DB, first migration run
+# Expected: migrations_complete → exit 0 → app starts
+#
+# Capture this log by running:
+#   docker compose up --build 2>&1 | grep migrate > docs/f0-acceptance/migrate-scenario-a.log
+#
+# Replace this file with real output before merging to main.
+{"level":"info","msg":"migrate_start","ts":"PLACEHOLDER","maxRetries":10,"retryDelayMs":3000}
+{"level":"info","msg":"db_connected","ts":"PLACEHOLDER","attempt":1}
+{"level":"info","msg":"migrations_complete","ts":"PLACEHOLDER","migrationsFolder":"./drizzle"}

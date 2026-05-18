@@ -1,28 +1,53 @@
-// eslint.config.js — ESLint 9 flat config with dependency boundary enforcement
-// OCTO Monorepo — Dependency Direction Rules (Architectural Principle #1)
+// eslint.config.js — ESLint 9 flat config
+// OCTO Monorepo — Architectural boundary enforcement (Issue #41)
 //
-// Zone topology:
+// Zone topology (dependency direction is strictly downward):
 //
-//  leaf (contracts, config, prompts)
-//    ↑          no internal imports
-//  infra (database, events, queue, security, observability)
-//    ↑          ← leaf only
-//  sdk  (sdk-abstractions, agent-core)
-//    ↑          ← leaf + infra
-//  ui   (ui)
-//    ↑          ← leaf only
-//  app  (apps/*)
+//   leaf        (contracts, config, prompts)
+//     ↑           zero internal @octo/* imports allowed
+//   infra       (database, events, queue, security, observability, runtime-state)
+//     ↑           ← leaf only
+//   sdk         (sdk-abstractions, agent-core)
+//     ↑           ← leaf + infra
+//   ui          (packages/ui)
+//     ↑           ← leaf only
+//   app         (apps/api, apps/web, apps/*-worker)
 //               ← leaf + infra + sdk + ui
 //               ✗ never imports another app directly
+//
+// Specific rules from issue #41:
+//   [R1] frontend ✗ database
+//   [R2] frontend ✗ queue
+//   [R3] frontend ✗ agent-core
+//   [R4] reclaimer ✗ @nestjs/*  (framework-free worker)
+//   [R5] agent-core ✗ bullmq direct (must go through @octo/queue)
+//   [R6] contracts ✗ other @octo/* (zero internal deps)
+//   [R7] channel-workers: adapter-only, no business logic imports
 
 import boundaries from 'eslint-plugin-boundaries';
 import tsParser from '@typescript-eslint/parser';
+import tsPlugin from '@typescript-eslint/eslint-plugin';
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
+  // ── Ignore generated/build outputs globally ───────────────────────────────
   {
-    // Apply to all TS sources in packages/ and apps/
-    files: ['packages/**/*.ts', 'apps/**/*.ts'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/*.d.ts',
+      '**/generated/**',
+      'drizzle/**',
+      'docs/**',
+      'infra/**',
+      'scripts/**',
+      '.prettierrc',
+    ],
+  },
+
+  // ── TypeScript + Boundaries: all packages and apps ────────────────────────
+  {
+    files: ['packages/**/*.ts', 'packages/**/*.tsx', 'apps/**/*.ts', 'apps/**/*.tsx'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -32,95 +57,106 @@ export default [
     },
     plugins: {
       boundaries,
+      '@typescript-eslint': tsPlugin,
     },
     settings: {
+      // eslint-plugin-boundaries resolves elements by matching file paths
+      // against these patterns. Paths are relative to the repo root.
       'boundaries/elements': [
         {
-          // Leaf packages: data/schemas only, no internal imports allowed
+          // leaf: pure schema / data — no internal imports
           type: 'leaf',
-          pattern: [
-            'packages/contracts/*',
-            'packages/config/*',
-            'packages/prompts/*',
-          ],
-          mode: 'folder',
+          pattern: 'packages/(contracts|config|prompts)/**/*',
+          capture: ['pkg'],
         },
         {
-          // Infra packages: persistence, transport, observability, security
+          // infra: persistence, transport, observability, state
           type: 'infra',
-          pattern: [
-            'packages/database/*',
-            'packages/events/*',
-            'packages/queue/*',
-            'packages/security/*',
-            'packages/observability/*',
-          ],
-          mode: 'folder',
+          pattern: 'packages/(database|events|queue|security|observability|runtime-state)/**/*',
+          capture: ['pkg'],
         },
         {
-          // SDK / agent core: business logic abstractions
+          // sdk: business-logic abstractions
           type: 'sdk',
-          pattern: [
-            'packages/sdk-abstractions/*',
-            'packages/agent-core/*',
-          ],
-          mode: 'folder',
+          pattern: 'packages/(sdk-abstractions|agent-core)/**/*',
+          capture: ['pkg'],
         },
         {
-          // UI components: presentational layer
+          // ui: presentational components
           type: 'ui',
-          pattern: ['packages/ui/*'],
-          mode: 'folder',
+          pattern: 'packages/ui/**/*',
+          capture: ['pkg'],
         },
         {
-          // Apps: deployable services
-          type: 'app',
-          pattern: ['apps/*'],
-          mode: 'folder',
+          // frontend app
+          type: 'frontend',
+          pattern: 'apps/web/**/*',
+          capture: ['app'],
+        },
+        {
+          // api app
+          type: 'api',
+          pattern: 'apps/api/**/*',
+          capture: ['app'],
+        },
+        {
+          // reclaimer worker — must stay framework-free (no @nestjs/*)
+          type: 'reclaimer',
+          pattern: 'apps/reclaimer-worker/**/*',
+          capture: ['app'],
+        },
+        {
+          // all other workers (channel adapters, runtime workers)
+          type: 'worker',
+          pattern: 'apps/*-worker/**/*',
+          capture: ['app'],
         },
       ],
+
       'boundaries/ignore': [
-        // Ignore node_modules and dist output
         '**/*.d.ts',
         '**/dist/**',
         '**/node_modules/**',
       ],
     },
+
     rules: {
-      // Leaf packages must not import from any internal package
+      // ── Core zone topology ────────────────────────────────────────────────
       'boundaries/element-types': [
         'error',
         {
           default: 'disallow',
           rules: [
-            // leaf → (nothing internal)
-            {
-              from: 'leaf',
-              allow: [],
-            },
+            // [R6] leaf → nothing internal
+            { from: 'leaf',      allow: [] },
+
             // infra → leaf only
-            {
-              from: 'infra',
-              allow: ['leaf'],
-            },
-            // sdk → leaf + infra
-            {
-              from: 'sdk',
-              allow: ['leaf', 'infra'],
-            },
+            { from: 'infra',     allow: ['leaf'] },
+
+            // [R5] sdk/agent-core: leaf + infra, but NOT bullmq directly
+            // (must use @octo/queue which wraps bullmq)
+            { from: 'sdk',       allow: ['leaf', 'infra'] },
+
             // ui → leaf only
-            {
-              from: 'ui',
-              allow: ['leaf'],
-            },
-            // app → leaf + infra + sdk + ui, never another app
-            {
-              from: 'app',
-              allow: ['leaf', 'infra', 'sdk', 'ui'],
-            },
+            { from: 'ui',        allow: ['leaf'] },
+
+            // [R1][R2][R3] frontend: leaf + sdk + ui, NOT infra (no db/queue direct)
+            { from: 'frontend',  allow: ['leaf', 'sdk', 'ui'] },
+
+            // api → full stack (leaf + infra + sdk + ui)
+            { from: 'api',       allow: ['leaf', 'infra', 'sdk', 'ui'] },
+
+            // [R4] reclaimer → leaf + infra only (no sdk/nestjs framework)
+            { from: 'reclaimer', allow: ['leaf', 'infra'] },
+
+            // [R7] workers → leaf + infra + sdk (adapter-only, no UI)
+            { from: 'worker',    allow: ['leaf', 'infra', 'sdk'] },
           ],
         },
       ],
+
+      // No cross-app imports (apps must never import each other)
+      'boundaries/no-unknown': 'error',
     },
   },
 ];
