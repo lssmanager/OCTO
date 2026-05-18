@@ -9,11 +9,10 @@
 # ─────────────────────────────────────────────
 # Stage 0: base — Node.js Alpine + pnpm
 # ─────────────────────────────────────────────
-FROM node:22.12.0-alpine3.21 AS base
+FROM node:22.13.0-alpine3.21 AS base
 RUN apk add --no-cache libc6-compat
-# Install pnpm directly via npm — bypasses Corepack entirely.
-# Corepack bundled in node:22.12.0 has stale verification keys and
-# cannot verify pnpm@10.x signatures (keyid rotation issue).
+# Install pnpm directly via npm — bypasses Corepack keyid issue
+# present in node:22.x bundled Corepack versions.
 RUN npm install -g pnpm@10.32.1
 ENV PNPM_HOME="/root/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -53,7 +52,7 @@ RUN pnpm turbo build --filter=@octo/runtime-worker
 # ─────────────────────────────────────────────
 # Stage 3: runner
 # ─────────────────────────────────────────────
-FROM node:22.12.0-alpine3.21 AS runner
+FROM node:22.13.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
 
 RUN addgroup --system --gid 1001 octo \
