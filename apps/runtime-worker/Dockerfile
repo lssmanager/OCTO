@@ -1,86 +1,69 @@
 # apps/runtime-worker/Dockerfile
-# Port: 3002 | Service: @octo/runtime-worker
+# Port: 8000 | Service: octo-runtime-worker (Python/FastAPI)
 #
-# BUILD CONTEXT: Must be repo root — turbo prune needs the full monorepo.
+# OCTO Execution Plane — isolated from the NestJS Control Plane.
+# This service MUST run in a separate process from the API.
+# See Architectural Principle #2: Runtime is isolated.
+#
+# BUILD CONTEXT: apps/runtime-worker/ (or repo root with this path)
 # SECURITY: Inject runtime secrets via Coolify env vars (Runtime tab).
+# No secrets in ARG or ENV during build.
 
 # syntax=docker/dockerfile:1.4
 
 # ─────────────────────────────────────────────
-# Stage 0: base — Node.js Alpine + pnpm
+# Stage 0: base — Python 3.12 slim
 # ─────────────────────────────────────────────
-FROM node:22.13.0-alpine3.21 AS base
-RUN apk add --no-cache libc6-compat
-# Install pnpm directly via npm — bypasses Corepack keyid issue
-# present in node:22.x bundled Corepack versions.
-RUN npm install -g pnpm@10.32.1
-ENV PNPM_HOME="/root/.local/share/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-WORKDIR /app
+FROM python:3.12-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # ─────────────────────────────────────────────
-# Stage 1: pruner
-# ─────────────────────────────────────────────
-FROM base AS pruner
-ENV TURBO_TELEMETRY_DISABLED=1
-COPY . .
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    HUSKY=0 pnpm install --frozen-lockfile
-RUN pnpm dlx turbo@2.9.14 prune @octo/runtime-worker --docker
-
-# ─────────────────────────────────────────────
-# Stage 2: builder
+# Stage 1: builder — install dependencies
 # ─────────────────────────────────────────────
 FROM base AS builder
-ENV NODE_ENV=development
-ENV TURBO_TELEMETRY_DISABLED=1
-
-COPY --from=pruner /app/out/json/ .
-COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    HUSKY=0 pnpm install --frozen-lockfile
-
-COPY --from=pruner /app/out/full/ .
-
-ARG BUILD_VERSION=unknown
-ARG BUILD_COMMIT=unknown
-ARG BUILD_PHASE=F0
-ARG BUILD_TIME=unknown
-
-RUN pnpm turbo build --filter=@octo/runtime-worker
-
-# ─────────────────────────────────────────────
-# Stage 3: runner
-# ─────────────────────────────────────────────
-FROM node:22.13.0-alpine3.21 AS runner
-RUN apk add --no-cache libc6-compat curl
-
-RUN addgroup --system --gid 1001 octo \
- && adduser --system --uid 1001 --ingroup octo octo
 
 WORKDIR /app
 
-COPY --from=builder --chown=octo:octo /app/apps/runtime-worker/dist ./dist
-COPY --from=builder --chown=octo:octo /app/apps/runtime-worker/package.json ./
-COPY --from=builder --chown=octo:octo /app/node_modules ./node_modules
-COPY --from=builder --chown=octo:octo /app/packages ./packages
+COPY apps/runtime-worker/requirements.txt ./requirements.txt
+
+RUN pip install --prefix=/install -r requirements.txt
+
+# ─────────────────────────────────────────────
+# Stage 2: runner — minimal production image
+# ─────────────────────────────────────────────
+FROM base AS runner
+
+RUN groupadd --system --gid 1001 octo \
+ && useradd --system --uid 1001 --gid octo --no-create-home octo
+
+WORKDIR /app
+
+COPY --from=builder /install /usr/local
+COPY --chown=octo:octo apps/runtime-worker/src ./src
+COPY --chown=octo:octo apps/runtime-worker/pyproject.toml ./pyproject.toml
 
 USER octo
-EXPOSE 3002
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3002/health/live || exit 1
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:8000/health/live || exit 1
 
 ARG BUILD_VERSION=unknown
 ARG BUILD_COMMIT=unknown
 ARG BUILD_PHASE=F0
-ARG BUILD_TIME=unknown
 
 ENV BUILD_VERSION=${BUILD_VERSION} \
     BUILD_COMMIT=${BUILD_COMMIT} \
     BUILD_PHASE=${BUILD_PHASE} \
-    BUILD_TIME=${BUILD_TIME} \
-    NODE_ENV=production \
-    WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-4}
+    PYTHONPATH=/app
 
-CMD ["node", "dist/main.js"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
