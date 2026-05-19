@@ -1,0 +1,131 @@
+# .github/workflows/security.yml
+# Issue #40 — Trivy vulnerability scan + SBOM generation
+#
+# SECURITY MODEL:
+#   - No runtime secrets are passed as Docker build args.
+#     Only build-time metadata (version, commit, phase) is injected.
+#     Runtime secrets (DATABASE_URL, REDIS_URL, JWT_SECRET, etc.) are
+#     injected at container startup by Coolify — never at image build time.
+#
+#   - Minimal permissions: contents:read + security-events:write only.
+#     No write access to packages, deployments, or other resources.
+#
+# JOBS:
+#   fs-scan    — Trivy filesystem scan (fast, no Docker build, runs on PRs)
+#   image-scan — Build api image → Trivy image scan (SARIF) → CycloneDX SBOM
+
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 8 * * 1'  # Mondays 08:00 UTC
+
+permissions:
+  contents: read
+  security-events: write   # Required for uploading SARIF to GitHub Security tab
+
+jobs:
+
+  # ──────────────────────────────────────────────────────────────────
+  # Job 1: Filesystem scan
+  # Fast scan against the source tree — catches CVEs in npm/pip deps
+  # without requiring a Docker build. Runs on every push and PR.
+  # ──────────────────────────────────────────────────────────────────
+  fs-scan:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan (SARIF)
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Upload filesystem SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()   # Upload even when exit-code:1 triggered
+        with:
+          sarif_file: 'trivy-fs-results.sarif'
+          category: 'trivy-filesystem'
+
+  # ──────────────────────────────────────────────────────────────────
+  # Job 2: Docker image scan + SBOM
+  # Builds the production API image (build metadata args only — no
+  # runtime secrets), then scans it and generates a CycloneDX SBOM.
+  # ──────────────────────────────────────────────────────────────────
+  image-scan:
+    name: Trivy image scan + SBOM (API)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Build the API production image.
+      # ONLY build-time metadata is injected as ARGs.
+      # Runtime secrets (DATABASE_URL, JWT_SECRET, REDIS_URL, etc.)
+      # are NEVER passed here — they are injected at runtime by Coolify.
+      - name: Build API image for scanning
+        run: |
+          docker build \
+            --file apps/api/Dockerfile \
+            --tag octo-api-scan:${{ github.sha }} \
+            --build-arg BUILD_VERSION=${{ github.ref_name }} \
+            --build-arg BUILD_COMMIT=${{ github.sha }} \
+            --build-arg BUILD_PHASE=F0 \
+            --build-arg BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            .
+
+      # Scan the built image and output SARIF for GitHub Security tab.
+      # exit-code:1 fails CI if HIGH or CRITICAL CVEs are found.
+      - name: Trivy image scan (SARIF)
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: 'octo-api-scan:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-image-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Upload image SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-image-results.sarif'
+          category: 'trivy-image-api'
+
+      # Generate a CycloneDX SBOM from the same image.
+      # exit-code:0 — SBOM generation is informational, not a gate.
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: 'octo-api-scan:${{ github.sha }}'
+          format: 'cyclonedx'
+          output: 'sbom.json'
+          exit-code: '0'
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-api
+          path: sbom.json
+          retention-days: 90
+
+      # Clean up local image to free runner disk space
+      - name: Remove scan image
+        if: always()
+        run: docker rmi octo-api-scan:${{ github.sha }} || true
