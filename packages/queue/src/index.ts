@@ -49,8 +49,13 @@ export { DLQ_NAMES }                from './dlq-names';
 // DLQ handler
 export { DlqHandler }               from './dlq-handler';
 
-// BullMQ adapter
-export { BullMQAdapter }            from './bullmq-adapter';
+// BullMQ adapters (concrete implementations of IQueue / IWorker)
+export {
+  BullMQQueue,
+  BullMQWorker,
+  BullMQQueueFactory,
+  BullMQWorkerFactory,
+} from './bullmq-adapter';
 
 // Write-before-ack pattern
 export { writeBeforeAck }           from './write-before-ack';
