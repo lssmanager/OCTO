@@ -99,12 +99,13 @@ function adaptJob<T>(
     attemptsMade: bullJob.attemptsMade,
     timestamp:    bullJob.timestamp,
     // BullMQ v5 changed updateProgress() return type to Promise<number>.
-    // IJob.updateProgress is typed as Promise<void>.
-    // Explicitly void the awaited result so TypeScript emits Promise<void>
-    // in the DTS output rather than inferring Promise<number>.
+    // IJob.updateProgress is typed as Promise<void>. Discard the value.
     updateProgress: (progress): Promise<void> =>
       bullJob.updateProgress(progress).then((): void => { /* discard */ }),
-    log:          (row) => bullJob.log(row),
+    // BullMQ v5 Job.log() returns Promise<number> (log entry index).
+    // IJob.log is typed as Promise<void> — discard the numeric return value.
+    log: (row): Promise<void> =>
+      bullJob.log(row).then((): void => { /* discard */ }),
   };
 }
 
