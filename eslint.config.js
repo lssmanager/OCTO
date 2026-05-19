@@ -147,9 +147,9 @@ export default [
         },
       ],
 
-      // OFF: fires on every external import (bullmq, @nestjs/*, drizzle-orm…)
-      // External deps are valid; only internal cross-zone violations matter.
-      'boundaries/no-unknown': 'off',
+      // External deps (node_modules) are valid; only flag truly unknown
+      // internal imports that don't match any element pattern.
+      'boundaries/no-unknown': ['error', { allowExternal: true }],
     },
   },
 ];
