@@ -100,9 +100,11 @@ function adaptJob<T>(
     timestamp:    bullJob.timestamp,
     // BullMQ v5 changed updateProgress() return type to Promise<number>.
     // IJob.updateProgress is typed as Promise<void>.
-    // We explicitly cast to Promise<void> to satisfy the DTS build.
-    updateProgress: (progress): Promise<void> =>
-      bullJob.updateProgress(progress) as unknown as Promise<void>,
+    // Wrap in an async function that awaits and discards the return value
+    // so TypeScript infers Promise<void> without any cast.
+    updateProgress: async (progress): Promise<void> => {
+      await bullJob.updateProgress(progress);
+    },
     log:          (row) => bullJob.log(row),
   };
 }
