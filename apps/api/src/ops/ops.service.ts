@@ -18,8 +18,8 @@ export interface OpsStatus {
   };
   services: {
     api: { status: string; uptime: number };
-    db: { status: string; latencyMs?: number; error?: string };
-    redis: { status: string; latencyMs?: number; error?: string };
+    db: { status: string; latencyMs?: number | undefined; error?: string | undefined };
+    redis: { status: string; latencyMs?: number | undefined; error?: string | undefined };
   };
   queues: {
     [name: string]: {

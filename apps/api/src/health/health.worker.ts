@@ -3,7 +3,7 @@
 // All log events now emit structured JSON with trace_id, worker_id,
 // execution_id — consistent with OTel trace propagation across the system.
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { Worker } from 'bullmq';
+import { Worker, type Job } from 'bullmq';
 import { createWorker, QUEUE_NAMES, type HealthJobData } from '@octo/queue';
 import { createLogger } from '@octo/observability';
 
@@ -28,7 +28,7 @@ export class HealthWorker implements OnModuleInit, OnModuleDestroy {
 
     this.worker = createWorker<HealthJobData>(
       QUEUE_NAMES.HEALTH,
-      async (job) => {
+      async (job: Job<HealthJobData>) => {
         this.logger.info({
           event:        'health_job_processed',
           trace_id:     'job',
@@ -42,7 +42,7 @@ export class HealthWorker implements OnModuleInit, OnModuleDestroy {
       { redisUrl, concurrency },
     );
 
-    this.worker.on('failed', (job, err) => {
+    this.worker.on('failed', (job: Job<HealthJobData> | undefined, err: Error) => {
       this.logger.error({
         event:        'health_job_failed',
         trace_id:     'job',
@@ -54,7 +54,7 @@ export class HealthWorker implements OnModuleInit, OnModuleDestroy {
       });
     });
 
-    this.worker.on('error', (err) => {
+    this.worker.on('error', (err: Error) => {
       this.logger.error({
         event:     'health_worker_error',
         trace_id:  'system',
