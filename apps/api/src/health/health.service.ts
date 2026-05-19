@@ -61,6 +61,7 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
   private healthQueue!: Queue<HealthJobData>;
   private redisUrl!: string;
   private dbUrl!: string;
+  private _bootstrapped = false;
 
   onModuleInit(): void {
     this.redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
@@ -68,6 +69,19 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
     this.healthQueue = createQueue<HealthJobData>(QUEUE_NAMES.HEALTH, {
       redisUrl: this.redisUrl,
     });
+  }
+
+  /**
+   * Marks bootstrap as complete. Called by main.ts after app.listen().
+   * Once set, /api/health/start returns 200 instead of 503.
+   */
+  markBootstrapped(): void {
+    this._bootstrapped = true;
+  }
+
+  /** Returns true if bootstrap has completed. */
+  isBootstrapped(): boolean {
+    return this._bootstrapped;
   }
 
   async onModuleDestroy(): Promise<void> {

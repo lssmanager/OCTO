@@ -11,10 +11,11 @@ import { HealthService, type HealthStatus } from './health.service';
 /**
  * Health endpoints — no authentication required (public probes).
  *
- * GET /api/health       — full status (Redis + BullMQ + Postgres)
- * GET /api/health/live  — liveness probe (always 200 if process is alive)
- * GET /api/health/ready — readiness probe (503 if any dependency is down)
- * GET /api/health/ping  — enqueues a health job to validate BullMQ end-to-end
+ * GET /api/health        — full status (Redis + BullMQ + Postgres)
+ * GET /api/health/live   — liveness probe (always 200 if process is alive)
+ * GET /api/health/ready  — readiness probe (503 if any dependency is down)
+ * GET /api/health/start  — startup probe (503 until bootstrap complete)
+ * GET /api/health/ping   — enqueues a health job to validate BullMQ end-to-end
  * GET /api/health/version — service version, commit, phase
  */
 @Controller('health')
@@ -65,6 +66,34 @@ export class HealthController {
       ready: allOk,
       timestamp: new Date().toISOString(),
       checks,
+    };
+  }
+
+  /**
+   * Startup probe.
+   * Returns 200 when bootstrap is complete (migrations applied, DI ready, server listening).
+   * Returns 503 Service Unavailable while bootstrap is in progress.
+   *
+   * Kubernetes / Coolify use this to delay traffic until the service is fully started.
+   * Distinction: live (process alive) ≠ ready (deps ok) ≠ start (bootstrap done).
+   */
+  @Get('start')
+  async start(
+    @Res({ passthrough: true }) res: FastifyReply,
+  ): Promise<Record<string, unknown>> {
+    const booted = this.healthService.isBootstrapped();
+    if (!booted) {
+      res.status(HttpStatus.SERVICE_UNAVAILABLE);
+      return {
+        status: 'starting',
+        bootstrapped: false,
+        timestamp: new Date().toISOString(),
+      };
+    }
+    return {
+      status: 'ok',
+      bootstrapped: true,
+      timestamp: new Date().toISOString(),
     };
   }
 

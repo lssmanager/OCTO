@@ -6,6 +6,10 @@
  * Organised by ADR source.
  */
 
+// F0-001 — Queue Name Contracts
+export { QUEUE_NAMES, DLQ_NAMES, MONITORED_QUEUES } from './queue.contracts';
+export type { QueueName } from './queue.contracts';
+
 // F0-006 — MCP & A2A Protocol Contracts
 export type {
   MCPTool,

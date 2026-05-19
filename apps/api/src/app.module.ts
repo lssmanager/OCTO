@@ -17,13 +17,14 @@ import { Module } from '@nestjs/common';
 import { loadApiConfig } from '@octo/config';
 import { BullBoardModule } from './admin/bullboard.module';
 import { HealthModule } from './health/health.module';
+import { OpsModule } from './ops/ops.module';
 import { MetricsController } from './metrics.controller';
 
 /** Injection token for the API config object. */
 export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
 
 @Module({
-  imports: [HealthModule, BullBoardModule],
+  imports: [HealthModule, OpsModule, BullBoardModule],
   controllers: [MetricsController],
   providers: [
     {

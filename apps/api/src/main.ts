@@ -6,6 +6,7 @@ import { loadApiConfig } from '@octo/config';
 import { bootstrapTelemetry, createLogger } from '@octo/observability';
 import { AppModule } from './app.module';
 import { BULLBOARD_BASEPATH, FastifyBullBoardPlugin } from './admin/bullboard.plugin';
+import { HealthService } from './health/health.service';
 
 const config = loadApiConfig();
 
@@ -22,8 +23,51 @@ const logger = createLogger({
   version: config.BUILD_VERSION,
 });
 
+// ── F4: Graceful shutdown on SIGTERM / SIGINT ─────────────────────────
+
+let app: NestFastifyApplication | null = null;
+
+function setupShutdown(): void {
+  const shutdown = async (signal: string) => {
+    logger.info({
+      event: 'shutdown_signal_received',
+      trace_id: 'shutdown',
+      run_id: 'shutdown',
+      msg: `Received ${signal} — starting graceful shutdown`,
+      signal,
+    });
+
+    if (app) {
+      try {
+        await app.close();
+        logger.info({
+          event: 'shutdown_complete',
+          trace_id: 'shutdown',
+          run_id: 'shutdown',
+          msg: 'NestJS application closed gracefully',
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error({
+          event: 'shutdown_error',
+          trace_id: 'shutdown',
+          run_id: 'shutdown',
+          msg: `Error during NestJS close: ${message}`,
+          error: message,
+        });
+        process.exit(1);
+      }
+    }
+
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+}
+
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestFastifyApplication>(
+  app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({ logger: false }),
   );
@@ -42,7 +86,14 @@ async function bootstrap(): Promise<void> {
   // Must run after app.init() (DI ready) and before app.listen()
   await FastifyBullBoardPlugin.register(app);
 
+  // Register graceful shutdown handlers BEFORE listening
+  setupShutdown();
+
   await app.listen(config.PORT, '0.0.0.0');
+
+  // Mark bootstrap complete — /api/health/start now returns 200
+  const healthService = app.get(HealthService);
+  healthService.markBootstrapped();
 
   logger.info({
     event: 'api_started',
