@@ -17,6 +17,11 @@
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
   },
+  "dependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@octo/observability": "workspace:*"
+  },
   "devDependencies": {
     "@octo/config": "workspace:*",
     "rimraf": "5.0.10",

@@ -6,6 +6,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
+import { Public } from '@octo/security';
 import { HealthService, type HealthStatus } from './health.service';
 
 /**
@@ -18,6 +19,7 @@ import { HealthService, type HealthStatus } from './health.service';
  * GET /api/health/ping   — enqueues a health job to validate BullMQ end-to-end
  * GET /api/health/version — service version, commit, phase
  */
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}

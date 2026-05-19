@@ -1,6 +1,7 @@
 import { getOpsStatus } from '@/lib/ops';
+import { OpsAutoRefresh } from './ops-auto-refresh';
 
-export const revalidate = 15;
+export const revalidate = 30;
 
 /** Status badge color logic for service health. */
 function statusColor(status: string): string {
@@ -39,6 +40,7 @@ export default async function OpsPage() {
         <div style={{ color: 'var(--color-text-error)' }}>
           Failed to fetch ops status: {result.error ?? 'Unknown error'}
         </div>
+        <OpsAutoRefresh />
       </div>
     );
   }
@@ -48,12 +50,14 @@ export default async function OpsPage() {
 
   return (
     <div className="space-y-6">
+      <OpsAutoRefresh />
+
       <div>
         <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
           Ops Console
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
-          Infrastructure status · Revalidates every 15s · {data.timestamp}
+          Infrastructure status · Auto-refresh 30s · {data.timestamp}
         </p>
       </div>
 
