@@ -26,7 +26,6 @@
 #
 # node:22.16.0-alpine3.21 — Node 22 LTS (current).
 # Minimum required by eslint-visitor-keys@5.0.1: ^22.13.0
-# 22.12.0 was below that floor and caused ERR_PNPM_UNSUPPORTED_ENGINE.
 # ─────────────────────────────────────────────
 FROM node:22.16.0-alpine3.21 AS base
 RUN apk add --no-cache libc6-compat
@@ -38,21 +37,27 @@ WORKDIR /app
 # ─────────────────────────────────────────────
 # Stage 1: pruner — generates minimal sub-repo for @octo/api
 #
-# pnpm-lock.yaml MUST be committed in the repo.
-# --frozen-lockfile guarantees reproducible builds.
-# HUSKY=0 — disables husky in Docker (no .git)
-# TURBO_TELEMETRY_DISABLED=1 — avoids interactive prompt in CI
+# ARG NODE_ENV=development — declared BEFORE pnpm install so it wins
+# over any external --build-arg NODE_ENV=production injected by Coolify.
+# pnpm respects NODE_ENV for devDependency installation; if it sees
+# "production" here it silently skips devDeps, breaking turbo build.
 # ─────────────────────────────────────────────
 FROM base AS pruner
 ENV TURBO_TELEMETRY_DISABLED=1
+# Force development so devDeps are included in the pruned output.
+# This ENV overrides any external --build-arg at the stage level.
+ENV NODE_ENV=development
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     HUSKY=0 pnpm install --frozen-lockfile
 RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 
 # ─────────────────────────────────────────────
-# Stage 2: builder — installs sub-repo deps and compiles
-# NODE_ENV=development is REQUIRED to install devDependencies.
+# Stage 2: builder — installs pruned sub-repo deps and compiles
+#
+# NODE_ENV=development MUST be set here too — same reason as pruner.
+# TURBO_FORCE=1 — bypasses any stale remote/local turbo cache that
+# could cause a phantom cache hit on a broken prior build.
 # ─────────────────────────────────────────────
 FROM base AS builder
 
