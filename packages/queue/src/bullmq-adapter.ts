@@ -52,7 +52,7 @@ import type {
 } from './interfaces';
 
  
-type AnyData = Record<string, any>;
+type AnyData = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const logger = createLogger({ service: 'queue:bullmq-adapter' });
 
@@ -98,7 +98,10 @@ function adaptJob<T>(
     meta,
     attemptsMade: bullJob.attemptsMade,
     timestamp:    bullJob.timestamp,
-    updateProgress: (progress) => bullJob.updateProgress(progress),
+    // BullMQ v5 changed updateProgress() return type to Promise<number>.
+    // IJob.updateProgress is Promise<void> — cast via void operator.
+    updateProgress: (progress): Promise<void> =>
+      bullJob.updateProgress(progress).then(() => undefined),
     log:          (row) => bullJob.log(row),
   };
 }
@@ -147,13 +150,10 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
 
   async pause(): Promise<void> { await this.bull.pause(); }
 
-  // BullQueue.resume() returns Promise<number> in bullmq v5 (number of resumed jobs).
-  // IQueue<T>.resume() is typed as Promise<void>.
-  // Wrapping in an explicit Promise<void> executor satisfies the DTS checker.
+  // BullMQ v5 Queue.resume() returns Promise<number> (resumed-job count).
+  // IQueue<T>.resume() is typed as Promise<void> — discard the value.
   resume(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      this.bull.resume().then(() => resolve(), reject);
-    });
+    return this.bull.resume().then(() => undefined);
   }
 
   async drain(delayed = false): Promise<void> {
