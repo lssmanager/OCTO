@@ -11,7 +11,7 @@
 
 # syntax=docker/dockerfile:1.4
 
-FROM node:22.12.0-alpine3.21 AS base
+FROM node:22.16.0-alpine3.21 AS base
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 ENV PNPM_HOME="/root/.local/share/pnpm"
@@ -43,7 +43,7 @@ ARG BUILD_TIME=unknown
 
 RUN pnpm turbo build --filter=@octo/channel-telegram-worker
 
-FROM node:22.12.0-alpine3.21 AS runner
+FROM node:22.16.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
 
 RUN addgroup --system --gid 1001 octo \
