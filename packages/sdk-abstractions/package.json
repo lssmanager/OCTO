@@ -1,20 +1,23 @@
 {
   "name": "@octo/sdk-abstractions",
   "version": "0.0.1",
+  "private": true,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsup src/index.ts --format cjs --dts",
-    "dev": "tsup src/index.ts --format cjs --dts --watch",
+    "dev": "tsup src/index.ts --format cjs --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
   },
+  "dependencies": {
+    "@octo/contracts": "workspace:*"
+  },
   "devDependencies": {
-    "@octo/config": "workspace:*",
     "@octo/contracts": "workspace:*",
     "@types/node": "22.0.0",
     "rimraf": "5.0.0",
     "tsup": "8.0.0",
-    "typescript": "5.4.0"
+    "typescript": "5.4.2"
   }
 }
