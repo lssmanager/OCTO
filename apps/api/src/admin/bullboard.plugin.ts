@@ -20,20 +20,16 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { createBullBoard } from '@bull-board/api';
 import { FastifyAdapter as BullBoardFastifyAdapter } from '@bull-board/fastify';
 import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
-import { MONITORED_QUEUES } from '@octo/queue';
+import { createRedisConnection, MONITORED_QUEUES } from '@octo/queue';
 
 export const BULLBOARD_BASEPATH = '/admin/queues/board';
 
 export class FastifyBullBoardPlugin {
   static async register(app: NestFastifyApplication): Promise<void> {
     // PATCH 2: single REDIS_URL — matches all other system consumers.
-    // IORedis parses the URL natively; rediss:// enables TLS automatically.
+    // Uses createRedisConnection from @octo/queue for consistent config.
     const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
-    const connection = new IORedis(redisUrl, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    });
+    const connection = createRedisConnection(redisUrl);
 
     // PATCH 3: names from MONITORED_QUEUES registry — no hardcoded strings.
     const queues = MONITORED_QUEUES.map(

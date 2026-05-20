@@ -14,8 +14,8 @@
  */
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
-import { MONITORED_QUEUES, type QueueName } from '@octo/queue';
+import { Redis } from 'ioredis';
+import { createRedisConnection, MONITORED_QUEUES, type QueueName } from '@octo/queue';
 
 export interface QueueMetricsSnapshot {
   queue: string;
@@ -30,17 +30,14 @@ export interface QueueMetricsSnapshot {
 
 @Injectable()
 export class QueueMetricsService implements OnModuleDestroy {
-  private readonly connection: IORedis;
+  private readonly connection: Redis;
   private readonly queues: Map<QueueName, Queue>;
 
   constructor() {
     // PATCH 9: single REDIS_URL — same source of truth as all workers.
-    // IORedis parses the URL; rediss:// enables TLS for managed Redis.
+    // Uses createRedisConnection from @octo/queue for consistent config.
     const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
-    this.connection = new IORedis(redisUrl, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    });
+    this.connection = createRedisConnection(redisUrl);
 
     // PATCH 3: names from registry — no magic strings.
     // All Queue instances share the same IORedis connection.
