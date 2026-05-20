@@ -8,6 +8,10 @@ Convenciones (F0-002, F0-008):
   - Estos modelos NO son auto-generados. Se mantienen en sync por convención.
     Un test JSON Schema round-trip se añadirá en F1 para detectar drift.
 
+SOURCE OF TRUTH: packages/contracts/src/execution.ts
+  Cualquier cambio en ExecutionStatus en TS DEBE reflejarse aquí.
+  Ver: VALID_TRANSITIONS en execution.ts para la máquina de estados completa.
+
 REGLA ABSOLUTA (Principio #1):
   ExecutionRequest NO contiene lógica de orquestación ni topología de agentes.
   Solo el payload necesario para ejecutar UNA tarea de UN agente.
@@ -33,12 +37,60 @@ class OctoModel(BaseModel):
 
 
 class ExecutionStatus(StrEnum):
+    """Mirror exacto de ExecutionStatus en packages/contracts/src/execution.ts.
+
+    SYNC RULE: Este enum DEBE tener los mismos valores que el TS const.
+    Último sync: FIX-1 (F0 Foundation Blockers resolution).
+
+    TS values (source of truth):
+      pending | queued | running | waiting_tool | waiting_human
+      retrying | suspended | completed | failed | cancelled
+    """
+
+    # Pre-execution
     PENDING = "pending"
+    QUEUED = "queued"
+    # Active
     RUNNING = "running"
+    # Blocked (alive but waiting on external signal)
+    WAITING_TOOL = "waiting_tool"
+    WAITING_HUMAN = "waiting_human"
+    RETRYING = "retrying"
+    SUSPENDED = "suspended"
+    # Terminal
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
-    PAUSED = "paused"
+
+
+TERMINAL_STATUSES: frozenset[ExecutionStatus] = frozenset({
+    ExecutionStatus.COMPLETED,
+    ExecutionStatus.FAILED,
+    ExecutionStatus.CANCELLED,
+})
+
+ACTIVE_STATUSES: frozenset[ExecutionStatus] = frozenset({
+    ExecutionStatus.RUNNING,
+    ExecutionStatus.RETRYING,
+})
+
+BLOCKED_STATUSES: frozenset[ExecutionStatus] = frozenset({
+    ExecutionStatus.WAITING_TOOL,
+    ExecutionStatus.WAITING_HUMAN,
+    ExecutionStatus.SUSPENDED,
+})
+
+
+def is_terminal(status: ExecutionStatus) -> bool:
+    return status in TERMINAL_STATUSES
+
+
+def is_active(status: ExecutionStatus) -> bool:
+    return status in ACTIVE_STATUSES
+
+
+def is_blocked(status: ExecutionStatus) -> bool:
+    return status in BLOCKED_STATUSES
 
 
 class AgentDefinition(OctoModel):
@@ -131,5 +183,5 @@ class ExecutionResult(OctoModel):
     duration_ms: int = Field(ge=0)
     checkpoint: dict[str, Any] | None = Field(
         default=None,
-        description="Estado LangGraph para pause/resume. Seteado solo si status=paused.",
+        description="Estado LangGraph para pause/resume. Seteado solo si status=suspended.",
     )
