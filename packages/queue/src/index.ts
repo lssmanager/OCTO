@@ -54,6 +54,9 @@ export { QUEUE_NAMES }              from './queue-names';
 export type { QueueName }           from './queue-names';
 export { DLQ_NAMES }                from './dlq-names';
 
+// MONITORED_QUEUES — re-exported from @octo/contracts for admin/ consumers
+export { MONITORED_QUEUES }         from '@octo/contracts';
+
 // DLQ handler
 export { DlqHandler }               from './dlq-handler';
 
