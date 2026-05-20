@@ -494,6 +494,10 @@ importers:
         version: 5.9.3
 
   packages/events:
+    dependencies:
+      '@octo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@types/node':
         specifier: 22.0.0
@@ -575,12 +579,21 @@ importers:
 
   packages/queue:
     dependencies:
+      '@octo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@octo/observability':
+        specifier: workspace:*
+        version: link:../observability
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
       bullmq:
         specifier: 5.56.0
         version: 5.56.0
+      ioredis:
+        specifier: 5.6.1
+        version: 5.6.1
     devDependencies:
       '@types/node':
         specifier: 22.0.0
