@@ -81,6 +81,18 @@ RUN pnpm turbo build --filter=@octo/api
 
 # ─────────────────────────────────────────────
 # Stage 3: runner — minimal final image
+#
+# WHY we copy packages/*/node_modules:
+#   pnpm uses a virtual store + symlinks. After `pnpm install` in the
+#   builder stage, some peer deps and non-hoisted packages (e.g.
+#   drizzle-orm/postgres-js, postgres) end up in package-level
+#   node_modules (packages/database/node_modules/, etc.) rather than
+#   the root /app/node_modules. Copying only the root node_modules
+#   causes MODULE_NOT_FOUND for those packages at runtime.
+#
+#   Copying packages/*/node_modules alongside packages/*/dist
+#   ensures every package can resolve its own direct dependencies
+#   regardless of hoisting decisions.
 # ─────────────────────────────────────────────
 FROM node:22.16.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
@@ -90,10 +102,29 @@ RUN addgroup --system --gid 1001 octo \
 
 WORKDIR /app
 
+# App dist + manifest
 COPY --from=builder --chown=octo:octo /app/apps/api/dist ./dist
 COPY --from=builder --chown=octo:octo /app/apps/api/package.json ./
+
+# Root hoisted node_modules (most dependencies live here)
 COPY --from=builder --chown=octo:octo /app/node_modules ./node_modules
+
+# Internal packages: built output + their own node_modules
+# (non-hoisted deps like drizzle-orm/postgres-js, postgres, etc.
+#  are installed at the package level by pnpm, not at the root)
 COPY --from=builder --chown=octo:octo /app/packages ./packages
+
+# Package-level node_modules (pnpm non-hoisted deps)
+# Each package that has its own node_modules gets it copied explicitly.
+# This is a belt-and-suspenders copy on top of the packages/ copy above;
+# it ensures node_modules directories are preserved even if the shell
+# glob in the COPY above is subject to .dockerignore exclusions.
+COPY --from=builder --chown=octo:octo /app/packages/database/node_modules ./packages/database/node_modules
+COPY --from=builder --chown=octo:octo /app/packages/observability/node_modules ./packages/observability/node_modules
+COPY --from=builder --chown=octo:octo /app/packages/queue/node_modules ./packages/queue/node_modules
+COPY --from=builder --chown=octo:octo /app/packages/runtime-state/node_modules ./packages/runtime-state/node_modules
+COPY --from=builder --chown=octo:octo /app/packages/security/node_modules ./packages/security/node_modules
+COPY --from=builder --chown=octo:octo /app/packages/contracts/node_modules ./packages/contracts/node_modules
 
 USER octo
 
