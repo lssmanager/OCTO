@@ -33,6 +33,12 @@
 import boundaries from 'eslint-plugin-boundaries';
 import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+
+// Custom rules
+const noRawExecutionStatusWrite = require('./eslint-rules/no-raw-execution-status-write.js');
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
@@ -63,6 +69,11 @@ export default [
     plugins: {
       boundaries,
       '@typescript-eslint': tsPlugin,
+      'octo-local': {
+        rules: {
+          'no-raw-execution-status-write': noRawExecutionStatusWrite,
+        },
+      },
     },
     settings: {
       // Only evaluate imports that are internal workspace packages (@octo/*)
@@ -150,6 +161,10 @@ export default [
       // External deps (node_modules) are valid; only flag truly unknown
       // internal imports that don't match any element pattern.
       'boundaries/no-unknown': ['error', { allowExternal: true }],
+
+      // [ADR-0017] Prevent raw execution status writes outside runtime-state.
+      // Use ExecutionStateService.transition() instead.
+      'octo-local/no-raw-execution-status-write': 'error',
     },
   },
 ];
