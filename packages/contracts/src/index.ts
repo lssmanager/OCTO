@@ -107,9 +107,8 @@ export * from './agent';
 
 // ─── execution.ts ─────────────────────────────────────────────────────────────
 // Single export block for both runtime values (const objects) and types.
-// FIX: removed the duplicate `export type { ... }` block that caused TS2300.
-// Const objects (ExecutionStatus, StepType, etc.) satisfy both the type and
-// value contract — TypeScript consumers use them as types via `typeof` inference.
+// FIX: removed the duplicate `export type { InvalidTransitionError }` that caused TS2300.
+// InvalidTransitionError is already exported as a value above — no separate type export needed.
 export {
   // Const enum objects (runtime values + inferred types)
   ExecutionStatus,
@@ -138,9 +137,7 @@ export {
 } from './execution';
 
 export type {
-  // Error types
-  InvalidTransitionError,
-  // Pure interfaces
+  // Pure interfaces (no duplicate of InvalidTransitionError here)
   GovernancePolicy,
   TaskDefinition,
   ExecutionContext,
