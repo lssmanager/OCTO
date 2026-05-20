@@ -24,11 +24,11 @@
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch --clean"
   },
   "dependencies": {
-    "zod": "^3.24.0"
+    "zod": "3.24.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "tsup": "^8.0.0",
-    "typescript": "^5.9.3"
+    "@types/node": "22.0.0",
+    "tsup": "8.0.0",
+    "typescript": "5.9.3"
   }
 }
