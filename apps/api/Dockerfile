@@ -51,6 +51,11 @@ RUN pnpm turbo build --filter=@octo/api
 
 # ─────────────────────────────────────────────
 # Stage 3: runner
+#
+# Copies the entire workspace layout from the builder so that pnpm
+# symlinks and nested node_modules (e.g. packages/database/node_modules)
+# are all present. Without them Node cannot resolve sub-path exports
+# like drizzle-orm/postgres-js when they are not hoisted to the root.
 # ─────────────────────────────────────────────
 FROM node:22.13.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
@@ -60,10 +65,17 @@ RUN addgroup --system --gid 1001 octo \
 
 WORKDIR /app
 
-COPY --from=builder --chown=octo:octo /app/apps/api/dist ./dist
-COPY --from=builder --chown=octo:octo /app/apps/api/package.json ./
+# Copy the full pruned workspace so every node_modules tree is intact
 COPY --from=builder --chown=octo:octo /app/node_modules ./node_modules
 COPY --from=builder --chown=octo:octo /app/packages ./packages
+COPY --from=builder --chown=octo:octo /app/apps/api/package.json ./apps/api/package.json
+COPY --from=builder --chown=octo:octo /app/apps/api/node_modules ./apps/api/node_modules
+
+# Compiled output goes to /app/dist so CMD can do `node dist/migrate.js`
+COPY --from=builder --chown=octo:octo /app/apps/api/dist ./dist
+
+# pnpm workspace root package.json is needed for module resolution
+COPY --from=builder --chown=octo:octo /app/package.json ./package.json
 
 USER octo
 EXPOSE 3001
