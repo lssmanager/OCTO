@@ -130,6 +130,13 @@ export const VALID_TRANSITIONS: Readonly<Record<ExecutionStatus, ReadonlySet<Exe
   cancelled: new Set<ExecutionStatus>(),
 };
 
+/** Set of terminal statuses — no outgoing transitions from these. */
+export const TERMINAL_STATUSES: ReadonlySet<ExecutionStatus> = new Set([
+  'completed',
+  'failed',
+  'cancelled',
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STATUS PREDICATES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,6 +188,13 @@ export class ExecutionTransitionError extends Error {
     this.executionId = executionId;
   }
 }
+
+/**
+ * Alias for ExecutionTransitionError — preserves backward compatibility
+ * with packages/runtime-state which used this name before consolidation.
+ */
+export const InvalidTransitionError = ExecutionTransitionError;
+export type InvalidTransitionError = ExecutionTransitionError;
 
 /**
  * Safe boolean predicate — does NOT throw.

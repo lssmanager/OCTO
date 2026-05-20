@@ -26,11 +26,23 @@ export async function createExecution(data: NewExecution) {
   return created;
 }
 
+/**
+ * @deprecated — Use ExecutionStateService.transition() instead.
+ * Only valid for internal FSM use. Passing skipFsmGuard=true draws
+ * intentional attention to every direct-write bypass.
+ */
 export async function updateExecutionStatus(
   id: string,
   status: NewExecution['status'],
   extra?: Partial<NewExecution>,
+  skipFsmGuard?: true,
 ) {
+  if (!skipFsmGuard) {
+    throw new Error(
+      'updateExecutionStatus called without skipFsmGuard=true. ' +
+      'Use ExecutionStateService.transition() for all status changes.',
+    );
+  }
   const db = getDb();
   const [updated] = await db
     .update(executions)
@@ -45,10 +57,13 @@ export async function updateExecutionStatus(
  * Sets status to 'suspended' and stores the serialized graph state.
  * Note: the canonical status for a paused execution is 'suspended'
  * per the executionStatusEnum definition in schema/executions.ts.
+ *
+ * Uses updateExecutionStatus with skipFsmGuard=true because this is
+ * invoked by the FSM-authorised path through ExecutionStateService.
  */
 export async function saveCheckpoint(
   id: string,
   checkpoint: Record<string, unknown>,
 ) {
-  return updateExecutionStatus(id, 'suspended', { checkpoint });
+  return updateExecutionStatus(id, 'suspended', { checkpoint }, true);
 }

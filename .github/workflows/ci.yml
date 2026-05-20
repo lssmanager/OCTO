@@ -61,6 +61,9 @@ jobs:
       - name: Boundary enforcement
         run: pnpm lint:boundaries
 
+      - name: Check runtime-state import allowlist
+        run: pnpm --filter @octo/runtime-state check:deps
+
       - name: Type check
         run: pnpm typecheck
 

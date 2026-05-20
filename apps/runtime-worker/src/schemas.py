@@ -33,7 +33,12 @@ class OctoModel(BaseModel):
 
 class ExecutionStatus(StrEnum):
     PENDING = "pending"
+    QUEUED = "queued"
     RUNNING = "running"
+    WAITING_TOOL = "waiting_tool"
+    WAITING_HUMAN = "waiting_human"
+    RETRYING = "retrying"
+    SUSPENDED = "suspended"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"

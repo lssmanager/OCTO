@@ -9,13 +9,16 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:deps": "depcruise --config .dependency-cruiser.cjs src"
   },
   "dependencies": {
+    "@octo/contracts": "workspace:*",
     "@octo/database": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.0.0",
+    "dependency-cruiser": "16.10.0",
     "typescript": "5.9.3",
     "vitest": "3.1.1"
   }

@@ -131,11 +131,15 @@ export {
   isTerminalStatus,
   isActiveStatus,
   isBlockedStatus,
-  // Error class
+  TERMINAL_STATUSES,
+  // Error classes
   ExecutionTransitionError,
+  InvalidTransitionError,
 } from './execution';
 
 export type {
+  // Error types
+  InvalidTransitionError,
   // Pure interfaces
   GovernancePolicy,
   TaskDefinition,
