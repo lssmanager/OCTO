@@ -5,10 +5,13 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsup src/index.ts --format cjs --dts",
-    "dev": "tsup src/index.ts --format cjs --watch",
+    "build": "tsup src/index.ts --format cjs --dts --external @octo/contracts",
+    "dev": "tsup src/index.ts --format cjs --watch --external @octo/contracts",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@octo/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.0.0",
