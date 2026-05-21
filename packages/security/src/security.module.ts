@@ -3,10 +3,12 @@
 //
 // Registers InternalSecretGuard as APP_GUARD (global).
 //
-// The guard resolves Reflector lazily via ModuleRef.get() in OnModuleInit
-// instead of constructor injection — this avoids the DI scope mismatch
-// that occurs when APP_GUARD is instantiated as a global provider and
-// left this.reflector undefined:
+// useExisting (not useClass) for APP_GUARD: this tells NestJS to reuse
+// the InternalSecretGuard instance already resolved by the DI container
+// for the InternalSecretGuard provider above it. useClass would create a
+// second independent instance in the root module scope, where constructor
+// injection of Reflector silently fails, leaving this.reflector undefined
+// and causing:
 //   TypeError: Cannot read properties of undefined (reading 'getAllAndOverride')
 //
 // AppModule only needs to import SecurityModule — no APP_GUARD there.
@@ -21,7 +23,7 @@ import { InternalSecretGuard, Public } from './internal-secret.guard';
     InternalSecretGuard,
     {
       provide: APP_GUARD,
-      useClass: InternalSecretGuard,
+      useExisting: InternalSecretGuard,
     },
   ],
   exports: [InternalSecretGuard],

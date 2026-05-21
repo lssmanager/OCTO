@@ -104,6 +104,16 @@ RUN mkdir -p /app/deploy/packages/database \
  && cp -r /app/packages/database/dist /app/deploy/packages/database/dist \
  && cp -r /app/packages/database/migrations /app/deploy/packages/database/migrations
 
+# Copy @octo/security dist into the deploy bundle explicitly.
+# pnpm deploy --prod resolves workspace packages as symlinks pointing to
+# their source tree dist/ output. If that dist/ was compiled in a prior
+# cached layer, the runner stage ends up with stale compiled code.
+# Overwriting with the freshly-built dist/ guarantees the guard code
+# (InternalSecretGuard with Reflector constructor injection) is current.
+RUN SECURITY_NM="/app/deploy/node_modules/@octo/security" \
+ && mkdir -p "$SECURITY_NM/dist" \
+ && cp -r /app/packages/security/dist/. "$SECURITY_NM/dist/"
+
 # ─────────────────────────────────────────────
 # Stage 3: runner — minimal final image
 #
