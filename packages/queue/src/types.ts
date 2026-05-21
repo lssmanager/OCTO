@@ -9,13 +9,13 @@
 
 import type { TriggerSource } from '@octo/contracts';
 
-/** octo:health — F0 validation job */
+/** octo-health — F0 validation job */
 export interface HealthJobData {
   readonly triggeredAt: string;  // ISO 8601
   readonly source: string;       // e.g. 'api-healthcheck', 'scheduler'
 }
 
-/** octo:execution — agent execution job */
+/** octo-execution — agent execution job */
 export interface ExecutionJobData {
   readonly executionId:    string;   // UUID v7 — matches executions.id
   readonly agentId:        string;   // UUID v7 — matches agents.id
@@ -28,7 +28,7 @@ export interface ExecutionJobData {
   readonly task: Record<string, unknown>;  // TaskDefinition (typed in F1)
 }
 
-/** octo:delegation — hierarchical delegation job */
+/** octo-delegation — hierarchical delegation job */
 export interface DelegationJobData {
   readonly delegationId:  string;
   readonly fromAgentId:   string;
@@ -39,7 +39,7 @@ export interface DelegationJobData {
   readonly runId:         string;
 }
 
-/** octo:tool — tool invocation job */
+/** octo-tool — tool invocation job */
 export interface ToolJobData {
   readonly invocationId:  string;
   readonly toolName:      string;
@@ -51,7 +51,7 @@ export interface ToolJobData {
   readonly input: Record<string, unknown>;
 }
 
-/** octo:memory — memory operation job */
+/** octo-memory — memory operation job */
 export interface MemoryJobData {
   readonly operationId:  string;
   readonly operation:    'store' | 'retrieve' | 'forget';
@@ -63,7 +63,7 @@ export interface MemoryJobData {
   readonly payload: Record<string, unknown>;
 }
 
-/** octo:channel — inbound channel message job */
+/** octo-channel — inbound channel message job */
 export interface ChannelJobData {
   readonly messageId:    string;
   readonly channelType:  'discord' | 'telegram' | 'whatsapp' | 'slack' | 'http';
