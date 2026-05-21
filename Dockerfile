@@ -58,6 +58,13 @@ RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 # NODE_ENV=development MUST be set here too — same reason as pruner.
 # TURBO_FORCE=1 — bypasses any stale remote/local turbo cache that
 # could cause a phantom cache hit on a broken prior build.
+#
+# WHY pnpm deploy:
+#   pnpm uses a virtual store with symlinks. Copying node_modules
+#   between Docker stages breaks those symlinks, causing
+#   MODULE_NOT_FOUND at runtime (e.g. @nestjs/core not found).
+#   `pnpm deploy --prod` resolves all symlinks and produces a
+#   self-contained, flat node_modules directory safe to COPY.
 # ─────────────────────────────────────────────
 FROM base AS builder
 
@@ -79,36 +86,23 @@ ARG BUILD_TIME=unknown
 
 RUN pnpm turbo build --filter=@octo/api
 
+# Produce a symlink-free, self-contained deployment bundle for @octo/api.
+# --prod omits devDependencies. Output goes to /app/deploy.
+# This is the only correct way to copy pnpm node_modules across Docker stages.
+RUN pnpm --filter @octo/api deploy --prod /app/deploy
+
+# Also build packages/database so migrate.js is available at runtime.
+# Copy the compiled migrate.js + migrations into the deploy bundle.
+RUN cp -r /app/packages/database/dist /app/deploy/packages/database/dist \
+ && cp -r /app/packages/database/migrations /app/deploy/packages/database/migrations
+
 # ─────────────────────────────────────────────
 # Stage 3: runner — minimal final image
 #
-# WHY we copy packages/*/node_modules:
-#   pnpm uses a virtual store + symlinks. After `pnpm install` in the
-#   builder stage, some peer deps and non-hoisted packages (e.g.
-#   drizzle-orm/postgres-js, postgres) end up in package-level
-#   node_modules (packages/database/node_modules/, etc.) rather than
-#   the root /app/node_modules. Copying only the root node_modules
-#   causes MODULE_NOT_FOUND for those packages at runtime.
-#
-#   Copying packages/*/node_modules alongside packages/*/dist
-#   ensures every package can resolve its own direct dependencies
-#   regardless of hoisting decisions.
-#
-# WHY we also copy apps/api/node_modules:
-#   pnpm's hoisting algorithm is not guaranteed. After a dependency
-#   version bump (e.g. @bull-board 6→7, ioredis 4→5), packages that
-#   previously hoisted to /app/node_modules may be placed in
-#   apps/api/node_modules instead. Copying this directory ensures
-#   app-level non-hoisted deps (e.g. @nestjs/core, @nestjs/common)
-#   are always resolvable regardless of pnpm hoisting decisions.
-#
-# WHY CMD runs packages/database/dist/migrate.js (not apps/api/dist/migrate.js):
-#   migrate.ts imports drizzle-orm/postgres-js directly. drizzle-orm is a
-#   dependency of @octo/database — pnpm installs it in
-#   packages/database/node_modules, NOT in the root /app/node_modules.
-#   Running the script from packages/database/dist means Node resolves
-#   require('drizzle-orm/postgres-js') relative to packages/database,
-#   where the module is guaranteed to exist.
+# Uses the /app/deploy output from `pnpm deploy` — a flat, symlink-free
+# node_modules that is safe to copy between Docker stages.
+# No need to copy root node_modules, apps/api/node_modules, or
+# packages/*/node_modules individually.
 # ─────────────────────────────────────────────
 FROM node:22.16.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
@@ -118,40 +112,14 @@ RUN addgroup --system --gid 1001 octo \
 
 WORKDIR /app
 
-# App dist + manifest
-COPY --from=builder --chown=octo:octo /app/apps/api/dist ./dist
-COPY --from=builder --chown=octo:octo /app/apps/api/package.json ./
+# Self-contained deploy bundle: dist + node_modules (flat, no symlinks)
+COPY --from=builder --chown=octo:octo /app/deploy/dist ./dist
+COPY --from=builder --chown=octo:octo /app/deploy/node_modules ./node_modules
+COPY --from=builder --chown=octo:octo /app/deploy/package.json ./
 
-# Root hoisted node_modules (most dependencies live here)
-COPY --from=builder --chown=octo:octo /app/node_modules ./node_modules
-
-# App-level node_modules — pnpm may place non-hoisted deps here instead
-# of the root after version bumps. Guards against MODULE_NOT_FOUND at runtime.
-COPY --from=builder --chown=octo:octo /app/apps/api/node_modules ./apps/api/node_modules
-
-# Internal packages: built output + their own node_modules
-# (non-hoisted deps like drizzle-orm/postgres-js, postgres, etc.
-#  are installed at the package level by pnpm, not at the root)
-COPY --from=builder --chown=octo:octo /app/packages ./packages
-
-# Package-level node_modules (pnpm non-hoisted deps)
-# Each package that has its own node_modules gets it copied explicitly.
-# This is a belt-and-suspenders copy on top of the packages/ copy above;
-# it ensures node_modules directories are preserved even if the shell
-# glob in the COPY above is subject to .dockerignore exclusions.
-COPY --from=builder --chown=octo:octo /app/packages/database/node_modules ./packages/database/node_modules
-COPY --from=builder --chown=octo:octo /app/packages/observability/node_modules ./packages/observability/node_modules
-COPY --from=builder --chown=octo:octo /app/packages/queue/node_modules ./packages/queue/node_modules
-COPY --from=builder --chown=octo:octo /app/packages/runtime-state/node_modules ./packages/runtime-state/node_modules
-COPY --from=builder --chown=octo:octo /app/packages/security/node_modules ./packages/security/node_modules
-COPY --from=builder --chown=octo:octo /app/packages/contracts/node_modules ./packages/contracts/node_modules
-
-# Migration SQL files — needed by packages/database/dist/migrate.js at runtime.
-# Resolved as path.join(__dirname, '..', 'migrations') from dist/migrate.js
-# → /app/packages/database/migrations (already included via packages/ copy above,
-#   but listed explicitly to document the dependency and guard against future
-#   .dockerignore changes that might exclude non-JS assets).
-COPY --from=builder --chown=octo:octo /app/packages/database/migrations ./packages/database/migrations
+# Database package: compiled migrate.js + SQL migration files
+COPY --from=builder --chown=octo:octo /app/deploy/packages/database/dist ./packages/database/dist
+COPY --from=builder --chown=octo:octo /app/deploy/packages/database/migrations ./packages/database/migrations
 
 USER octo
 
@@ -175,6 +143,7 @@ ENV BUILD_VERSION=${BUILD_VERSION} \
     NODE_ENV=production
 
 # migrate.js runs first from packages/database/dist so Node resolves
-# drizzle-orm/postgres-js from packages/database/node_modules (where pnpm
-# actually installs it). If migrate.js exits non-zero, main.js never starts.
+# drizzle-orm relative to packages/database/node_modules (resolved by
+# pnpm deploy into the flat node_modules bundle).
+# If migrate.js exits non-zero, main.js never starts.
 CMD ["sh", "-c", "node packages/database/dist/migrate.js && node dist/main.js"]
