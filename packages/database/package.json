@@ -3,8 +3,17 @@
   "version": "0.0.1",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./migrate": {
+      "require": "./dist/migrate.js"
+    }
+  },
   "scripts": {
-    "build": "tsup src/index.ts --format cjs --dts",
+    "build": "tsup src/index.ts src/migrate.ts --format cjs --dts",
     "dev": "tsup src/index.ts --format cjs --dts --watch",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
