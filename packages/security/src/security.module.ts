@@ -3,10 +3,14 @@
 //
 // Registers InternalSecretGuard as APP_GUARD (global) so Nest resolves
 // the Reflector dependency in the same DI scope where the guard is declared.
-// Moving APP_GUARD here (instead of AppModule) avoids a second instance
-// being created outside the SecurityModule context, which left Reflector
-// undefined and caused:
+//
+// FIX: useClass on APP_GUARD created a second independent instance of the
+// guard that did NOT receive Reflector via DI, causing:
 //   TypeError: Cannot read properties of undefined (reading 'getAllAndOverride')
+//
+// useExisting reuses the already-resolved InternalSecretGuard instance
+// (which has Reflector correctly injected) instead of creating a new one.
+// This guarantees a single instance with a fully hydrated DI context.
 //
 // AppModule only needs to import SecurityModule — no APP_GUARD there.
 
@@ -20,7 +24,7 @@ import { InternalSecretGuard, Public } from './internal-secret.guard';
     InternalSecretGuard,
     {
       provide: APP_GUARD,
-      useClass: InternalSecretGuard,
+      useExisting: InternalSecretGuard,
     },
   ],
   exports: [InternalSecretGuard],
