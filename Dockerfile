@@ -94,6 +94,14 @@ RUN pnpm turbo build --filter=@octo/api
 #   ensures every package can resolve its own direct dependencies
 #   regardless of hoisting decisions.
 #
+# WHY we also copy apps/api/node_modules:
+#   pnpm's hoisting algorithm is not guaranteed. After a dependency
+#   version bump (e.g. @bull-board 6→7, ioredis 4→5), packages that
+#   previously hoisted to /app/node_modules may be placed in
+#   apps/api/node_modules instead. Copying this directory ensures
+#   app-level non-hoisted deps (e.g. @nestjs/core, @nestjs/common)
+#   are always resolvable regardless of pnpm hoisting decisions.
+#
 # WHY CMD runs packages/database/dist/migrate.js (not apps/api/dist/migrate.js):
 #   migrate.ts imports drizzle-orm/postgres-js directly. drizzle-orm is a
 #   dependency of @octo/database — pnpm installs it in
@@ -116,6 +124,10 @@ COPY --from=builder --chown=octo:octo /app/apps/api/package.json ./
 
 # Root hoisted node_modules (most dependencies live here)
 COPY --from=builder --chown=octo:octo /app/node_modules ./node_modules
+
+# App-level node_modules — pnpm may place non-hoisted deps here instead
+# of the root after version bumps. Guards against MODULE_NOT_FOUND at runtime.
+COPY --from=builder --chown=octo:octo /app/apps/api/node_modules ./apps/api/node_modules
 
 # Internal packages: built output + their own node_modules
 # (non-hoisted deps like drizzle-orm/postgres-js, postgres, etc.
