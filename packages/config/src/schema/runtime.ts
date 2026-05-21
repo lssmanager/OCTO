@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+const postgresUrlRefine = (v: string) =>
+  v.startsWith('postgresql://') || v.startsWith('postgres://');
+
+const postgresUrlMessage =
+  'DATABASE_URL must start with postgresql:// or postgres://';
+
 /**
  * Zod schema for the Python runtime-worker environment.
  * Used as the TypeScript source-of-truth for runtime config documentation.
@@ -9,9 +15,7 @@ export const runtimeConfigSchema = z.object({
   DATABASE_URL: z
     .string()
     .url()
-    .refine((v) => v.startsWith('postgresql://'), {
-      message: 'DATABASE_URL must start with postgresql://',
-    }),
+    .refine(postgresUrlRefine, { message: postgresUrlMessage }),
   REDIS_URL: z
     .string()
     .url()

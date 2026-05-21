@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+const postgresUrlRefine = (v: string) =>
+  v.startsWith('postgresql://') || v.startsWith('postgres://');
+
+const postgresUrlMessage =
+  'DATABASE_URL must start with postgresql:// or postgres://';
+
 export const apiConfigSchema = z.object({
   // Server
   NODE_ENV: z
@@ -14,9 +20,7 @@ export const apiConfigSchema = z.object({
   DATABASE_URL: z
     .string()
     .url()
-    .refine((v) => v.startsWith('postgresql://'), {
-      message: 'DATABASE_URL must start with postgresql://',
-    }),
+    .refine(postgresUrlRefine, { message: postgresUrlMessage }),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(20),
 
   // Redis
