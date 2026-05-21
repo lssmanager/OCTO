@@ -65,11 +65,6 @@ RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 #   MODULE_NOT_FOUND at runtime (e.g. @nestjs/core not found).
 #   `pnpm deploy --prod` resolves all symlinks and produces a
 #   self-contained, flat node_modules directory safe to COPY.
-#
-# --legacy: required since pnpm v10+ changed deploy behaviour for
-#   workspaces without inject-workspace-packages=true per-package.
-#   inject-workspace-packages=true is set globally in .npmrc but
-#   pnpm v11 still requires --legacy for `pnpm deploy` to work.
 # ─────────────────────────────────────────────
 FROM base AS builder
 
@@ -94,7 +89,7 @@ RUN pnpm turbo build --filter=@octo/api
 # Produce a symlink-free, self-contained deployment bundle for @octo/api.
 # --prod omits devDependencies. Output goes to /app/deploy.
 # This is the only correct way to copy pnpm node_modules across Docker stages.
-RUN pnpm --filter @octo/api deploy --prod --legacy /app/deploy
+RUN pnpm --filter @octo/api deploy --prod /app/deploy
 
 # Also build packages/database so migrate.js is available at runtime.
 # Copy the compiled migrate.js + migrations into the deploy bundle.
@@ -103,16 +98,6 @@ RUN pnpm --filter @octo/api deploy --prod --legacy /app/deploy
 RUN mkdir -p /app/deploy/packages/database \
  && cp -r /app/packages/database/dist /app/deploy/packages/database/dist \
  && cp -r /app/packages/database/migrations /app/deploy/packages/database/migrations
-
-# Copy @octo/security dist into the deploy bundle explicitly.
-# pnpm deploy --prod resolves workspace packages as symlinks pointing to
-# their source tree dist/ output. If that dist/ was compiled in a prior
-# cached layer, the runner stage ends up with stale compiled code.
-# Overwriting with the freshly-built dist/ guarantees the guard code
-# (InternalSecretGuard with Reflector constructor injection) is current.
-RUN SECURITY_NM="/app/deploy/node_modules/@octo/security" \
- && mkdir -p "$SECURITY_NM/dist" \
- && cp -r /app/packages/security/dist/. "$SECURITY_NM/dist/"
 
 # ─────────────────────────────────────────────
 # Stage 3: runner — minimal final image
