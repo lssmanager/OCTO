@@ -14,3 +14,11 @@ onlyBuiltDependencies:
   - msgpackr-extract
   - protobufjs
   - unrs-resolver
+
+allowBuilds:
+  '@nestjs/core': true
+  '@scarf/scarf': true
+  esbuild: true
+  msgpackr-extract: true
+  protobufjs: true
+  unrs-resolver: true
