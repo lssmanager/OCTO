@@ -65,6 +65,15 @@ RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 #   MODULE_NOT_FOUND at runtime (e.g. @nestjs/core not found).
 #   `pnpm deploy --prod` resolves all symlinks and produces a
 #   self-contained, flat node_modules directory safe to COPY.
+#
+# WHY .npmrc is copied explicitly before pnpm install:
+#   turbo prune --docker splits output into two layers:
+#     out/json/  → package.json files (for install layer caching)
+#     out/full/  → full source including .npmrc (copied AFTER install)
+#   The .npmrc contains inject-workspace-packages=true, which pnpm
+#   needs to see at install time so that `pnpm deploy` works without
+#   --legacy. Copying it explicitly here mirrors the pnpm-lock.yaml
+#   pattern and ensures pnpm reads the correct config on every RUN.
 # ─────────────────────────────────────────────
 FROM base AS builder
 
@@ -73,6 +82,9 @@ ENV TURBO_TELEMETRY_DISABLED=1
 
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+# Copy .npmrc before pnpm install so inject-workspace-packages=true
+# is active during install and pnpm deploy.
+COPY --from=pruner /app/.npmrc ./.npmrc
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     HUSKY=0 pnpm install --frozen-lockfile
 
