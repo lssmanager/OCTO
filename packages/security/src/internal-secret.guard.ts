@@ -13,35 +13,28 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { createLogger } from '@octo/observability';
 
 /** Decorator key for marking public (unauthenticated) routes. */
-export const IS_PUBLIC_KEY = Symbol('IS_PUBLIC');
+export const IS_PUBLIC_KEY = 'IS_PUBLIC';
 
 /**
  * Decorator: marks a controller or handler as publicly accessible.
  * Routes decorated with @Public() skip the InternalSecretGuard.
+ *
+ * Uses NestJS SetMetadata() which correctly sets metadata on the class
+ * constructor (not the prototype), matching what Reflector.getAllAndOverride()
+ * reads via context.getClass() and context.getHandler().
  *
  * Usage:
  *   @Public()
  *   @Controller('health')
  *   export class HealthController { ... }
  */
-export function Public(): MethodDecorator & ClassDecorator {
-  return (
-    target: object,
-    _propertyKey?: string | symbol,
-    descriptor?: PropertyDescriptor,
-  ) => {
-    if (descriptor) {
-      Reflect.defineMetadata(IS_PUBLIC_KEY, true, descriptor.value);
-    } else {
-      Reflect.defineMetadata(IS_PUBLIC_KEY, true, target);
-    }
-  };
-}
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 const logger = createLogger({ service: 'internal-secret-guard' });
 
@@ -49,9 +42,6 @@ const logger = createLogger({ service: 'internal-secret-guard' });
 export class InternalSecretGuard implements CanActivate {
   // Reflector is a global NestJS core provider — always available in every
   // DI scope, including the root module scope where APP_GUARD is resolved.
-  // Injecting it directly in the constructor avoids the ModuleRef.get()
-  // workaround that caused: TypeError: Cannot read properties of undefined
-  // (reading 'get') at InternalSecretGuard.onModuleInit
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
