@@ -1,0 +1,9 @@
+# pnpm configuration — separated from .npmrc per pnpm 11 best practices
+# https://pnpm.io/settings
+
+publish-branch=main
+link-workspace-packages=true
+strict-peer-dependencies=false
+auto-install-peers=true
+shamefully-hoist=true
+inject-workspace-packages=true
