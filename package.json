@@ -37,21 +37,6 @@
     "typescript": "5.9.3",
     "vitest": "3.1.1"
   },
-  "pnpm": {
-    "overrides": {
-      "uuid": "10.0.0",
-      "glob": "11.0.0",
-      "source-map": "0.7.4",
-      "typescript": "5.9.3"
-    },
-    "onlyBuiltDependencies": [
-      "@nestjs/core",
-      "esbuild",
-      "msgpackr-extract",
-      "protobufjs",
-      "unrs-resolver"
-    ]
-  },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=10.0.0"
