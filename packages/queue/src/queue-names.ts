@@ -2,7 +2,10 @@
  * Canonical queue names for the OCTO system.
  * All queue consumers must import from here — never hardcode strings.
  *
- * Naming convention: octo:<domain>
+ * Naming convention: octo-<domain>
+ * BullMQ 5.x prohibits colons (:) in queue names — they are reserved
+ * as Redis key separators used internally by BullMQ.
+ *
  * F0: health (validation that BullMQ works)
  * F1+: execution, delegation, tool, memory (activated in future phases)
  *
@@ -12,19 +15,19 @@
  */
 export const QUEUE_NAMES = {
   /** F0: Validates BullMQ connectivity. Used in health checks. */
-  HEALTH: 'octo:health',
+  HEALTH: 'octo-health',
   /** F1: Agent execution jobs — main orchestration queue. */
-  EXECUTION: 'octo:execution',
+  EXECUTION: 'octo-execution',
   /** F4: Hierarchical delegation between agents. */
-  DELEGATION: 'octo:delegation',
+  DELEGATION: 'octo-delegation',
   /** F3: Tool invocation jobs. */
-  TOOL: 'octo:tool',
+  TOOL: 'octo-tool',
   /** F3: Memory read/write operations. */
-  MEMORY: 'octo:memory',
+  MEMORY: 'octo-memory',
   /** F1: Dead-letter queue for failed executions. */
-  DLQ_EXECUTION: 'octo:dlq:execution',
+  DLQ_EXECUTION: 'octo-dlq-execution',
   /** F3: Dead-letter queue for failed tool invocations. */
-  DLQ_TOOL: 'octo:dlq:tool',
+  DLQ_TOOL: 'octo-dlq-tool',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
