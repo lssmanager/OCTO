@@ -29,7 +29,7 @@
 # ─────────────────────────────────────────────
 FROM node:22.16.0-alpine3.21 AS base
 RUN apk add --no-cache libc6-compat
-RUN npm install -g pnpm@10.32.1
+RUN npm install -g pnpm@11.2.2
 ENV PNPM_HOME="/root/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
