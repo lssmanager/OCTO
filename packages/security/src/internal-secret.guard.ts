@@ -7,14 +7,21 @@
 //
 // Excludes /health/* and /ops/* routes via @Public() decorator metadata.
 // JWT/AuthModule is F1 — NOT implemented here.
+//
+// FIX: Reflector is resolved lazily via ModuleRef.get() in OnModuleInit
+// instead of constructor injection. This avoids the DI scope mismatch
+// that occurs when APP_GUARD is instantiated outside SecurityModule's
+// provider scope, which left this.reflector undefined and caused:
+//   TypeError: Cannot read properties of undefined (reading 'getAllAndOverride')
 
 import {
   Injectable,
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  OnModuleInit,
 } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { ModuleRef, Reflector } from '@nestjs/core';
 import { createLogger } from '@octo/observability';
 
 /** Decorator key for marking public (unauthenticated) routes. */
@@ -46,18 +53,33 @@ export function Public(): MethodDecorator & ClassDecorator {
 const logger = createLogger({ service: 'internal-secret-guard' });
 
 @Injectable()
-export class InternalSecretGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+export class InternalSecretGuard implements CanActivate, OnModuleInit {
+  // Resolved lazily in onModuleInit to avoid APP_GUARD scope issues.
+  private reflector!: Reflector;
+
+  constructor(private readonly moduleRef: ModuleRef) {}
+
+  onModuleInit(): void {
+    // { strict: false } searches the entire DI container, not just the
+    // current module scope — guaranteed to find the global Reflector
+    // instance regardless of which scope APP_GUARD was resolved in.
+    this.reflector = this.moduleRef.get(Reflector, { strict: false });
+  }
 
   canActivate(context: ExecutionContext): boolean {
-    // ── Skip guard for @Public() routes ─────────────────────────────────
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    // ── Skip guard for @Public() routes ───────────────────────────────────────
+    // Defensive: if reflector is still missing (shouldn't happen after
+    // onModuleInit), default to non-public (fail-closed).
+    const isPublic = this.reflector
+      ? this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+          context.getHandler(),
+          context.getClass(),
+        ])
+      : false;
+
     if (isPublic) return true;
 
-    // ── Development bypass ──────────────────────────────────────────────
+    // ── Development bypass ───────────────────────────────────────────────────────
     const nodeEnv = process.env['NODE_ENV'] ?? 'development';
     if (nodeEnv === 'development') {
       logger.warn({
@@ -69,7 +91,7 @@ export class InternalSecretGuard implements CanActivate {
       return true;
     }
 
-    // ── Production enforcement ──────────────────────────────────────────
+    // ── Production enforcement ──────────────────────────────────────────────────
     const expected = process.env['INTERNAL_SECRET'];
     if (!expected) {
       logger.error({
