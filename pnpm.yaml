@@ -1,0 +1,5 @@
+overrides:
+  # pega aquí lo que tenías en pnpm.overrides
+  
+onlyBuiltDependencies:
+  # pega aquí lo que tenías en pnpm.onlyBuiltDependencies
