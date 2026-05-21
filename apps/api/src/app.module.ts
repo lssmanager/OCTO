@@ -14,13 +14,12 @@
 // injected this token. CONFIG_TOKEN is exported as a TypeScript symbol
 // for future @Inject(CONFIG_TOKEN) usage once consumers exist.
 //
-// F0 Security: InternalSecretGuard registered as APP_GUARD (global).
-// All routes require X-Internal-Secret header except @Public() routes
-// (/health/*, /ops/*). JWT is F1.
+// F0 Security: APP_GUARD is registered inside SecurityModule directly so
+// Reflector is resolved in the correct DI scope. AppModule only imports
+// SecurityModule — no APP_GUARD provider here.
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
 import { loadApiConfig } from '@octo/config';
-import { SecurityModule, InternalSecretGuard } from '@octo/security';
+import { SecurityModule } from '@octo/security';
 import { BullBoardModule } from './admin/bullboard.module';
 import { HealthModule } from './health/health.module';
 import { OpsModule } from './ops/ops.module';
@@ -38,12 +37,6 @@ export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
       // Replaces module-scope const config = loadApiConfig().
       provide: CONFIG_TOKEN,
       useFactory: loadApiConfig,
-    },
-    // F0: Global internal-secret guard protects all non-public routes.
-    // Routes annotated with @Public() (health, ops) are excluded.
-    {
-      provide: APP_GUARD,
-      useClass: InternalSecretGuard,
     },
   ],
   // PATCH 8: exports removed — no consumer uses CONFIG_TOKEN yet.
