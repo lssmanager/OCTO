@@ -31,6 +31,8 @@ export const ExecutionStatus = {
   PENDING:          'pending',
   /** BullMQ job created, worker not yet picked up. */
   QUEUED:           'queued',
+  /** BullMQ job dispatched to worker, awaiting pickup. */
+  DISPATCHED:       'dispatched',
   /** Worker actively processing. */
   RUNNING:          'running',
   /** Blocked on external tool response (async tool call in flight). */
@@ -39,8 +41,12 @@ export const ExecutionStatus = {
   WAITING_HUMAN:    'waiting_human',
   /** Transient failure — exponential backoff in progress. */
   RETRYING:         'retrying',
+  /** Retry scheduled after backoff delay, not yet re-enqueued. */
+  RETRY_SCHEDULED:  'retry_scheduled',
   /** Explicitly paused via API — resumes when PATCH /executions/:id/resume. */
   SUSPENDED:        'suspended',
+  /** Lease expired, execution is reclaimable by scheduler. */
+  RECLAIMABLE:      'reclaimable',
   /** Terminal: successful completion. */
   COMPLETED:        'completed',
   /** Terminal: max retries exceeded or non-retryable error. */
@@ -69,20 +75,24 @@ export const ExecutionStatusValues = Object.values(ExecutionStatus) as Execution
  *
  * Diagram (text):
  *
- *   PENDING ──► QUEUED ──► RUNNING
- *                               │
- *               ┌───────────────┼───────────────────────────┐
- *               ▼               ▼                           ▼
- *         WAITING_TOOL    WAITING_HUMAN               RETRYING
- *               │               │                       │
- *               └───────────────┴──────► RUNNING ◄──────┘
- *                                            │
- *                               ┌────────────┼─────────────┐
- *                               ▼            ▼             ▼
- *                           COMPLETED     FAILED      CANCELLED
+ *   PENDING ──► QUEUED ──► DISPATCHED ──► RUNNING
+ *                                               │
+ *               ┌───────────────────────────────┼─────────────────────────────┐
+ *               ▼                               ▼                             ▼
+ *         WAITING_TOOL                    WAITING_HUMAN                 RETRYING
+ *               │                               │                             │
+ *               └───────────────────────────────┴──────► RUNNING ◄──────┘    │
+ *                                                                              │
+ *                                                            RETRY_SCHEDULED ◄─┘
+ *                                                                  │
+ *                                                              QUEUED
  *
- * SUSPENDED can be reached from any non-terminal active state.
- * CANCELLED can be reached from any non-terminal state.
+ *   RUNNING ──► RECLAIMABLE ──► RETRYING (lease expired → reclaim)
+ *                                    │
+ *                              RETRY_SCHEDULED (scheduler picks up)
+ *
+ *   SUSPENDED can be reached from any non-terminal active state.
+ *   CANCELLED can be reached from any non-terminal state.
  */
 export const VALID_TRANSITIONS: Readonly<Record<ExecutionStatus, ReadonlySet<ExecutionStatus>>> = {
   pending: new Set([
@@ -90,14 +100,20 @@ export const VALID_TRANSITIONS: Readonly<Record<ExecutionStatus, ReadonlySet<Exe
     'cancelled',   // cancelled before enqueue (e.g. duplicate detected)
   ]),
   queued: new Set([
-    'running',
+    'dispatched',  // picked up by worker
     'cancelled',   // cancelled while waiting in queue
     'failed',      // worker crashed before pickup (stale job detection)
+  ]),
+  dispatched: new Set([
+    'running',
+    'cancelled',   // cancelled before worker started processing
+    'failed',      // worker failed to start
   ]),
   running: new Set([
     'waiting_tool',
     'waiting_human',
     'retrying',
+    'reclaimable', // lease expired, reclaim scanner detected
     'suspended',
     'completed',
     'failed',
@@ -116,8 +132,18 @@ export const VALID_TRANSITIONS: Readonly<Record<ExecutionStatus, ReadonlySet<Exe
     'suspended',
   ]),
   retrying: new Set([
+    'retry_scheduled', // backoff delay computed, retry scheduled
+    'failed',          // max retries exceeded
+    'cancelled',
+  ]),
+  retry_scheduled: new Set([
     'queued',      // re-enqueued after backoff delay
-    'failed',      // max retries exceeded
+    'failed',      // max retries exceeded during scheduling
+    'cancelled',
+  ]),
+  reclaimable: new Set([
+    'retrying',    // reclaimed — will retry
+    'failed',      // max reclaims exceeded
     'cancelled',
   ]),
   suspended: new Set([

@@ -26,6 +26,13 @@ export const queueJobsTotal = new Counter({
   registers: [metricsRegistry],
 });
 
+export const queueJobsActive = new Counter({
+  name: 'queue_jobs_active',
+  help: 'Total queue jobs currently being processed',
+  labelNames: ['queue'] as const,
+  registers: [metricsRegistry],
+});
+
 export const queueJobsFailedTotal = new Counter({
   name: 'queue_jobs_failed_total',
   help: 'Total queue jobs that failed permanently',
@@ -38,6 +45,22 @@ export const queueJobDurationMs = new Histogram({
   help: 'Queue job processing duration in milliseconds',
   labelNames: ['queue'] as const,
   buckets: [100, 500, 1000, 5000, 15000, 30000, 60000],
+  registers: [metricsRegistry],
+});
+
+// ── Database ──────────────────────────────────────────────────────────
+export const dbConnectionUp = new Counter({
+  name: 'db_connection_up',
+  help: 'Database connection status (1 = up, 0 = down)',
+  labelNames: ['database'] as const,
+  registers: [metricsRegistry],
+});
+
+// ── Redis ─────────────────────────────────────────────────────────────
+export const redisConnectionUp = new Counter({
+  name: 'redis_connection_up',
+  help: 'Redis connection status (1 = up, 0 = down)',
+  labelNames: ['instance'] as const,
   registers: [metricsRegistry],
 });
 

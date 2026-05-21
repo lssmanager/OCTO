@@ -1,0 +1,30 @@
+# LiteLLM Proxy Configuration — OCTO F0
+# 
+# All LLM providers are configured via environment variables.
+# This file defines the proxy behavior and model routing.
+#
+# ADR F0-011: Never use vendor SDKs directly.
+# Every LLM call goes through this proxy.
+
+model_list:
+  # Default model — configured via OPENAI_API_KEY env var
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  disable_end_user_cost_tracking: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  otel: true
+  custom_auth: true
+  database_url: os.environ/DATABASE_URL

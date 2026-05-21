@@ -21,6 +21,7 @@ export interface HealthStatus {
     redis: RedisCheck;
     queue: QueueCheck;
     postgres: PostgresCheck;
+    litellm: LiteLLMCheck;
   };
 }
 
@@ -44,6 +45,12 @@ interface PostgresCheck {
   error?: string;
 }
 
+interface LiteLLMCheck {
+  status: 'ok' | 'error';
+  latencyMs?: number;
+  error?: string;
+}
+
 /** Milliseconds before a dependency check is considered timed out */
 const CHECK_TIMEOUT_MS = 500;
 
@@ -61,11 +68,13 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
   private healthQueue!: Queue<HealthJobData>;
   private redisUrl!: string;
   private dbUrl!: string;
+  private litellmUrl!: string;
   private _bootstrapped = false;
 
   onModuleInit(): void {
     this.redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
     this.dbUrl = process.env['DATABASE_URL'] ?? '';
+    this.litellmUrl = process.env['LITELLM_BASE_URL'] ?? 'http://litellm:4000';
     this.healthQueue = createQueue<HealthJobData>(QUEUE_NAMES.HEALTH, {
       redisUrl: this.redisUrl,
     });
@@ -90,12 +99,13 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
 
   /** Run all dependency checks. Used by GET /health and GET /ready. */
   async runChecks(): Promise<HealthStatus['checks']> {
-    const [redisCheck, queueCheck, postgresCheck] = await Promise.all([
+    const [redisCheck, queueCheck, postgresCheck, litellmCheck] = await Promise.all([
       this.checkRedis(),
       this.checkQueue(),
       this.checkPostgres(),
+      this.checkLiteLLM(),
     ]);
-    return { redis: redisCheck, queue: queueCheck, postgres: postgresCheck };
+    return { redis: redisCheck, queue: queueCheck, postgres: postgresCheck, litellm: litellmCheck };
   }
 
   async check(): Promise<HealthStatus> {
@@ -206,6 +216,41 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
       };
     } finally {
       await probeClient.end({ timeout: 1 });
+    }
+  }
+
+  /**
+   * LiteLLM health check — validates the LLM gateway is reachable.
+   * Principle #6: All LLM calls go through LiteLLM — must be monitored.
+   * Uses LiteLLM's /health/liveliness endpoint (returns 200 when ready).
+   */
+  private async checkLiteLLM(): Promise<LiteLLMCheck> {
+    const start = Date.now();
+    try {
+      const url = `${this.litellmUrl}/health/liveliness`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+
+      const res = await fetch(url, {
+        signal: controller.signal,
+        method: 'GET',
+      });
+      clearTimeout(timer);
+
+      if (!res.ok) {
+        return {
+          status: 'error',
+          error: `HTTP ${res.status} ${res.statusText}`,
+        };
+      }
+
+      const latencyMs = Date.now() - start;
+      return { status: 'ok', latencyMs };
+    } catch (err) {
+      return {
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   }
 }

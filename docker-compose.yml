@@ -111,6 +111,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      litellm:
+        condition: service_healthy
     networks:
       - octonet
     healthcheck:
@@ -183,6 +185,36 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────────────────────────
+  # LLM GATEWAY — LiteLLM
+  # Proxy unificado para todos los proveedores LLM.
+  # Principio Arquitectónico #6: Nunca usar SDKs de vendor directamente.
+  # Todas las llamadas LLM pasan por LiteLLM.
+  # ────────────────────────────────────────────────────────────────
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: octo-litellm
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      DATABASE_URL: ${DATABASE_URL}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+    volumes:
+      - ./docker/litellm/config.yaml:/app/config.yaml:ro
+    ports:
+      - "${LITELLM_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - octonet
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health/liveliness"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
 # ────────────────────────────────────────────────────────────────

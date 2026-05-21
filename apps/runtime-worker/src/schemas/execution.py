@@ -40,23 +40,27 @@ class ExecutionStatus(StrEnum):
     """Mirror exacto de ExecutionStatus en packages/contracts/src/execution.ts.
 
     SYNC RULE: Este enum DEBE tener los mismos valores que el TS const.
-    Último sync: FIX-1 (F0 Foundation Blockers resolution).
+    Último sync: FSM alignment (dispatched, retry_scheduled, reclaimable added).
 
     TS values (source of truth):
-      pending | queued | running | waiting_tool | waiting_human
-      retrying | suspended | completed | failed | cancelled
+      pending | queued | dispatched | running | waiting_tool | waiting_human
+      retrying | retry_scheduled | suspended | reclaimable
+      completed | failed | cancelled
     """
 
     # Pre-execution
     PENDING = "pending"
     QUEUED = "queued"
+    DISPATCHED = "dispatched"
     # Active
     RUNNING = "running"
     # Blocked (alive but waiting on external signal)
     WAITING_TOOL = "waiting_tool"
     WAITING_HUMAN = "waiting_human"
     RETRYING = "retrying"
+    RETRY_SCHEDULED = "retry_scheduled"
     SUSPENDED = "suspended"
+    RECLAIMABLE = "reclaimable"
     # Terminal
     COMPLETED = "completed"
     FAILED = "failed"
