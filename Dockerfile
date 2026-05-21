@@ -98,7 +98,10 @@ RUN pnpm --filter @octo/api deploy --prod --legacy /app/deploy
 
 # Also build packages/database so migrate.js is available at runtime.
 # Copy the compiled migrate.js + migrations into the deploy bundle.
-RUN cp -r /app/packages/database/dist /app/deploy/packages/database/dist \
+# mkdir -p is required: pnpm deploy does not create packages/database/
+# inside the deploy bundle (it is a workspace dep, not a node_modules entry).
+RUN mkdir -p /app/deploy/packages/database \
+ && cp -r /app/packages/database/dist /app/deploy/packages/database/dist \
  && cp -r /app/packages/database/migrations /app/deploy/packages/database/migrations
 
 # ─────────────────────────────────────────────
