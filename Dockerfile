@@ -65,6 +65,11 @@ RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 #   MODULE_NOT_FOUND at runtime (e.g. @nestjs/core not found).
 #   `pnpm deploy --prod` resolves all symlinks and produces a
 #   self-contained, flat node_modules directory safe to COPY.
+#
+# --legacy: required since pnpm v10+ changed deploy behaviour for
+#   workspaces without inject-workspace-packages=true per-package.
+#   inject-workspace-packages=true is set globally in .npmrc but
+#   pnpm v11 still requires --legacy for `pnpm deploy` to work.
 # ─────────────────────────────────────────────
 FROM base AS builder
 
@@ -89,7 +94,7 @@ RUN pnpm turbo build --filter=@octo/api
 # Produce a symlink-free, self-contained deployment bundle for @octo/api.
 # --prod omits devDependencies. Output goes to /app/deploy.
 # This is the only correct way to copy pnpm node_modules across Docker stages.
-RUN pnpm --filter @octo/api deploy --prod /app/deploy
+RUN pnpm --filter @octo/api deploy --prod --legacy /app/deploy
 
 # Also build packages/database so migrate.js is available at runtime.
 # Copy the compiled migrate.js + migrations into the deploy bundle.
