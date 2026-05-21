@@ -93,6 +93,14 @@ RUN pnpm turbo build --filter=@octo/api
 #   Copying packages/*/node_modules alongside packages/*/dist
 #   ensures every package can resolve its own direct dependencies
 #   regardless of hoisting decisions.
+#
+# WHY CMD runs packages/database/dist/migrate.js (not apps/api/dist/migrate.js):
+#   migrate.ts imports drizzle-orm/postgres-js directly. drizzle-orm is a
+#   dependency of @octo/database — pnpm installs it in
+#   packages/database/node_modules, NOT in the root /app/node_modules.
+#   Running the script from packages/database/dist means Node resolves
+#   require('drizzle-orm/postgres-js') relative to packages/database,
+#   where the module is guaranteed to exist.
 # ─────────────────────────────────────────────
 FROM node:22.16.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
@@ -126,6 +134,13 @@ COPY --from=builder --chown=octo:octo /app/packages/runtime-state/node_modules .
 COPY --from=builder --chown=octo:octo /app/packages/security/node_modules ./packages/security/node_modules
 COPY --from=builder --chown=octo:octo /app/packages/contracts/node_modules ./packages/contracts/node_modules
 
+# Migration SQL files — needed by packages/database/dist/migrate.js at runtime.
+# Resolved as path.join(__dirname, '..', 'migrations') from dist/migrate.js
+# → /app/packages/database/migrations (already included via packages/ copy above,
+#   but listed explicitly to document the dependency and guard against future
+#   .dockerignore changes that might exclude non-JS assets).
+COPY --from=builder --chown=octo:octo /app/packages/database/migrations ./packages/database/migrations
+
 USER octo
 
 EXPOSE 3001
@@ -147,6 +162,7 @@ ENV BUILD_VERSION=${BUILD_VERSION} \
     BUILD_TIME=${BUILD_TIME} \
     NODE_ENV=production
 
-# migrate.js runs first: applies pending migrations then starts the API.
-# If migrate.js exits non-zero, main.js is never started.
-CMD ["sh", "-c", "node dist/migrate.js && node dist/main.js"]
+# migrate.js runs first from packages/database/dist so Node resolves
+# drizzle-orm/postgres-js from packages/database/node_modules (where pnpm
+# actually installs it). If migrate.js exits non-zero, main.js never starts.
+CMD ["sh", "-c", "node packages/database/dist/migrate.js && node dist/main.js"]
