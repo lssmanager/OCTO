@@ -14,12 +14,16 @@
 // injected this token. CONFIG_TOKEN is exported as a TypeScript symbol
 // for future @Inject(CONFIG_TOKEN) usage once consumers exist.
 //
-// F0 Security: APP_GUARD is registered inside SecurityModule directly so
-// Reflector is resolved in the correct DI scope. AppModule only imports
-// SecurityModule — no APP_GUARD provider here.
+// F0 Security: APP_GUARD registered here in the root module scope so
+// NestJS injects the correct root-scope Reflector instance into the guard.
+// Registering APP_GUARD inside SecurityModule (child scope) causes
+// this.reflector to be undefined at runtime — NestJS canonical pattern
+// requires APP_GUARD to live in the root module.
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { loadApiConfig } from '@octo/config';
 import { SecurityModule } from '@octo/security';
+import { InternalSecretGuard } from '@octo/security';
 import { BullBoardModule } from './admin/bullboard.module';
 import { HealthModule } from './health/health.module';
 import { OpsModule } from './ops/ops.module';
@@ -37,6 +41,13 @@ export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
       // Replaces module-scope const config = loadApiConfig().
       provide: CONFIG_TOKEN,
       useFactory: loadApiConfig,
+    },
+    {
+      // APP_GUARD in root scope: NestJS resolves Reflector from the root
+      // DI container, ensuring this.reflector is the correct instance
+      // that can read @Public() metadata via getAllAndOverride().
+      provide: APP_GUARD,
+      useClass: InternalSecretGuard,
     },
   ],
   // PATCH 8: exports removed — no consumer uses CONFIG_TOKEN yet.
