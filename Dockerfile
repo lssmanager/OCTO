@@ -82,8 +82,11 @@ ENV TURBO_TELEMETRY_DISABLED=1
 
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-# Copy .npmrc before pnpm install so inject-workspace-packages=true
-# is active during install and pnpm deploy.
+# Explicitly copy both config files before pnpm install and deploy.
+# .pnpmrc has inject-workspace-packages=true (required by pnpm deploy).
+# .npmrc has engine-strict=true.
+# turbo prune does not include these in out/json/ or out/full/.
+COPY --from=pruner /app/.pnpmrc ./.pnpmrc
 COPY --from=pruner /app/.npmrc ./.npmrc
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     HUSKY=0 pnpm install --frozen-lockfile
