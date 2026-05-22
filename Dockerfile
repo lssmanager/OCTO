@@ -100,7 +100,10 @@ ARG BUILD_COMMIT=unknown
 ARG BUILD_PHASE=F0
 ARG BUILD_TIME=unknown
 
-RUN pnpm turbo build --filter=@octo/api
+# --force invalidates turbo's local cache, guaranteeing that workspace
+# dependencies like @octo/security are recompiled from their source
+# instead of reusing a stale dist/ from a previous cached build.
+RUN pnpm turbo build --filter=@octo/api --force
 
 # Produce a symlink-free, self-contained deployment bundle for @octo/api.
 # --prod omits devDependencies. Output goes to /app/deploy.
