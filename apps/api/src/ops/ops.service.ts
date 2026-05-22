@@ -41,13 +41,13 @@ export class OpsService implements OnModuleInit {
         },
         db: {
           status: checks.postgres.status,
-          latencyMs: checks.postgres.latencyMs,
-          error: checks.postgres.error,
+          ...(checks.postgres.latencyMs !== undefined && { latencyMs: checks.postgres.latencyMs }),
+          ...(checks.postgres.error !== undefined && { error: checks.postgres.error }),
         },
         redis: {
           status: checks.redis.status,
-          latencyMs: checks.redis.latencyMs,
-          error: checks.redis.error,
+          ...(checks.redis.latencyMs !== undefined && { latencyMs: checks.redis.latencyMs }),
+          ...(checks.redis.error !== undefined && { error: checks.redis.error }),
         },
       },
       queues: queueStats,
