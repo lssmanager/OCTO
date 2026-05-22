@@ -1,4 +1,5 @@
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import type { OpsStatus } from '@octo/contracts';
 import { Public } from '../admin/internal-secret.guard';
 import { OpsService } from './ops.service';
 
@@ -9,7 +10,7 @@ export class OpsController {
 
   @Get('status')
   @HttpCode(HttpStatus.OK)
-  status(): Record<string, unknown> {
+  async status(): Promise<OpsStatus> {
     return this.opsService.getStatus();
   }
 }

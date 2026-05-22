@@ -4,34 +4,10 @@
 // No F1+ features.
 
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import type { OpsStatus } from '@octo/contracts';
 import { HealthService } from '../health/health.service';
 import type { Queue } from 'bullmq';
 import { createQueue, QUEUE_NAMES, type HealthJobData } from '@octo/queue';
-
-export interface OpsStatus {
-  build: {
-    version: string;
-    commit: string;
-    phase: string;
-    builtAt: string;
-    node: string;
-  };
-  services: {
-    api: { status: string; uptime: number };
-    db: { status: string; latencyMs?: number | undefined; error?: string | undefined };
-    redis: { status: string; latencyMs?: number | undefined; error?: string | undefined };
-  };
-  queues: {
-    [name: string]: {
-      waiting: number;
-      active: number;
-      completed: number;
-      failed: number;
-      delayed: number;
-    };
-  };
-  timestamp: string;
-}
 
 @Injectable()
 export class OpsService implements OnModuleInit {
@@ -48,8 +24,6 @@ export class OpsService implements OnModuleInit {
 
   async getStatus(): Promise<OpsStatus> {
     const checks = await this.healthService.runChecks();
-
-    // Queue stats — read counts from the health queue as a representative sample.
     const queueStats = await this.getQueueStats();
 
     return {

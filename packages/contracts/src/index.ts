@@ -10,6 +10,9 @@
 export { QUEUE_NAMES, DLQ_NAMES, MONITORED_QUEUES } from './queue.contracts';
 export type { QueueName } from './queue.contracts';
 
+// F0-002 — Ops Status Contract
+export type { OpsStatus, OpsQueueStats } from './ops';
+
 // F0-006 — MCP & A2A Protocol Contracts
 export type {
   MCPTool,
