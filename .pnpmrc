@@ -6,4 +6,3 @@ link-workspace-packages=true
 strict-peer-dependencies=false
 auto-install-peers=true
 shamefully-hoist=true
-inject-workspace-packages=true

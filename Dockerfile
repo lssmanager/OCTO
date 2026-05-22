@@ -66,14 +66,14 @@ RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 #   `pnpm deploy --prod` resolves all symlinks and produces a
 #   self-contained, flat node_modules directory safe to COPY.
 #
-# WHY .npmrc is copied explicitly before pnpm install:
+# WHY pnpm-workspace.yaml is copied explicitly before pnpm install:
 #   turbo prune --docker splits output into two layers:
 #     out/json/  → package.json files (for install layer caching)
-#     out/full/  → full source including .npmrc (copied AFTER install)
-#   The .npmrc contains inject-workspace-packages=true, which pnpm
-#   needs to see at install time so that `pnpm deploy` works without
-#   --legacy. Copying it explicitly here mirrors the pnpm-lock.yaml
-#   pattern and ensures pnpm reads the correct config on every RUN.
+#     out/full/  → full source (copied AFTER install)
+#   pnpm v10+ reads inject-workspace-packages from pnpm-workspace.yaml
+#   under the `settings` key, NOT from .pnpmrc. It must be present
+#   before `pnpm install` so `pnpm deploy --legacy` can resolve
+#   workspace packages correctly.
 # ─────────────────────────────────────────────
 FROM base AS builder
 
@@ -82,11 +82,12 @@ ENV TURBO_TELEMETRY_DISABLED=1
 
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-# Explicitly copy both config files before pnpm install and deploy.
-# .pnpmrc has inject-workspace-packages=true (required by pnpm deploy).
+# Explicitly copy config files before pnpm install and deploy.
+# pnpm-workspace.yaml has inject-workspace-packages: true (pnpm v10+
+# reads this from workspace settings, NOT from .pnpmrc).
 # .npmrc has engine-strict=true.
 # turbo prune does not include these in out/json/ or out/full/.
-COPY --from=pruner /app/.pnpmrc ./.pnpmrc
+COPY --from=pruner /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=pruner /app/.npmrc ./.npmrc
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     HUSKY=0 pnpm install --frozen-lockfile
@@ -103,8 +104,9 @@ RUN pnpm turbo build --filter=@octo/api
 
 # Produce a symlink-free, self-contained deployment bundle for @octo/api.
 # --prod omits devDependencies. Output goes to /app/deploy.
+# --legacy: safety net in case workspace.yaml settings aren't picked up.
 # This is the only correct way to copy pnpm node_modules across Docker stages.
-RUN pnpm --filter @octo/api deploy --prod /app/deploy
+RUN pnpm --filter @octo/api deploy --prod --legacy /app/deploy
 
 # Also build packages/database so migrate.js is available at runtime.
 # Copy the compiled migrate.js + migrations into the deploy bundle.
