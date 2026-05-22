@@ -23,9 +23,6 @@
 
 # ─────────────────────────────────────────────
 # Stage 0: base — Node.js Alpine + pnpm
-#
-# node:22.16.0-alpine3.21 — Node 22 LTS (current).
-# Minimum required by eslint-visitor-keys@5.0.1: ^22.13.0
 # ─────────────────────────────────────────────
 FROM node:22.16.0-alpine3.21 AS base
 RUN apk add --no-cache libc6-compat
@@ -36,16 +33,9 @@ WORKDIR /app
 
 # ─────────────────────────────────────────────
 # Stage 1: pruner — generates minimal sub-repo for @octo/api
-#
-# ARG NODE_ENV=development — declared BEFORE pnpm install so it wins
-# over any external --build-arg NODE_ENV=production injected by Coolify.
-# pnpm respects NODE_ENV for devDependency installation; if it sees
-# "production" here it silently skips devDeps, breaking turbo build.
 # ─────────────────────────────────────────────
 FROM base AS pruner
 ENV TURBO_TELEMETRY_DISABLED=1
-# Force development so devDeps are included in the pruned output.
-# This ENV overrides any external --build-arg at the stage level.
 ENV NODE_ENV=development
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
@@ -55,25 +45,15 @@ RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 # ─────────────────────────────────────────────
 # Stage 2: builder — installs pruned sub-repo deps and compiles
 #
-# NODE_ENV=development MUST be set here too — same reason as pruner.
-# TURBO_FORCE=1 — bypasses any stale remote/local turbo cache that
-# could cause a phantom cache hit on a broken prior build.
+# WHY we override @octo/security dist/ after pnpm deploy:
+#   pnpm deploy resolves @octo/security from the pnpm virtual store.
+#   The store caches the dist/ from before any fix — turbo build --force
+#   compiles a fresh dist/ into /app/packages/security/dist/ but does NOT
+#   update the store copy. The deploy bundle therefore contains the stale
+#   dist/index.js with the broken Reflector.
 #
-# WHY pnpm deploy:
-#   pnpm uses a virtual store with symlinks. Copying node_modules
-#   between Docker stages breaks those symlinks, causing
-#   MODULE_NOT_FOUND at runtime (e.g. @nestjs/core not found).
-#   `pnpm deploy --prod` resolves all symlinks and produces a
-#   self-contained, flat node_modules directory safe to COPY.
-#
-# WHY pnpm-workspace.yaml is copied explicitly before pnpm install:
-#   turbo prune --docker splits output into two layers:
-#     out/json/  → package.json files (for install layer caching)
-#     out/full/  → full source (copied AFTER install)
-#   pnpm v10+ reads inject-workspace-packages from pnpm-workspace.yaml
-#   under the `settings` key, NOT from .pnpmrc. It must be present
-#   before `pnpm install` so `pnpm deploy --legacy` can resolve
-#   workspace packages correctly.
+#   Fix: after pnpm deploy, explicitly overwrite the stale dist/ in the
+#   deploy bundle with the freshly compiled output from the build stage.
 # ─────────────────────────────────────────────
 FROM base AS builder
 
@@ -82,11 +62,6 @@ ENV TURBO_TELEMETRY_DISABLED=1
 
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-# Explicitly copy config files before pnpm install and deploy.
-# pnpm-workspace.yaml has inject-workspace-packages: true (pnpm v10+
-# reads this from workspace settings, NOT from .pnpmrc).
-# .npmrc has engine-strict=true.
-# turbo prune does not include these in out/json/ or out/full/.
 COPY --from=pruner /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=pruner /app/.npmrc ./.npmrc
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
@@ -94,41 +69,34 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 
 COPY --from=pruner /app/out/full/ .
 
-# Non-sensitive build metadata only — safe as ARG.
 ARG BUILD_VERSION=unknown
 ARG BUILD_COMMIT=unknown
 ARG BUILD_PHASE=F0
 ARG BUILD_TIME=unknown
 
-# Step 1: force-rebuild @octo/security so the new peerDependencies +
-# --external flags produce a fresh dist/index.js without bundled NestJS.
-# Without --force, turbo reuses a cached dist/ built before the fix.
+# Step 1: force-rebuild @octo/security first — fresh dist/ with correct
+# --external flags, no bundled NestJS, correct Reflector resolution.
 RUN pnpm turbo build --filter=@octo/security --force
 
-# Step 2: build @octo/api (and its deps) with --force to avoid stale cache.
+# Step 2: build @octo/api and all its deps.
 RUN pnpm turbo build --filter=@octo/api --force
 
-# Produce a symlink-free, self-contained deployment bundle for @octo/api.
-# --prod omits devDependencies. Output goes to /app/deploy.
-# --legacy: safety net in case workspace.yaml settings aren't picked up.
-# This is the only correct way to copy pnpm node_modules across Docker stages.
+# Step 3: produce symlink-free deploy bundle for @octo/api.
 RUN pnpm --filter @octo/api deploy --prod --legacy /app/deploy
 
-# Also build packages/database so migrate.js is available at runtime.
-# Copy the compiled migrate.js + migrations into the deploy bundle.
-# mkdir -p is required: pnpm deploy does not create packages/database/
-# inside the deploy bundle (it is a workspace dep, not a node_modules entry).
+# Step 4: overwrite the stale @octo/security dist/ in the deploy bundle
+# with the freshly compiled output. pnpm deploy copies from the pnpm store
+# which caches the old dist/ — this ensures the correct build is used.
+RUN cp -r /app/packages/security/dist \
+          /app/deploy/node_modules/@octo/security/dist
+
+# Step 5: copy database package for runtime migrations.
 RUN mkdir -p /app/deploy/packages/database \
  && cp -r /app/packages/database/dist /app/deploy/packages/database/dist \
  && cp -r /app/packages/database/migrations /app/deploy/packages/database/migrations
 
 # ─────────────────────────────────────────────
 # Stage 3: runner — minimal final image
-#
-# Uses the /app/deploy output from `pnpm deploy` — a flat, symlink-free
-# node_modules that is safe to copy between Docker stages.
-# No need to copy root node_modules, apps/api/node_modules, or
-# packages/*/node_modules individually.
 # ─────────────────────────────────────────────
 FROM node:22.16.0-alpine3.21 AS runner
 RUN apk add --no-cache libc6-compat curl
@@ -138,12 +106,10 @@ RUN addgroup --system --gid 1001 octo \
 
 WORKDIR /app
 
-# Self-contained deploy bundle: dist + node_modules (flat, no symlinks)
 COPY --from=builder --chown=octo:octo /app/deploy/dist ./dist
 COPY --from=builder --chown=octo:octo /app/deploy/node_modules ./node_modules
 COPY --from=builder --chown=octo:octo /app/deploy/package.json ./
 
-# Database package: compiled migrate.js + SQL migration files
 COPY --from=builder --chown=octo:octo /app/deploy/packages/database/dist ./packages/database/dist
 COPY --from=builder --chown=octo:octo /app/deploy/packages/database/migrations ./packages/database/migrations
 
@@ -151,15 +117,11 @@ USER octo
 
 EXPOSE 3001
 
-# HEALTHCHECK temporarily disabled: /api/health/live is guarded by
-# InternalSecretGuard which crashes (this.reflector undefined) until the
-# @octo/security reflector injection bug is resolved. Re-enable once fixed.
+# HEALTHCHECK temporarily disabled until Reflector fix is confirmed working.
+# Re-enable after /api/health/live responds 200 consistently.
 # HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 #   CMD curl -f http://localhost:3001/api/health/live || exit 1
 
-# Non-sensitive build metadata — stamped into the image at build time.
-# Runtime secrets (DATABASE_URL, REDIS_URLs, JWT_SECRET, etc.) must NEVER
-# appear here. Inject via Coolify → Environment Variables → Runtime tab.
 ARG BUILD_VERSION=unknown
 ARG BUILD_COMMIT=unknown
 ARG BUILD_PHASE=F0
@@ -171,8 +133,4 @@ ENV BUILD_VERSION=${BUILD_VERSION} \
     BUILD_TIME=${BUILD_TIME} \
     NODE_ENV=production
 
-# migrate.js runs first from packages/database/dist so Node resolves
-# drizzle-orm relative to packages/database/node_modules (resolved by
-# pnpm deploy into the flat node_modules bundle).
-# If migrate.js exits non-zero, main.js never starts.
 CMD ["sh", "-c", "node packages/database/dist/migrate.js && node dist/main.js"]

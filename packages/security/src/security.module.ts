@@ -1,26 +1,26 @@
 // packages/security/src/security.module.ts
-// F0: SecurityModule — exports InternalSecretGuard for DI.
+// F0: SecurityModule — re-exports Public decorator and InternalSecretGuard type.
 //
-// APP_GUARD is intentionally NOT registered here.
+// This module does NOT register InternalSecretGuard as a provider and does
+// NOT register APP_GUARD. Both must live in AppModule (root scope).
 //
-// NestJS resolves Reflector for APP_GUARD from the root module scope.
-// If APP_GUARD is registered inside a child module (even @Global()),
-// the injected Reflector is a different instance from the one NestJS
-// uses internally for metadata resolution — causing:
+// Why: NestJS resolves Reflector for APP_GUARD from the root DI container.
+// If InternalSecretGuard is provided inside a child module (even @Global()),
+// the Reflector injected into the guard constructor is a different instance
+// from the root-scope Reflector NestJS uses for metadata resolution, causing:
 //   TypeError: Cannot read properties of undefined (reading 'getAllAndOverride')
 //
-// Canonical fix: register APP_GUARD in AppModule (root scope) so that
-// NestJS injects the correct root-scope Reflector instance.
-// SecurityModule only provides + exports the guard class for DI.
+// Canonical NestJS pattern:
+//   - Guard provider in AppModule
+//   - APP_GUARD { useExisting: GuardClass } in AppModule
+//   - SecurityModule only re-exports the decorator for use in controllers
 
 import { Module } from '@nestjs/common';
-import { InternalSecretGuard, Public } from './internal-secret.guard';
+import { Public } from './internal-secret.guard';
 
-@Module({
-  providers: [InternalSecretGuard],
-  exports: [InternalSecretGuard],
-})
+@Module({})
 export class SecurityModule {}
 
-// Re-export decorator for convenience
-export { Public, InternalSecretGuard };
+// Re-export decorator and guard class for consumers
+export { Public };
+export { InternalSecretGuard } from './internal-secret.guard';

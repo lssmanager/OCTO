@@ -1,29 +1,19 @@
 // apps/api/src/app.module.ts
 //
 // PATCH 5: loadApiConfig() promoted to DI-managed singleton via useFactory.
-// The previous module-scope call (const config = loadApiConfig()) ran
-// twice — once here and once in main.ts — duplicating env parsing and
-// validation side-effects. useFactory is lazy and NestJS-singleton.
 //
-// main.ts retains its own loadApiConfig() call because it needs port,
-// CORS origins, telemetry config, and version metadata BEFORE the NestJS
-// container is instantiated. That is architecturally correct — bootstrap
-// pre-DI config is not the same concern as runtime DI-managed config.
+// F0 Security — canonical APP_GUARD pattern:
+// InternalSecretGuard is declared as a provider HERE in the root module.
+// APP_GUARD uses useExisting to reuse that same DI-managed instance.
+// This guarantees NestJS injects the correct root-scope Reflector into
+// the guard constructor — resolving the 'getAllAndOverride undefined' crash.
 //
-// PATCH 8: Remove inert exports: ['CONFIG']. No internal consumer
-// injected this token. CONFIG_TOKEN is exported as a TypeScript symbol
-// for future @Inject(CONFIG_TOKEN) usage once consumers exist.
-//
-// F0 Security: APP_GUARD registered here in the root module scope so
-// NestJS injects the correct root-scope Reflector instance into the guard.
-// Registering APP_GUARD inside SecurityModule (child scope) causes
-// this.reflector to be undefined at runtime — NestJS canonical pattern
-// requires APP_GUARD to live in the root module.
+// SecurityModule only re-exports the @Public() decorator and the guard type.
+// It does NOT declare the guard as a provider or register APP_GUARD.
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { loadApiConfig } from '@octo/config';
-import { SecurityModule } from '@octo/security';
-import { InternalSecretGuard } from '@octo/security';
+import { SecurityModule, InternalSecretGuard } from '@octo/security';
 import { BullBoardModule } from './admin/bullboard.module';
 import { HealthModule } from './health/health.module';
 import { OpsModule } from './ops/ops.module';
@@ -37,20 +27,15 @@ export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
   controllers: [MetricsController],
   providers: [
     {
-      // PATCH 5: useFactory — lazy, singleton, DI-managed.
-      // Replaces module-scope const config = loadApiConfig().
       provide: CONFIG_TOKEN,
       useFactory: loadApiConfig,
     },
+    // Guard provider in root scope — NestJS injects the correct Reflector
+    InternalSecretGuard,
     {
-      // APP_GUARD in root scope: NestJS resolves Reflector from the root
-      // DI container, ensuring this.reflector is the correct instance
-      // that can read @Public() metadata via getAllAndOverride().
       provide: APP_GUARD,
-      useClass: InternalSecretGuard,
+      useExisting: InternalSecretGuard,
     },
   ],
-  // PATCH 8: exports removed — no consumer uses CONFIG_TOKEN yet.
-  // Re-add `exports: [CONFIG_TOKEN]` when a module injects it.
 })
 export class AppModule {}
