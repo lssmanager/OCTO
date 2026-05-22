@@ -34,7 +34,6 @@ export class HealthController {
   /**
    * Liveness probe.
    * Returns 200 as long as the process is alive.
-   * Coolify / Docker HEALTHCHECK hits this endpoint.
    */
   @Get('live')
   @HttpCode(HttpStatus.OK)
@@ -46,13 +45,6 @@ export class HealthController {
    * Readiness probe.
    * Returns 200 when all dependencies are healthy.
    * Returns 503 Service Unavailable when any dependency is down or degraded.
-   * Load balancers and Coolify use this to gate traffic.
-   *
-   * PATCH 6: Migrated from @Res() to @Res({ passthrough: true }).
-   * With bare @Res(), NestJS hands full response control to the handler
-   * and bypasses interceptors, logging middleware, and trace propagation.
-   * passthrough: true restores the full NestJS pipeline while still
-   * allowing us to set a custom HTTP status code (200 vs 503).
    */
   @Get('ready')
   async ready(
@@ -73,11 +65,8 @@ export class HealthController {
 
   /**
    * Startup probe.
-   * Returns 200 when bootstrap is complete (migrations applied, DI ready, server listening).
-   * Returns 503 Service Unavailable while bootstrap is in progress.
-   *
-   * Kubernetes / Coolify use this to delay traffic until the service is fully started.
-   * Distinction: live (process alive) ≠ ready (deps ok) ≠ start (bootstrap done).
+   * Returns 200 when bootstrap is complete.
+   * Returns 503 while bootstrap is in progress.
    */
   @Get('start')
   async start(
@@ -109,8 +98,6 @@ export class HealthController {
 
   /**
    * Version info.
-   * Exposes build metadata injected at image build time via ARG/ENV.
-   * Useful for verifying which commit / phase is deployed.
    */
   @Get('version')
   @HttpCode(HttpStatus.OK)

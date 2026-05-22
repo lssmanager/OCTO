@@ -1,18 +1,12 @@
-/**
- * MOVED: InternalSecretGuard → apps/api/src/admin/internal-secret.guard.ts
- *
- * The guard was moved out of @octo/security to avoid pnpm-store
- * class-identity issues with NestJS DI. When a package is built and
- * linked via pnpm's virtual store, NestJS resolves APP_GUARD against
- * a different class identity than the one registered as a provider,
- * causing constructor-injected dependencies (Reflector) to be undefined.
- *
- * The guard is now:
- *   - Defined in: apps/api/src/admin/internal-secret.guard.ts
- *   - Registered as APP_GUARD in: apps/api/src/app.module.ts
- *   - Decorator @Public() exported from the same file
- *
- * @octo/security SecurityModule remains as a no-op @Global() shell
- * for F1+ JWT/Passport additions.
- */
+// packages/security/src/internal-secret.guard.ts
+// RELOCATED to apps/api/src/admin/internal-secret.guard.ts
+//
+// The guard was moved to apps/api to ensure a single class identity.
+// When APP_GUARD resolves a class from the pnpm virtual store, NestJS
+// sees a different class identity than the registered provider, causing
+// Reflector injection to fail silently.
+//
+// This file is intentionally empty. Do not add guards here.
+// For F1 (JWT), add a JwtAuthGuard in apps/api following the same pattern.
 
+export {};

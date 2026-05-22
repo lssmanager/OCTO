@@ -20,6 +20,7 @@
 # ─────────────────────────────────────────────────────────────────
 
 # syntax=docker/dockerfile:1.4
+# cache-bust: guard-relocated-to-apps-api-v1
 
 # ─────────────────────────────────────────────
 # Stage 0: base — Node.js Alpine + pnpm
@@ -44,16 +45,6 @@ RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 
 # ─────────────────────────────────────────────
 # Stage 2: builder — installs pruned sub-repo deps and compiles
-#
-# WHY we override @octo/security dist/ after pnpm deploy:
-#   pnpm deploy resolves @octo/security from the pnpm virtual store.
-#   The store caches the dist/ from before any fix — turbo build --force
-#   compiles a fresh dist/ into /app/packages/security/dist/ but does NOT
-#   update the store copy. The deploy bundle therefore contains the stale
-#   dist/index.js with the broken Reflector.
-#
-#   Fix: after pnpm deploy, explicitly overwrite the stale dist/ in the
-#   deploy bundle with the freshly compiled output from the build stage.
 # ─────────────────────────────────────────────
 FROM base AS builder
 
@@ -74,23 +65,13 @@ ARG BUILD_COMMIT=unknown
 ARG BUILD_PHASE=F0
 ARG BUILD_TIME=unknown
 
-# Step 1: force-rebuild @octo/security first — fresh dist/ with correct
-# --external flags, no bundled NestJS, correct Reflector resolution.
-RUN pnpm turbo build --filter=@octo/security --force
-
-# Step 2: build @octo/api and all its deps.
+# The guard now lives in apps/api/src/admin/internal-secret.guard.ts —
+# compiled directly into apps/api dist/. No pnpm store indirection.
+# @octo/security is now an empty shell — no need to build it separately.
 RUN pnpm turbo build --filter=@octo/api --force
 
-# Step 3: produce symlink-free deploy bundle for @octo/api.
 RUN pnpm --filter @octo/api deploy --prod --legacy /app/deploy
 
-# Step 4: overwrite the stale @octo/security dist/ in the deploy bundle
-# with the freshly compiled output. pnpm deploy copies from the pnpm store
-# which caches the old dist/ — this ensures the correct build is used.
-RUN cp -r /app/packages/security/dist \
-          /app/deploy/node_modules/@octo/security/dist
-
-# Step 5: copy database package for runtime migrations.
 RUN mkdir -p /app/deploy/packages/database \
  && cp -r /app/packages/database/dist /app/deploy/packages/database/dist \
  && cp -r /app/packages/database/migrations /app/deploy/packages/database/migrations
@@ -117,8 +98,8 @@ USER octo
 
 EXPOSE 3001
 
-# HEALTHCHECK temporarily disabled until Reflector fix is confirmed working.
-# Re-enable after /api/health/live responds 200 consistently.
+# HEALTHCHECK temporarily disabled until /api/health/live confirms 200.
+# Re-enable after this deploy is verified.
 # HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 #   CMD curl -f http://localhost:3001/api/health/live || exit 1
 

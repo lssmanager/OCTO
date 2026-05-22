@@ -1,21 +1,15 @@
 // apps/api/src/app.module.ts
 //
-// PATCH 5: loadApiConfig() promoted to DI-managed singleton via useFactory.
+// F0 Security — canonical APP_GUARD pattern with single class identity:
 //
-// F0 Security: APP_GUARD registered directly in AppModule with the
-// local InternalSecretGuard class from apps/api/src/admin/ — single
-// class identity, no pnpm store virtual module, no dual-resolution bug.
-// SecurityModule from @octo/security is kept as a no-op shell for F1+.
+// InternalSecretGuard is declared as a provider HERE in the root module
+// and imported from the LOCAL file (not from @octo/security).
+// APP_GUARD uses useExisting to reuse that same DI-managed instance.
 //
-// The guard class lives in apps/api (not @octo/security) because:
-//   - pnpm's virtual store creates a second compiled copy of the package
-//   - NestJS resolves APP_GUARD against the store's class identity
-//   - That identity differs from the one registered as provider
-//   - Result: constructor-injected Reflector is undefined
-//
-// PATCH 8: Remove inert exports: ['CONFIG']. No internal consumer
-// injected this token. CONFIG_TOKEN is exported as a TypeScript symbol
-// for future @Inject(CONFIG_TOKEN) usage once consumers exist.
+// This guarantees NestJS injects the correct root-scope Reflector because:
+// 1. The class registered as provider and the class used by APP_GUARD
+//    are the exact same identity (same file, no pnpm store indirection).
+// 2. APP_GUARD is in the root module scope where Reflector lives.
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { loadApiConfig } from '@octo/config';
@@ -37,6 +31,8 @@ export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
       provide: CONFIG_TOKEN,
       useFactory: loadApiConfig,
     },
+    // Guard declared in root scope — same class identity as APP_GUARD below.
+    // Imported from local file, not from @octo/security pnpm store.
     InternalSecretGuard,
     {
       provide: APP_GUARD,
