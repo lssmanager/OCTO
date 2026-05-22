@@ -2,18 +2,25 @@
 //
 // PATCH 5: loadApiConfig() promoted to DI-managed singleton via useFactory.
 //
-// F0 Security — canonical APP_GUARD pattern:
-// InternalSecretGuard is declared as a provider HERE in the root module.
-// APP_GUARD uses useExisting to reuse that same DI-managed instance.
-// This guarantees NestJS injects the correct root-scope Reflector into
-// the guard constructor — resolving the 'getAllAndOverride undefined' crash.
+// F0 Security: APP_GUARD registered directly in AppModule with the
+// local InternalSecretGuard class from apps/api/src/admin/ — single
+// class identity, no pnpm store virtual module, no dual-resolution bug.
+// SecurityModule from @octo/security is kept as a no-op shell for F1+.
 //
-// SecurityModule only re-exports the @Public() decorator and the guard type.
-// It does NOT declare the guard as a provider or register APP_GUARD.
+// The guard class lives in apps/api (not @octo/security) because:
+//   - pnpm's virtual store creates a second compiled copy of the package
+//   - NestJS resolves APP_GUARD against the store's class identity
+//   - That identity differs from the one registered as provider
+//   - Result: constructor-injected Reflector is undefined
+//
+// PATCH 8: Remove inert exports: ['CONFIG']. No internal consumer
+// injected this token. CONFIG_TOKEN is exported as a TypeScript symbol
+// for future @Inject(CONFIG_TOKEN) usage once consumers exist.
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { loadApiConfig } from '@octo/config';
-import { SecurityModule, InternalSecretGuard } from '@octo/security';
+import { SecurityModule } from '@octo/security';
+import { InternalSecretGuard } from './admin/internal-secret.guard';
 import { BullBoardModule } from './admin/bullboard.module';
 import { HealthModule } from './health/health.module';
 import { OpsModule } from './ops/ops.module';
@@ -30,7 +37,6 @@ export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
       provide: CONFIG_TOKEN,
       useFactory: loadApiConfig,
     },
-    // Guard provider in root scope — NestJS injects the correct Reflector
     InternalSecretGuard,
     {
       provide: APP_GUARD,

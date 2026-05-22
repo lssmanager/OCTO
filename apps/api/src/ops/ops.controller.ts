@@ -3,7 +3,7 @@
 // Public infrastructure status — no auth required.
 
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
-import { Public } from '@octo/security';
+import { Public } from '../admin/internal-secret.guard';
 import { OpsService, type OpsStatus } from './ops.service';
 
 @Public()

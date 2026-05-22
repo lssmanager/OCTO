@@ -6,7 +6,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
-import { Public } from '@octo/security';
+import { Public } from '../admin/internal-secret.guard';
 import { HealthService, type HealthStatus } from './health.service';
 
 /**
