@@ -48,11 +48,8 @@ ENV TURBO_TELEMETRY_DISABLED=1
 # This ENV overrides any external --build-arg at the stage level.
 ENV NODE_ENV=development
 COPY . .
-# --frozen-lockfile temporarily removed: package.json dependency structure
-# changed (e.g. @nestjs moved to peerDependencies). Let the Docker build
-# regenerate the lockfile. Restore --frozen-lockfile after next pnpm install.
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    HUSKY=0 pnpm install
+    HUSKY=0 pnpm install --frozen-lockfile
 RUN pnpm dlx turbo@2.9.14 prune @octo/api --docker
 
 # ─────────────────────────────────────────────
@@ -92,9 +89,8 @@ COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 # turbo prune does not include these in out/json/ or out/full/.
 COPY --from=pruner /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=pruner /app/.npmrc ./.npmrc
-# --frozen-lockfile temporarily removed (see pruner stage comment).
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    HUSKY=0 pnpm install
+    HUSKY=0 pnpm install --frozen-lockfile
 
 COPY --from=pruner /app/out/full/ .
 
@@ -156,7 +152,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:3001/api/health/live || exit 1
 
 # Non-sensitive build metadata — stamped into the image at build time.
-# Runtime secrets (DATABASE_URL, REDIS_URL, JWT_SECRET, etc.) must NEVER
+# Runtime secrets (DATABASE_URL, REDIS_URLs, JWT_SECRET, etc.) must NEVER
 # appear here. Inject via Coolify → Environment Variables → Runtime tab.
 ARG BUILD_VERSION=unknown
 ARG BUILD_COMMIT=unknown
