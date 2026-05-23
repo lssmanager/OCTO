@@ -17,10 +17,7 @@ export interface QueueConfig {
  * - removeOnComplete: 100 (prevent Redis OOM)
  * - removeOnFail: 500 (keep enough for debugging)
  */
-export function createQueue<T = unknown>(
-  name: QueueName | string,
-  config: QueueConfig,
-): Queue<T> {
+export function createQueue<T = unknown>(name: QueueName | string, config: QueueConfig): Queue<T> {
   const connection = createRedisConnection(config.redisUrl);
 
   return new Queue<T>(name, {

@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Res,
-} from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Res } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { Public } from '../admin/internal-secret.guard';
 import { HealthService, type HealthStatus } from './health.service';
@@ -47,9 +41,7 @@ export class HealthController {
    * Returns 503 Service Unavailable when any dependency is down or degraded.
    */
   @Get('ready')
-  async ready(
-    @Res({ passthrough: true }) res: FastifyReply,
-  ): Promise<Record<string, unknown>> {
+  async ready(@Res({ passthrough: true }) res: FastifyReply): Promise<Record<string, unknown>> {
     const checks = await this.healthService.runChecks();
     const allOk = Object.values(checks).every((c) => c.status === 'ok');
     const httpStatus = allOk ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE;
@@ -69,9 +61,7 @@ export class HealthController {
    * Returns 503 while bootstrap is in progress.
    */
   @Get('start')
-  async start(
-    @Res({ passthrough: true }) res: FastifyReply,
-  ): Promise<Record<string, unknown>> {
+  async start(@Res({ passthrough: true }) res: FastifyReply): Promise<Record<string, unknown>> {
     const booted = this.healthService.isBootstrapped();
     if (!booted) {
       res.status(HttpStatus.SERVICE_UNAVAILABLE);

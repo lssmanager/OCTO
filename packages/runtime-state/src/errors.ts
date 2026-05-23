@@ -22,11 +22,11 @@ export class ConcurrentTransitionError extends Error {
   constructor(
     public readonly executionId: string,
     public readonly expectedStatus: string,
-    public readonly attemptedStatus: string,
+    public readonly attemptedStatus: string
   ) {
     super(
       `FSM conflict: execution ${executionId} expected '${expectedStatus}', ` +
-      `transition to '${attemptedStatus}' rejected — concurrent worker won`,
+        `transition to '${attemptedStatus}' rejected — concurrent worker won`
     );
     this.name = 'ConcurrentTransitionError';
     // Maintain proper prototype chain for instanceof checks across module boundaries

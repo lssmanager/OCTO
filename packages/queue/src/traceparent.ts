@@ -10,12 +10,7 @@
 // Format: 00-<trace-id-32hex>-<parent-id-16hex>-<flags-2hex>
 // Example: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 
-import {
-  context,
-  propagation,
-  trace,
-  type Context,
-} from '@opentelemetry/api';
+import { context, propagation, trace, type Context } from '@opentelemetry/api';
 
 // The single canonical definition of the traceparent field.
 // Used as the constraint in InstrumentedQueue<T extends WithTraceparent>.
@@ -78,7 +73,7 @@ export function formatTraceparent(traceId: string, spanId: string, flags = '01')
  * Returns null if the format is invalid.
  */
 export function parseTraceparent(
-  traceparent: string,
+  traceparent: string
 ): { version: string; traceId: string; parentId: string; flags: string } | null {
   const parts = traceparent.split('-');
   if (parts.length !== 4) return null;

@@ -9,7 +9,6 @@ import { createQueue, type QueueConfig } from './create-queue';
 import { injectOtelContext, type OtelTraceFields } from './otel-propagation';
 import type { QueueName } from './queue-names';
 
- 
 type AnyJobData = Record<string, any>;
 
 export class InstrumentedQueue<T extends OtelTraceFields = AnyJobData> {
@@ -18,8 +17,8 @@ export class InstrumentedQueue<T extends OtelTraceFields = AnyJobData> {
   private readonly queueName: string;
 
   constructor(name: QueueName | string, config: QueueConfig) {
-    this.queue     = createQueue<AnyJobData>(name, config);
-    this.tracer    = getOctoTracer();
+    this.queue = createQueue<AnyJobData>(name, config);
+    this.tracer = getOctoTracer();
     this.queueName = name;
   }
 
@@ -27,22 +26,18 @@ export class InstrumentedQueue<T extends OtelTraceFields = AnyJobData> {
    * Enqueue a job with full OTel instrumentation.
    * Automatically injects W3C traceparent + tracestate + correlationId.
    */
-  async add(
-    jobName: string,
-    data: T,
-    opts?: JobsOptions,
-  ): Promise<string | undefined> {
+  async add(jobName: string, data: T, opts?: JobsOptions): Promise<string | undefined> {
     return this.tracer.startActiveSpan(
       `${this.queueName} publish`,
       {
         kind: SpanKind.PRODUCER,
         attributes: {
-          'messaging.system':            'bullmq',
-          'messaging.operation':         'publish',
-          'messaging.destination.name':  this.queueName,
-          'messaging.message.id':        (data as AnyJobData)['executionId'] as string ?? jobName,
-          'octo.job.name':               jobName,
-          'octo.correlation.id':         (data as AnyJobData)['correlationId'] as string ?? '',
+          'messaging.system': 'bullmq',
+          'messaging.operation': 'publish',
+          'messaging.destination.name': this.queueName,
+          'messaging.message.id': ((data as AnyJobData)['executionId'] as string) ?? jobName,
+          'octo.job.name': jobName,
+          'octo.correlation.id': ((data as AnyJobData)['correlationId'] as string) ?? '',
         },
       },
       async (span) => {
@@ -62,17 +57,21 @@ export class InstrumentedQueue<T extends OtelTraceFields = AnyJobData> {
         } finally {
           span.end();
         }
-      },
+      }
     );
   }
 
-  get raw(): Queue<AnyJobData> { return this.queue; }
-  async close(): Promise<void> { await this.queue.close(); }
+  get raw(): Queue<AnyJobData> {
+    return this.queue;
+  }
+  async close(): Promise<void> {
+    await this.queue.close();
+  }
 }
 
 export function createInstrumentedQueue<T extends OtelTraceFields = AnyJobData>(
   name: QueueName | string,
-  config: QueueConfig,
+  config: QueueConfig
 ): InstrumentedQueue<T> {
   return new InstrumentedQueue<T>(name, config);
 }

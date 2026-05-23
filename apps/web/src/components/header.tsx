@@ -30,9 +30,23 @@ export function Header() {
               <circle cx="12" cy="12" r="10" stroke="var(--color-primary)" strokeWidth="1.5" />
               <circle cx="12" cy="12" r="4" fill="var(--color-primary)" opacity="0.7" />
               <line x1="12" y1="2" x2="12" y2="7" stroke="var(--color-primary)" strokeWidth="1.5" />
-              <line x1="12" y1="17" x2="12" y2="22" stroke="var(--color-primary)" strokeWidth="1.5" />
+              <line
+                x1="12"
+                y1="17"
+                x2="12"
+                y2="22"
+                stroke="var(--color-primary)"
+                strokeWidth="1.5"
+              />
               <line x1="2" y1="12" x2="7" y2="12" stroke="var(--color-primary)" strokeWidth="1.5" />
-              <line x1="17" y1="12" x2="22" y2="12" stroke="var(--color-primary)" strokeWidth="1.5" />
+              <line
+                x1="17"
+                y1="12"
+                x2="22"
+                y2="12"
+                stroke="var(--color-primary)"
+                strokeWidth="1.5"
+              />
             </svg>
             <span
               className="font-semibold text-sm tracking-wider uppercase"
@@ -55,11 +69,13 @@ export function Header() {
 
         {/* Nav */}
         <nav className="hidden sm:flex items-center gap-6">
-          {([
-            ['/', 'Status'],
-            ['/health', 'Health'],
-            ['/version', 'Version'],
-          ] as const).map(([href, label]) => (
+          {(
+            [
+              ['/', 'Status'],
+              ['/health', 'Health'],
+              ['/version', 'Version'],
+            ] as const
+          ).map(([href, label]) => (
             <Link
               key={href}
               href={href}
@@ -79,12 +95,26 @@ export function Header() {
           style={{ color: 'var(--color-text-muted)' }}
         >
           {theme === 'dark' ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <circle cx="12" cy="12" r="5" />
               <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
             </svg>
           ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
             </svg>
           )}

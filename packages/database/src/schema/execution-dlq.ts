@@ -32,56 +32,55 @@ import {
 import { executions } from './executions';
 
 export const dlqReasonEnum = pgEnum('dlq_reason', [
-  'max_retries_exceeded',   // exponential backoff exhausted
-  'non_retryable_error',    // error.retryable === false
-  'governance_limit',       // token/cost/recursion budget exceeded
-  'timeout',                // step or execution timeout
-  'poison_message',         // caused worker panic / unhandled crash
-  'manual',                 // operator-triggered via API
+  'max_retries_exceeded', // exponential backoff exhausted
+  'non_retryable_error', // error.retryable === false
+  'governance_limit', // token/cost/recursion budget exceeded
+  'timeout', // step or execution timeout
+  'poison_message', // caused worker panic / unhandled crash
+  'manual', // operator-triggered via API
 ]);
 
 export const executionDlq = pgTable(
   'execution_dlq',
   {
-    id:          text('id').primaryKey(),    // UUID v7
-    executionId: text('execution_id')
-                   .references(() => executions.id),  // nullable — job may not have an execution row
-    tenantId:    text('tenant_id').notNull(),
+    id: text('id').primaryKey(), // UUID v7
+    executionId: text('execution_id').references(() => executions.id), // nullable — job may not have an execution row
+    tenantId: text('tenant_id').notNull(),
 
     // ── Failure context ───────────────────────────────────────────────────────
-    reason:         dlqReasonEnum('reason').notNull(),
-    attemptsMade:   integer('attempts_made').notNull(),
-    lastError:      jsonb('last_error').notNull(),   // { message, code, stack, retryable }
-    errorChain:     jsonb('error_chain'),             // full retry history
+    reason: dlqReasonEnum('reason').notNull(),
+    attemptsMade: integer('attempts_made').notNull(),
+    lastError: jsonb('last_error').notNull(), // { message, code, stack, retryable }
+    errorChain: jsonb('error_chain'), // full retry history
     failureContext: jsonb('failure_context').notNull(), // original OctoJobPayload + BullMQ metadata
 
     // ── Queue metadata ────────────────────────────────────────────────────────
-    queueName:  text('queue_name').notNull(),
+    queueName: text('queue_name').notNull(),
     queueJobId: text('queue_job_id').notNull(),
-    traceId:    text('trace_id'),
-    runId:      text('run_id'),
+    traceId: text('trace_id'),
+    runId: text('run_id'),
 
     // ── Inspection / replay ───────────────────────────────────────────────────
     // quarantine=true: skip during global replay, requires manual resolution
-    quarantine:  boolean('quarantine').notNull().default(false),
-    notes:       text('notes'),           // operator notes added via API
-    replayedAt:  timestamp('replayed_at'), // set when replay is triggered
-    replayRunId: text('replay_run_id'),    // new execution ID from replay
-    resolvedAt:  timestamp('resolved_at'), // set when marked resolved
-    resolvedBy:  text('resolved_by'),      // user ID or 'system'
+    quarantine: boolean('quarantine').notNull().default(false),
+    notes: text('notes'), // operator notes added via API
+    replayedAt: timestamp('replayed_at'), // set when replay is triggered
+    replayRunId: text('replay_run_id'), // new execution ID from replay
+    resolvedAt: timestamp('resolved_at'), // set when marked resolved
+    resolvedBy: text('resolved_by'), // user ID or 'system'
 
-    createdAt:   timestamp('created_at').notNull().defaultNow(),
-    updatedAt:   timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => ({
-    tenantIdx:     index('dlq_tenant_id_idx').on(t.tenantId),
-    executionIdx:  index('dlq_execution_id_idx').on(t.executionId),
-    reasonIdx:     index('dlq_reason_idx').on(t.reason),
+    tenantIdx: index('dlq_tenant_id_idx').on(t.tenantId),
+    executionIdx: index('dlq_execution_id_idx').on(t.executionId),
+    reasonIdx: index('dlq_reason_idx').on(t.reason),
     quarantineIdx: index('dlq_quarantine_idx').on(t.quarantine),
-    traceIdx:      index('dlq_trace_id_idx').on(t.traceId),
-    createdIdx:    index('dlq_created_at_idx').on(t.createdAt),
-  }),
+    traceIdx: index('dlq_trace_id_idx').on(t.traceId),
+    createdIdx: index('dlq_created_at_idx').on(t.createdAt),
+  })
 );
 
-export type ExecutionDlqEntry    = typeof executionDlq.$inferSelect;
+export type ExecutionDlqEntry = typeof executionDlq.$inferSelect;
 export type NewExecutionDlqEntry = typeof executionDlq.$inferInsert;

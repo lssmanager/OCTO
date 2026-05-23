@@ -9,8 +9,7 @@ const nextConfig = {
   // → enforces the architecture rule: no direct browser calls to runtime-worker
   env: {
     API_URL: process.env['API_URL'] ?? 'http://localhost:3001',
-    RUNTIME_WORKER_URL:
-      process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000',
+    RUNTIME_WORKER_URL: process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000',
     GIT_COMMIT: process.env['GIT_COMMIT'] ?? 'local',
     BUILD_TIME: process.env['BUILD_TIME'] ?? new Date().toISOString(),
   },

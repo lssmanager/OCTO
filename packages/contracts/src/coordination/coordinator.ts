@@ -70,12 +70,12 @@ export interface TaskDecomposition {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ConsolidationMode =
-  | 'merge-sequential'   // outputs appended in dependency order
-  | 'merge-parallel'     // outputs merged from parallel subtasks
-  | 'llm-synthesis'      // coordinator LLM synthesises all outputs
-  | 'vote'               // majority vote across agent outputs
-  | 'first-success'      // use first subtask that succeeds
-  | 'custom';            // custom handler registered in the runtime
+  | 'merge-sequential' // outputs appended in dependency order
+  | 'merge-parallel' // outputs merged from parallel subtasks
+  | 'llm-synthesis' // coordinator LLM synthesises all outputs
+  | 'vote' // majority vote across agent outputs
+  | 'first-success' // use first subtask that succeeds
+  | 'custom'; // custom handler registered in the runtime
 
 export interface ConsolidationStrategy {
   mode: ConsolidationMode;
@@ -176,10 +176,7 @@ export interface ICoordinatorAgent {
   profile: IAgentProfile;
 
   /** Decompose a high-level goal into subtasks */
-  decomposeGoal(
-    goal: string,
-    context?: Record<string, unknown>,
-  ): Promise<TaskDecomposition>;
+  decomposeGoal(goal: string, context?: Record<string, unknown>): Promise<TaskDecomposition>;
 
   /** Assign subtasks to specialised agents */
   assignSubtasks(decomposition: TaskDecomposition): Promise<void>;
@@ -188,13 +185,13 @@ export interface ICoordinatorAgent {
   replan(
     decompositionId: string,
     failedSubtaskId: string,
-    reason: string,
+    reason: string
   ): Promise<TaskDecomposition>;
 
   /** Consolidate outputs from all completed subtasks */
   consolidate(
     decomposition: TaskDecomposition,
-    strategy: ConsolidationStrategy,
+    strategy: ConsolidationStrategy
   ): Promise<Record<string, unknown>>;
 
   /** Persist a checkpoint so execution can be resumed after restart */

@@ -51,9 +51,9 @@ export interface TransactionalDb {
  * @throws Re-throws any transaction error, causing BullMQ to retry the job.
  */
 export async function writeBeforeAck<T>(
-  db:      TransactionalDb,
-  _job:    { id?: string },
-  handler: (tx: unknown) => Promise<T>,
+  db: TransactionalDb,
+  _job: { id?: string },
+  handler: (tx: unknown) => Promise<T>
 ): Promise<T> {
   // Full sequence inside this transaction:
   //   checkpoint write

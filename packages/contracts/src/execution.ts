@@ -28,34 +28,34 @@
  */
 export const ExecutionStatus = {
   /** Created in DB, not yet enqueued in BullMQ. */
-  PENDING:          'pending',
+  PENDING: 'pending',
   /** BullMQ job created, worker not yet picked up. */
-  QUEUED:           'queued',
+  QUEUED: 'queued',
   /** BullMQ job dispatched to worker, awaiting pickup. */
-  DISPATCHED:       'dispatched',
+  DISPATCHED: 'dispatched',
   /** Worker actively processing. */
-  RUNNING:          'running',
+  RUNNING: 'running',
   /** Blocked on external tool response (async tool call in flight). */
-  WAITING_TOOL:     'waiting_tool',
+  WAITING_TOOL: 'waiting_tool',
   /** Blocked on human approval gate (HITL). */
-  WAITING_HUMAN:    'waiting_human',
+  WAITING_HUMAN: 'waiting_human',
   /** Transient failure — exponential backoff in progress. */
-  RETRYING:         'retrying',
+  RETRYING: 'retrying',
   /** Retry scheduled after backoff delay, not yet re-enqueued. */
-  RETRY_SCHEDULED:  'retry_scheduled',
+  RETRY_SCHEDULED: 'retry_scheduled',
   /** Explicitly paused via API — resumes when PATCH /executions/:id/resume. */
-  SUSPENDED:        'suspended',
+  SUSPENDED: 'suspended',
   /** Lease expired, execution is reclaimable by scheduler. */
-  RECLAIMABLE:      'reclaimable',
+  RECLAIMABLE: 'reclaimable',
   /** Terminal: successful completion. */
-  COMPLETED:        'completed',
+  COMPLETED: 'completed',
   /** Terminal: max retries exceeded or non-retryable error. */
-  FAILED:           'failed',
+  FAILED: 'failed',
   /** Terminal: cancelled by user or governance policy. */
-  CANCELLED:        'cancelled',
+  CANCELLED: 'cancelled',
 } as const;
 
-export type ExecutionStatus = typeof ExecutionStatus[keyof typeof ExecutionStatus];
+export type ExecutionStatus = (typeof ExecutionStatus)[keyof typeof ExecutionStatus];
 
 /** Ordered array — useful for iteration and Zod enums. */
 export const ExecutionStatusValues = Object.values(ExecutionStatus) as ExecutionStatus[];
@@ -97,17 +97,17 @@ export const ExecutionStatusValues = Object.values(ExecutionStatus) as Execution
 export const VALID_TRANSITIONS: Readonly<Record<ExecutionStatus, ReadonlySet<ExecutionStatus>>> = {
   pending: new Set([
     'queued',
-    'cancelled',   // cancelled before enqueue (e.g. duplicate detected)
+    'cancelled', // cancelled before enqueue (e.g. duplicate detected)
   ]),
   queued: new Set([
-    'dispatched',  // picked up by worker
-    'cancelled',   // cancelled while waiting in queue
-    'failed',      // worker crashed before pickup (stale job detection)
+    'dispatched', // picked up by worker
+    'cancelled', // cancelled while waiting in queue
+    'failed', // worker crashed before pickup (stale job detection)
   ]),
   dispatched: new Set([
     'running',
-    'cancelled',   // cancelled before worker started processing
-    'failed',      // worker failed to start
+    'cancelled', // cancelled before worker started processing
+    'failed', // worker failed to start
   ]),
   running: new Set([
     'waiting_tool',
@@ -120,39 +120,39 @@ export const VALID_TRANSITIONS: Readonly<Record<ExecutionStatus, ReadonlySet<Exe
     'cancelled',
   ]),
   waiting_tool: new Set([
-    'running',     // tool responded — resume execution
-    'retrying',    // tool call failed — retry
-    'failed',      // tool timeout / non-retryable error
+    'running', // tool responded — resume execution
+    'retrying', // tool call failed — retry
+    'failed', // tool timeout / non-retryable error
     'cancelled',
     'suspended',
   ]),
   waiting_human: new Set([
-    'running',     // approval granted
-    'cancelled',   // approval denied or timeout
+    'running', // approval granted
+    'cancelled', // approval denied or timeout
     'suspended',
   ]),
   retrying: new Set([
     'retry_scheduled', // backoff delay computed, retry scheduled
-    'failed',          // max retries exceeded
+    'failed', // max retries exceeded
     'cancelled',
   ]),
   retry_scheduled: new Set([
-    'queued',      // re-enqueued after backoff delay
-    'failed',      // max retries exceeded during scheduling
+    'queued', // re-enqueued after backoff delay
+    'failed', // max retries exceeded during scheduling
     'cancelled',
   ]),
   reclaimable: new Set([
-    'retrying',    // reclaimed — will retry
-    'failed',      // max reclaims exceeded
+    'retrying', // reclaimed — will retry
+    'failed', // max reclaims exceeded
     'cancelled',
   ]),
   suspended: new Set([
-    'queued',      // resumed — re-enqueue
+    'queued', // resumed — re-enqueue
     'cancelled',
   ]),
   // Terminal states — no outgoing transitions.
   completed: new Set<ExecutionStatus>(),
-  failed:    new Set<ExecutionStatus>(),
+  failed: new Set<ExecutionStatus>(),
   cancelled: new Set<ExecutionStatus>(),
 };
 
@@ -182,11 +182,7 @@ export function isActiveStatus(status: ExecutionStatus): boolean {
  * These rows are not actively consuming worker capacity.
  */
 export function isBlockedStatus(status: ExecutionStatus): boolean {
-  return (
-    status === 'waiting_tool' ||
-    status === 'waiting_human' ||
-    status === 'suspended'
-  );
+  return status === 'waiting_tool' || status === 'waiting_human' || status === 'suspended';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -206,7 +202,7 @@ export class ExecutionTransitionError extends Error {
   constructor(executionId: string, from: ExecutionStatus, to: ExecutionStatus) {
     super(
       `Invalid execution transition [${executionId}]: ${from} → ${to}. ` +
-      `Valid targets from '${from}': [${[...VALID_TRANSITIONS[from]].join(', ') || 'none'}]`
+        `Valid targets from '${from}': [${[...VALID_TRANSITIONS[from]].join(', ') || 'none'}]`
     );
     this.name = 'ExecutionTransitionError';
     this.from = from;
@@ -229,10 +225,7 @@ export type InvalidTransitionError = ExecutionTransitionError;
  * @example
  *   if (!canTransition(execution.status, 'running')) return;
  */
-export function canTransition(
-  from: ExecutionStatus,
-  to: ExecutionStatus,
-): boolean {
+export function canTransition(from: ExecutionStatus, to: ExecutionStatus): boolean {
   return VALID_TRANSITIONS[from].has(to);
 }
 
@@ -247,7 +240,7 @@ export function canTransition(
 export function assertValidTransition(
   executionId: string,
   from: ExecutionStatus,
-  to: ExecutionStatus,
+  to: ExecutionStatus
 ): void {
   if (!canTransition(from, to)) {
     throw new ExecutionTransitionError(executionId, from, to);
@@ -266,18 +259,18 @@ export function assertValidTransition(
  *   3. Update runtime-worker dispatcher
  */
 export const StepType = {
-  LLM_CALL:      'llm_call',
+  LLM_CALL: 'llm_call',
   TOOL_DISPATCH: 'tool_dispatch',
-  DELEGATION:    'delegation',
-  REASONING:     'reasoning',
-  MEMORY_READ:   'memory_read',
-  MEMORY_WRITE:  'memory_write',
-  EMBEDDING:     'embedding',
-  CHECKPOINT:    'checkpoint',
+  DELEGATION: 'delegation',
+  REASONING: 'reasoning',
+  MEMORY_READ: 'memory_read',
+  MEMORY_WRITE: 'memory_write',
+  EMBEDDING: 'embedding',
+  CHECKPOINT: 'checkpoint',
   APPROVAL_GATE: 'approval_gate',
 } as const;
 
-export type StepType = typeof StepType[keyof typeof StepType];
+export type StepType = (typeof StepType)[keyof typeof StepType];
 export const StepTypeValues = Object.values(StepType) as StepType[];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -285,24 +278,24 @@ export const StepTypeValues = Object.values(StepType) as StepType[];
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const StepStatus = {
-  PENDING:   'pending',
-  RUNNING:   'running',
+  PENDING: 'pending',
+  RUNNING: 'running',
   COMPLETED: 'completed',
-  FAILED:    'failed',
-  SKIPPED:   'skipped',
+  FAILED: 'failed',
+  SKIPPED: 'skipped',
 } as const;
 
-export type StepStatus = typeof StepStatus[keyof typeof StepStatus];
+export type StepStatus = (typeof StepStatus)[keyof typeof StepStatus];
 
 export const VALID_STEP_TRANSITIONS: Readonly<Record<StepStatus, ReadonlySet<StepStatus>>> = {
-  pending:   new Set(['running', 'skipped']),
-  running:   new Set(['completed', 'failed']),
+  pending: new Set(['running', 'skipped']),
+  running: new Set(['completed', 'failed']),
   // retried steps go through: failed → (new row with pending)
   // We create a new step row per retry instead of mutating the failed row.
   // This preserves the full retry history as immutable records.
   completed: new Set<StepStatus>(),
-  failed:    new Set<StepStatus>(),
-  skipped:   new Set<StepStatus>(),
+  failed: new Set<StepStatus>(),
+  skipped: new Set<StepStatus>(),
 };
 
 export type StepTransition = {
@@ -321,14 +314,14 @@ export function canTransitionStep(from: StepStatus, to: StepStatus): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TriggerSource = {
-  API:        'api',
-  SCHEDULE:   'schedule',
-  CHANNEL:    'channel',
+  API: 'api',
+  SCHEDULE: 'schedule',
+  CHANNEL: 'channel',
   DELEGATION: 'delegation',
-  REPLAY:     'replay',
+  REPLAY: 'replay',
 } as const;
 
-export type TriggerSource = typeof TriggerSource[keyof typeof TriggerSource];
+export type TriggerSource = (typeof TriggerSource)[keyof typeof TriggerSource];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DLQ REASON
@@ -336,14 +329,14 @@ export type TriggerSource = typeof TriggerSource[keyof typeof TriggerSource];
 
 export const DlqReason = {
   MAX_RETRIES_EXCEEDED: 'max_retries_exceeded',
-  NON_RETRYABLE_ERROR:  'non_retryable_error',
-  GOVERNANCE_LIMIT:     'governance_limit',
-  TIMEOUT:              'timeout',
-  POISON_MESSAGE:       'poison_message',
-  MANUAL:               'manual',
+  NON_RETRYABLE_ERROR: 'non_retryable_error',
+  GOVERNANCE_LIMIT: 'governance_limit',
+  TIMEOUT: 'timeout',
+  POISON_MESSAGE: 'poison_message',
+  MANUAL: 'manual',
 } as const;
 
-export type DlqReason = typeof DlqReason[keyof typeof DlqReason];
+export type DlqReason = (typeof DlqReason)[keyof typeof DlqReason];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDEMPOTENCY SCOPE
@@ -351,12 +344,12 @@ export type DlqReason = typeof DlqReason[keyof typeof DlqReason];
 
 export const IdempotencyScope = {
   EXECUTION: 'execution',
-  STEP:      'step',
-  TOOL:      'tool',
-  CHANNEL:   'channel',
+  STEP: 'step',
+  TOOL: 'tool',
+  CHANNEL: 'channel',
 } as const;
 
-export type IdempotencyScope = typeof IdempotencyScope[keyof typeof IdempotencyScope];
+export type IdempotencyScope = (typeof IdempotencyScope)[keyof typeof IdempotencyScope];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GOVERNANCE POLICY (runtime value-object)

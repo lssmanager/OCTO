@@ -15,11 +15,7 @@
 //
 // ADR: F0-002 (Provider Abstraction), TASK 10
 
-import type {
-  ExecutionStatus,
-  TriggerSource,
-  DlqReason,
-} from '@octo/contracts';
+import type { ExecutionStatus, TriggerSource, DlqReason } from '@octo/contracts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JOB ENVELOPE
@@ -37,21 +33,21 @@ import type {
  */
 export interface OctoJobPayload<T = Record<string, unknown>> {
   // ── Identity ──────────────────────────────────────────────────────────
-  readonly jobId: string;          // BullMQ job ID (UUID v7)
-  readonly tenantId: string;       // mandatory from C1
-  readonly executionId: string;    // matches executions.id in PostgreSQL
+  readonly jobId: string; // BullMQ job ID (UUID v7)
+  readonly tenantId: string; // mandatory from C1
+  readonly executionId: string; // matches executions.id in PostgreSQL
 
   // ── Observability ───────────────────────────────────────────────────────
-  readonly traceId: string;        // W3C traceparent root
-  readonly runId: string;          // groups all executions in a logical run
+  readonly traceId: string; // W3C traceparent root
+  readonly runId: string; // groups all executions in a logical run
   readonly agentId: string;
 
   // ── Trigger context ───────────────────────────────────────────────────
   readonly triggerSource: TriggerSource;
-  readonly triggerRef?: string;    // message ID, schedule ID, parent execution ID
+  readonly triggerRef?: string; // message ID, schedule ID, parent execution ID
 
   // ── Retry context ───────────────────────────────────────────────────────
-  readonly attempt: number;        // execution-level attempt counter (0-based)
+  readonly attempt: number; // execution-level attempt counter (0-based)
   readonly maxAttempts: number;
 
   // ── Deduplication (TASK 5) ───────────────────────────────────────────────
@@ -72,9 +68,9 @@ export interface OctoJobPayload<T = Record<string, unknown>> {
  * Available inside JobHandler<T> via IJob<T>.meta.
  */
 export interface OctoJobMeta {
-  readonly workerName: string;     // which worker instance picked up this job
-  readonly workerId: string;       // UUID of the worker process
-  readonly pickedUpAt: string;     // ISO 8601
+  readonly workerName: string; // which worker instance picked up this job
+  readonly workerId: string; // UUID of the worker process
+  readonly pickedUpAt: string; // ISO 8601
   readonly queueName: string;
 }
 
@@ -137,8 +133,9 @@ export interface JobResult<TOutput = unknown> {
  *     return { success: true };
  *   };
  */
-export type JobHandler<T = Record<string, unknown>, TOutput = unknown> =
-  (job: IJob<T>) => Promise<JobResult<TOutput>>;
+export type JobHandler<T = Record<string, unknown>, TOutput = unknown> = (
+  job: IJob<T>
+) => Promise<JobResult<TOutput>>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RETRY POLICY
@@ -159,19 +156,19 @@ export interface RetryPolicy {
 
 /** Default retry policy for execution jobs. */
 export const DEFAULT_EXECUTION_RETRY_POLICY: Readonly<RetryPolicy> = {
-  maxAttempts:  3,
-  backoff:      'exponential',
-  delayMs:      2_000,    // 2s base
-  maxDelayMs:   60_000,   // 60s cap
+  maxAttempts: 3,
+  backoff: 'exponential',
+  delayMs: 2_000, // 2s base
+  maxDelayMs: 60_000, // 60s cap
   jitterFactor: 0.2,
 };
 
 /** Default retry policy for tool dispatch jobs. */
 export const DEFAULT_TOOL_RETRY_POLICY: Readonly<RetryPolicy> = {
-  maxAttempts:  5,
-  backoff:      'exponential',
-  delayMs:      1_000,
-  maxDelayMs:   30_000,
+  maxAttempts: 5,
+  backoff: 'exponential',
+  delayMs: 1_000,
+  maxDelayMs: 30_000,
   jitterFactor: 0.1,
 };
 
@@ -224,18 +221,14 @@ export interface IQueue<T = Record<string, unknown>> {
    * Enqueue a single job.
    * Returns the assigned job ID.
    */
-  add(
-    jobName: string,
-    payload: OctoJobPayload<T>,
-    opts?: AddJobOptions,
-  ): Promise<string>;
+  add(jobName: string, payload: OctoJobPayload<T>, opts?: AddJobOptions): Promise<string>;
 
   /**
    * Enqueue multiple jobs atomically.
    * Returns array of job IDs in submission order.
    */
   addBulk(
-    jobs: Array<{ name: string; payload: OctoJobPayload<T>; opts?: AddJobOptions }>,
+    jobs: Array<{ name: string; payload: OctoJobPayload<T>; opts?: AddJobOptions }>
   ): Promise<string[]>;
 
   /** Pause the queue — workers stop picking up new jobs. */
@@ -275,19 +268,19 @@ export interface IQueue<T = Record<string, unknown>> {
 
 export interface WorkerEventMap<T> {
   /** Fired when a job starts processing. */
-  'job:started':   (job: IJob<T>) => void;
+  'job:started': (job: IJob<T>) => void;
   /** Fired when a job completes successfully. */
   'job:completed': (job: IJob<T>, result: JobResult) => void;
   /** Fired when a job fails (may be retried). */
-  'job:failed':    (job: IJob<T>, error: Error) => void;
+  'job:failed': (job: IJob<T>, error: Error) => void;
   /** Fired when a job is moved to the DLQ. */
-  'job:dead':      (job: IJob<T>, reason: DlqReason) => void;
+  'job:dead': (job: IJob<T>, reason: DlqReason) => void;
   /** Fired when the worker is ready to accept jobs. */
-  'worker:ready':  () => void;
+  'worker:ready': () => void;
   /** Fired when the worker has closed gracefully. */
   'worker:closed': () => void;
   /** Fired on worker-level error (Redis disconnect, etc.). */
-  'worker:error':  (error: Error) => void;
+  'worker:error': (error: Error) => void;
 }
 
 /**

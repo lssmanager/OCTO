@@ -33,23 +33,23 @@ export class OtelDrizzleLogger implements Logger {
 
   constructor(dbSystem = 'postgresql', dbName = 'octo') {
     this.dbSystem = dbSystem;
-    this.dbName   = dbName;
+    this.dbName = dbName;
   }
 
   logQuery(query: string, params: unknown[]): void {
     const tracer = getOctoTracer();
-    const span   = tracer.startSpan(
+    const span = tracer.startSpan(
       'db.query',
       {
         kind: SpanKind.CLIENT,
         attributes: {
-          'db.system':     this.dbSystem,
-          'db.name':       this.dbName,
-          'db.statement':  query.substring(0, 1000), // truncate to avoid huge spans
+          'db.system': this.dbSystem,
+          'db.name': this.dbName,
+          'db.statement': query.substring(0, 1000), // truncate to avoid huge spans
           'db.params.count': params.length,
         },
       },
-      context.active(),
+      context.active()
     );
     span.setStatus({ code: SpanStatusCode.OK });
     span.end();
@@ -84,17 +84,17 @@ export function createPostgresInterceptor() {
         {
           kind: SpanKind.CLIENT,
           attributes: {
-            'db.system':    'postgresql',
-            'db.name':      'octo',
+            'db.system': 'postgresql',
+            'db.name': 'octo',
             'db.statement': originalQuery.string.substring(0, 1000),
             'db.params.count': originalQuery.parameters.length,
           },
         },
-        context.active(),
+        context.active()
       );
 
       const originalResolve = originalQuery.resolve;
-      const originalReject  = originalQuery.reject;
+      const originalReject = originalQuery.reject;
 
       originalQuery.resolve = (value: unknown) => {
         span.setStatus({ code: SpanStatusCode.OK });

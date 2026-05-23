@@ -40,7 +40,7 @@ export interface WorkerConfig {
 export function createWorker<T = unknown, R = unknown>(
   name: QueueName | string,
   processor: Processor<T, R>,
-  config: WorkerConfig,
+  config: WorkerConfig
 ): Worker<T, R> {
   const connection = createRedisConnection(config.redisUrl);
   const concurrency = config.concurrency ?? 4;
@@ -54,12 +54,9 @@ export function createWorker<T = unknown, R = unknown>(
   // Activate DLQ handler if a dead letter queue was provided
   let dlqHandler: DlqHandler | undefined;
   if (config.deadLetterQueue) {
-    dlqHandler = new DlqHandler(
-      name,
-      config.redisUrl,
-      config.deadLetterQueue,
-      { onDeadJob: config.onDeadJob },
-    );
+    dlqHandler = new DlqHandler(name, config.redisUrl, config.deadLetterQueue, {
+      onDeadJob: config.onDeadJob,
+    });
   }
 
   // Graceful shutdown — drain in-flight jobs before process exit

@@ -15,16 +15,16 @@ import { casReclaim } from './cas-reclaim';
 import { reclaimedCounter, alreadyTakenCounter, reclaimErrorCounter } from './metrics';
 
 interface LoopConfig {
-  intervalMs:     number;
+  intervalMs: number;
   leaseTimeoutMs: number;
 }
 
 let timer: NodeJS.Timeout | null = null;
 
 export async function startReclaimLoop(
-  db:       NodePgDatabase,
+  db: NodePgDatabase,
   redisUrl: string,
-  config:   LoopConfig,
+  config: LoopConfig
 ): Promise<void> {
   const executionQueue = createQueue('execution', { redisUrl });
 
@@ -32,19 +32,14 @@ export async function startReclaimLoop(
     try {
       const zombies = await db
         .select({
-          id:      executions.id,
+          id: executions.id,
           attempt: executions.attempt,
-          task:    executions.task,
+          task: executions.task,
           // Select trace fields stored in the task payload for context restoration
           traceId: executions.traceId,
         })
         .from(executions)
-        .where(
-          and(
-            eq(executions.status, 'running'),
-            lt(executions.leaseExpiresAt, sql`NOW()`),
-          ),
-        );
+        .where(and(eq(executions.status, 'running'), lt(executions.leaseExpiresAt, sql`NOW()`)));
 
       for (const zombie of zombies) {
         try {
@@ -61,35 +56,36 @@ export async function startReclaimLoop(
               'execute',
               { executionId: zombie.id, task: zombie.task },
               {
-                jobId:    `reclaim:${zombie.id}:${Date.now()}`,
+                jobId: `reclaim:${zombie.id}:${Date.now()}`,
                 attempts: 3,
-              },
+              }
             );
 
-            console.log(JSON.stringify({
-              msg:          'execution_reclaimed',
-              executionId:  zombie.id,
-              reclaimCount: (zombie.attempt ?? 0) + 1,
-            }));
-
+            console.log(
+              JSON.stringify({
+                msg: 'execution_reclaimed',
+                executionId: zombie.id,
+                reclaimCount: (zombie.attempt ?? 0) + 1,
+              })
+            );
           } else if (outcome === 'already_taken') {
             alreadyTakenCounter.add(1, { executionId: zombie.id });
           }
-
         } catch (err: unknown) {
           reclaimErrorCounter.add(1, { executionId: zombie.id });
-          console.error(JSON.stringify({
-            msg:         'reclaim_error',
-            executionId: zombie.id,
-            error:       String(err),
-          }));
+          console.error(
+            JSON.stringify({
+              msg: 'reclaim_error',
+              executionId: zombie.id,
+              error: String(err),
+            })
+          );
         }
       }
 
       if (zombies.length > 0) {
         console.log(JSON.stringify({ msg: 'reclaim_tick_done', scanned: zombies.length }));
       }
-
     } catch (err: unknown) {
       console.error(JSON.stringify({ msg: 'reclaim_tick_error', error: String(err) }));
     }
@@ -101,5 +97,8 @@ export async function startReclaimLoop(
 }
 
 export async function stopReclaimLoop(): Promise<void> {
-  if (timer) { clearTimeout(timer); timer = null; }
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
 }

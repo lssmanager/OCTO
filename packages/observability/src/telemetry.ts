@@ -1,10 +1,7 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
-import {
-  ATTR_SERVICE_NAME,
-  ATTR_SERVICE_VERSION,
-} from '@opentelemetry/semantic-conventions';
+import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 
 export interface TelemetryConfig {
@@ -49,4 +46,3 @@ export function bootstrapTelemetry(config: TelemetryConfig): NodeSDK {
 
   return sdkInstance;
 }
-

@@ -33,7 +33,7 @@ export class FastifyBullBoardPlugin {
 
     // PATCH 3: names from MONITORED_QUEUES registry — no hardcoded strings.
     const queues = MONITORED_QUEUES.map(
-      (name) => new BullMQAdapter(new Queue(name, { connection })),
+      (name) => new BullMQAdapter(new Queue(name, { connection }))
     );
 
     const serverAdapter = new BullBoardFastifyAdapter();
@@ -42,25 +42,21 @@ export class FastifyBullBoardPlugin {
     createBullBoard({ queues, serverAdapter });
 
     // Access the raw Fastify instance from the NestJS adapter
-     
+
     const fastifyInstance = app.getHttpAdapter().getInstance() as any;
 
     // Register the bull-board UI as a Fastify plugin
-    await fastifyInstance.register(
-       
-      serverAdapter.registerPlugin(),
-      {
-        prefix: BULLBOARD_BASEPATH,
-        logLevel: 'warn',
-      },
-    );
+    await fastifyInstance.register(serverAdapter.registerPlugin(), {
+      prefix: BULLBOARD_BASEPATH,
+      logLevel: 'warn',
+    });
 
     // Enforce X-Internal-Secret on all BullBoard routes outside development
     fastifyInstance.addHook(
       'preHandler',
       async (
         request: { url: string; headers: Record<string, string | undefined> },
-        reply: { code: (n: number) => { send: (b: unknown) => void } },
+        reply: { code: (n: number) => { send: (b: unknown) => void } }
       ) => {
         if (!request.url.startsWith(BULLBOARD_BASEPATH)) return;
         if (process.env['NODE_ENV'] === 'development') return;
@@ -70,7 +66,7 @@ export class FastifyBullBoardPlugin {
         if (!expected || secret !== expected) {
           reply.code(401).send({ message: 'Invalid internal secret' });
         }
-      },
+      }
     );
   }
 }

@@ -20,16 +20,16 @@
  */
 
 export const HEARTBEAT_INTERVAL_MS = 30_000;
-export const LEASE_DURATION_SEC    = 90;
+export const LEASE_DURATION_SEC = 90;
 
 export class HeartbeatLostError extends Error {
   constructor(
     public readonly executionId: string,
-    public readonly workerId:    string,
+    public readonly workerId: string
   ) {
     super(
       `[heartbeat] Execution ${executionId} reclaimed while ` +
-      `worker ${workerId} was running it. Worker must abort.`,
+        `worker ${workerId} was running it. Worker must abort.`
     );
     this.name = 'HeartbeatLostError';
   }
@@ -56,9 +56,9 @@ export class HeartbeatRefresher {
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
-    private readonly deps:        HeartbeatRefresherDeps,
+    private readonly deps: HeartbeatRefresherDeps,
     private readonly executionId: string,
-    private readonly workerId:    string,
+    private readonly workerId: string
   ) {}
 
   start(): void {
