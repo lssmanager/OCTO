@@ -27,7 +27,7 @@
  */
 
 export const RECONCILER_INTERVAL_MS = 60_000;
-export const RECONCILER_BATCH_SIZE  = 50;
+export const RECONCILER_BATCH_SIZE = 50;
 
 export type ReconcilerCase =
   | 'db-running-queue-missing'
@@ -35,21 +35,23 @@ export type ReconcilerCase =
   | 'stuck-retrying';
 
 export interface ReconcilerOutcome {
-  readonly case:        ReconcilerCase;
+  readonly case: ReconcilerCase;
   readonly executionId: string;
-  readonly action:      're-enqueued' | 'moved-to-dlq' | 'marked-failed' | 'alerted';
-  readonly resolvedAt:  Date;
+  readonly action: 're-enqueued' | 'moved-to-dlq' | 'marked-failed' | 'alerted';
+  readonly resolvedAt: Date;
 }
 
 export interface ReconcilerDeps {
   /** Returns executions in 'running'/'retrying' with no corresponding active BullMQ job. */
-  findOrphaned(): Promise<Array<{
-    id:          string;
-    status:      string;
-    attempt:     number;
-    maxAttempts: number;
-    traceId:     string;
-  }>>;
+  findOrphaned(): Promise<
+    Array<{
+      id: string;
+      status: string;
+      attempt: number;
+      maxAttempts: number;
+      traceId: string;
+    }>
+  >;
 
   /** Returns BullMQ job IDs ACTIVE but with no matching execution row in Postgres. */
   findGhostJobs(): Promise<Array<{ jobId: string; queueName: string }>>;
@@ -74,13 +76,26 @@ export async function runReconciliation(deps: ReconcilerDeps): Promise<Reconcile
     try {
       if (exec.status === 'retrying' && exec.attempt >= exec.maxAttempts) {
         await deps.markFailed(exec.id, `max_attempts_exceeded:${exec.attempt}`);
-        outcomes.push({ case: 'stuck-retrying', executionId: exec.id, action: 'marked-failed', resolvedAt: now });
+        outcomes.push({
+          case: 'stuck-retrying',
+          executionId: exec.id,
+          action: 'marked-failed',
+          resolvedAt: now,
+        });
       } else {
         await deps.reEnqueue(exec.id, exec.traceId);
-        outcomes.push({ case: 'db-running-queue-missing', executionId: exec.id, action: 're-enqueued', resolvedAt: now });
+        outcomes.push({
+          case: 'db-running-queue-missing',
+          executionId: exec.id,
+          action: 're-enqueued',
+          resolvedAt: now,
+        });
       }
     } catch (err) {
-      console.error('[reconciler] failed to reconcile orphaned execution', { executionId: exec.id, err });
+      console.error('[reconciler] failed to reconcile orphaned execution', {
+        executionId: exec.id,
+        err,
+      });
     }
   }
 
@@ -89,7 +104,12 @@ export async function runReconciliation(deps: ReconcilerDeps): Promise<Reconcile
   for (const ghost of ghosts) {
     try {
       await deps.moveToDlq(ghost.jobId, ghost.queueName, 'execution_row_missing_from_db');
-      outcomes.push({ case: 'queue-active-db-missing', executionId: ghost.jobId, action: 'moved-to-dlq', resolvedAt: now });
+      outcomes.push({
+        case: 'queue-active-db-missing',
+        executionId: ghost.jobId,
+        action: 'moved-to-dlq',
+        resolvedAt: now,
+      });
     } catch (err) {
       console.error('[reconciler] failed to process ghost job', { jobId: ghost.jobId, err });
     }

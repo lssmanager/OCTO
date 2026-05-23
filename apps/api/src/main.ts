@@ -13,7 +13,8 @@ const config = loadApiConfig();
 bootstrapTelemetry({
   serviceName: 'api',
   serviceVersion: config.BUILD_VERSION,
-  otlpEndpoint: process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'http://otel-collector:4318/v1/traces',
+  otlpEndpoint:
+    process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'http://otel-collector:4318/v1/traces',
   enablePrometheus: true,
   prometheusPort: 9464,
 });
@@ -69,7 +70,7 @@ function setupShutdown(): void {
 async function bootstrap(): Promise<void> {
   app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: false }),
+    new FastifyAdapter({ logger: false })
   );
 
   app.enableCors({

@@ -1,9 +1,9 @@
 {
   "invocationId": "01932b4c-1234-7abc-8def-000000000020",
-  "toolName":     "web_search",
-  "executionId":  "01932b4c-1234-7abc-8def-000000000001",
-  "agentId":      "01932b4c-1234-7abc-8def-000000000002",
-  "traceId":      "4bf92f3577b34da6a3ce929d0e0e4736",
-  "traceparent":  "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+  "toolName": "web_search",
+  "executionId": "01932b4c-1234-7abc-8def-000000000001",
+  "agentId": "01932b4c-1234-7abc-8def-000000000002",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
   "input": { "query": "OCTO distributed execution", "maxResults": 5 }
 }

@@ -4,7 +4,8 @@ module.exports = {
     {
       name: 'runtime-state-no-illegal-imports',
       severity: 'error',
-      comment: 'runtime-state only imports from @octo/contracts, @octo/database, @octo/observability',
+      comment:
+        'runtime-state only imports from @octo/contracts, @octo/database, @octo/observability',
       from: { path: '^src/' },
       to: {
         pathNot: [

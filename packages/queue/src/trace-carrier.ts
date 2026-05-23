@@ -18,7 +18,7 @@
 
 export interface TraceCarrier {
   readonly traceparent?: string; // W3C traceparent: '00-traceId-spanId-flags'
-  readonly tracestate?:  string; // W3C tracestate: vendor-specific
+  readonly tracestate?: string; // W3C tracestate: vendor-specific
 }
 
 /**
@@ -26,14 +26,14 @@ export interface TraceCarrier {
  * Prefer injectOtelContext() from otel-propagation.ts for new code.
  */
 export function injectTraceContext<T extends Record<string, unknown>>(
-  payload:     T,
+  payload: T,
   traceparent?: string,
-  tracestate?:  string,
+  tracestate?: string
 ): T & TraceCarrier {
   return {
     ...payload,
     ...(traceparent ? { traceparent } : {}),
-    ...(tracestate  ? { tracestate  } : {}),
+    ...(tracestate ? { tracestate } : {}),
   };
 }
 
@@ -44,6 +44,6 @@ export function injectTraceContext<T extends Record<string, unknown>>(
 export function extractTraceContext(jobData: Record<string, unknown>): TraceCarrier {
   return {
     traceparent: typeof jobData['traceparent'] === 'string' ? jobData['traceparent'] : undefined,
-    tracestate:  typeof jobData['tracestate']  === 'string' ? jobData['tracestate']  : undefined,
+    tracestate: typeof jobData['tracestate'] === 'string' ? jobData['tracestate'] : undefined,
   };
 }

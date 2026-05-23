@@ -39,15 +39,15 @@ import { assertValidTransition, ExecutionStatus, TERMINAL_STATUSES } from './tra
 import { ConcurrentTransitionError } from './errors';
 
 export interface TransitionOpts {
-  readonly workerId?:     string;
-  readonly result?:       unknown;
-  readonly error?:        unknown;
-  readonly checkpoint?:   unknown;
-  readonly stepName?:     string;
-  readonly stepPayload?:  unknown;
+  readonly workerId?: string;
+  readonly result?: unknown;
+  readonly error?: unknown;
+  readonly checkpoint?: unknown;
+  readonly stepName?: string;
+  readonly stepPayload?: unknown;
   /** Heartbeat + lease update — set true when acquiring execution. */
   readonly acquireLease?: boolean;
-  readonly leaseSec?:     number; // default 90
+  readonly leaseSec?: number; // default 90
 }
 
 export interface StateServiceDeps {
@@ -69,18 +69,18 @@ export interface StateServiceDeps {
    * Returns false → CAS lost (another worker already changed the status)
    */
   updateExecutionStatus(
-    tx:          unknown,
+    tx: unknown,
     executionId: string,
-    from:        ExecutionStatus,
-    to:          ExecutionStatus,
-    opts:        TransitionOpts,
+    from: ExecutionStatus,
+    to: ExecutionStatus,
+    opts: TransitionOpts
   ): Promise<boolean>;
 
   appendExecutionEvent(
-    tx:          unknown,
+    tx: unknown,
     executionId: string,
-    eventType:   string,
-    payload:     unknown,
+    eventType: string,
+    payload: unknown
   ): Promise<void>;
 }
 
@@ -112,11 +112,11 @@ export class ExecutionStateService {
    * @throws ConcurrentTransitionError   if CAS lost (another worker won)
    */
   async transition(
-    tx:          unknown,
+    tx: unknown,
     executionId: string,
-    from:        ExecutionStatus,
-    to:          ExecutionStatus,
-    opts:        TransitionOpts = {},
+    from: ExecutionStatus,
+    to: ExecutionStatus,
+    opts: TransitionOpts = {}
   ): Promise<void> {
     // 1. Idempotency: already at target state (replay guard for double-delivery)
     if (from === to) return;
@@ -137,12 +137,12 @@ export class ExecutionStateService {
     await this.deps.appendExecutionEvent(tx, executionId, `execution.${from}_to_${to}`, {
       from,
       to,
-      workerId:   opts.workerId,
-      stepName:   opts.stepName,
-      hasError:   !!opts.error,
-      hasResult:  !!opts.result,
+      workerId: opts.workerId,
+      stepName: opts.stepName,
+      hasError: !!opts.error,
+      hasResult: !!opts.result,
       checkpoint: !!opts.checkpoint,
-      timestamp:  new Date().toISOString(),
+      timestamp: new Date().toISOString(),
     });
   }
 

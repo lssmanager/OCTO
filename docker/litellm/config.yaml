@@ -1,5 +1,5 @@
 # LiteLLM Proxy Configuration — OCTO F0
-# 
+#
 # All LLM providers are configured via environment variables.
 # This file defines the proxy behavior and model routing.
 #

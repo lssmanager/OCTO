@@ -23,22 +23,22 @@ import type { OtelTraceFields } from '@octo/queue';
 export type ReclaimOutcome = 'reclaimed' | 'already_taken' | 'not_found';
 
 export async function casReclaim(
-  db:          NodePgDatabase,
+  db: NodePgDatabase,
   executionId: string,
-  traceFields?: OtelTraceFields,
+  traceFields?: OtelTraceFields
 ): Promise<ReclaimOutcome> {
   // Restore trace context from original job payload (if available)
   const parentCtx = traceFields ? extractOtelContext(traceFields) : context.active();
-  const tracer    = trace.getTracer('octo.reclaimer', '0.1.0');
+  const tracer = trace.getTracer('octo.reclaimer', '0.1.0');
 
   return tracer.startActiveSpan(
     'execution.reclaim',
     {
       kind: SpanKind.INTERNAL,
       attributes: {
-        'execution.id':         executionId,
-        'messaging.system':     'bullmq',
-        'octo.correlation.id':  traceFields?.correlationId ?? 'none',
+        'execution.id': executionId,
+        'messaging.system': 'bullmq',
+        'octo.correlation.id': traceFields?.correlationId ?? 'none',
       },
     },
     parentCtx,
@@ -61,18 +61,18 @@ export async function casReclaim(
         const result = await db
           .update(executions)
           .set({
-            status:         'retrying',
+            status: 'retrying',
             leaseExpiresAt: null,
-            reclaimedAt:    sql`NOW()`,
-            reclaimCount:   sql`reclaim_count + 1`,
-            updatedAt:      new Date(),
+            reclaimedAt: sql`NOW()`,
+            reclaimCount: sql`reclaim_count + 1`,
+            updatedAt: new Date(),
           })
           .where(
             and(
               eq(executions.id, executionId),
               eq(executions.status, 'running'),
-              lt(executions.leaseExpiresAt, sql`NOW()`),
-            ),
+              lt(executions.leaseExpiresAt, sql`NOW()`)
+            )
           )
           .returning({ id: executions.id });
 
@@ -80,7 +80,6 @@ export async function casReclaim(
         span.setAttribute('reclaim.outcome', outcome);
         span.setStatus({ code: SpanStatusCode.OK });
         return outcome;
-
       } catch (err) {
         span.recordException(err as Error);
         span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
@@ -88,6 +87,6 @@ export async function casReclaim(
       } finally {
         span.end();
       }
-    },
+    }
   );
 }

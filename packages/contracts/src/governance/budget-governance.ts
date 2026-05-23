@@ -94,7 +94,7 @@ export interface ICostTracking {
     agentId?: string;
     runId?: string;
     from?: string; // ISO 8601
-    to?: string;   // ISO 8601
+    to?: string; // ISO 8601
   }): Promise<{
     totalUsd: number;
     totalTokens: number;
@@ -343,7 +343,11 @@ export interface ComparisonReport {
 
 export interface IEvalRunner {
   run(bundle: IEvalBundle, options?: { parallelism?: number }): Promise<EvalRunResult>;
-  compare(bundleId: string, baselineRunId: string, candidateRunId: string): Promise<ComparisonReport>;
+  compare(
+    bundleId: string,
+    baselineRunId: string,
+    candidateRunId: string
+  ): Promise<ComparisonReport>;
   getRunResult(runId: string): Promise<EvalRunResult | null>;
   listRunResults(bundleId: string): Promise<EvalRunResult[]>;
 }

@@ -18,11 +18,7 @@ export default async function HealthPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ServiceDetailCard
-          service="api"
-          label="Control Plane (NestJS API)"
-          data={health.api}
-        />
+        <ServiceDetailCard service="api" label="Control Plane (NestJS API)" data={health.api} />
         <ServiceDetailCard
           service="runtime"
           label="Execution Plane (Runtime Worker)"

@@ -35,12 +35,12 @@ export async function updateExecutionStatus(
   id: string,
   status: NewExecution['status'],
   extra?: Partial<NewExecution>,
-  skipFsmGuard?: true,
+  skipFsmGuard?: true
 ) {
   if (!skipFsmGuard) {
     throw new Error(
       'updateExecutionStatus called without skipFsmGuard=true. ' +
-      'Use ExecutionStateService.transition() for all status changes.',
+        'Use ExecutionStateService.transition() for all status changes.'
     );
   }
   const db = getDb();
@@ -61,9 +61,6 @@ export async function updateExecutionStatus(
  * Uses updateExecutionStatus with skipFsmGuard=true because this is
  * invoked by the FSM-authorised path through ExecutionStateService.
  */
-export async function saveCheckpoint(
-  id: string,
-  checkpoint: Record<string, unknown>,
-) {
+export async function saveCheckpoint(id: string, checkpoint: Record<string, unknown>) {
   return updateExecutionStatus(id, 'suspended', { checkpoint }, true);
 }

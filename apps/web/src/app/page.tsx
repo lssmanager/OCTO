@@ -8,8 +8,7 @@ export const revalidate = 30;
 export default async function StatusPage() {
   const health = await getSystemHealth();
 
-  const overallOk =
-    health.api.status === 'ok' && health.runtime.status === 'ok';
+  const overallOk = health.api.status === 'ok' && health.runtime.status === 'ok';
 
   return (
     <div className="space-y-6">
@@ -17,20 +16,14 @@ export default async function StatusPage() {
       <div
         className="flex items-center gap-3 px-4 py-3 rounded-lg border"
         style={{
-          borderColor: overallOk
-            ? 'var(--color-success)'
-            : 'var(--color-error)',
-          backgroundColor: overallOk
-            ? 'rgba(63,185,80,0.08)'
-            : 'rgba(248,81,73,0.08)',
+          borderColor: overallOk ? 'var(--color-success)' : 'var(--color-error)',
+          backgroundColor: overallOk ? 'rgba(63,185,80,0.08)' : 'rgba(248,81,73,0.08)',
         }}
       >
         <span
           className="inline-block w-2.5 h-2.5 rounded-full animate-pulse"
           style={{
-            backgroundColor: overallOk
-              ? 'var(--color-success)'
-              : 'var(--color-error)',
+            backgroundColor: overallOk ? 'var(--color-success)' : 'var(--color-error)',
           }}
         />
         <span className="font-semibold text-sm tracking-wide uppercase">

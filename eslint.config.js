@@ -78,11 +78,7 @@ export default [
     settings: {
       // Only evaluate imports that are internal workspace packages (@octo/*)
       // or relative paths. External node_modules are ignored by the plugin.
-      'boundaries/include-paths': [
-        '@octo/*',
-        './*/src/**',
-        '../*/src/**',
-      ],
+      'boundaries/include-paths': ['@octo/*', './*/src/**', '../*/src/**'],
       'boundaries/elements': [
         {
           type: 'leaf',
@@ -125,11 +121,7 @@ export default [
           capture: ['app'],
         },
       ],
-      'boundaries/ignore': [
-        '**/*.d.ts',
-        '**/dist/**',
-        '**/node_modules/**',
-      ],
+      'boundaries/ignore': ['**/*.d.ts', '**/dist/**', '**/node_modules/**'],
     },
     rules: {
       // Enforce the internal DAG topology for all @octo/* cross-package imports
@@ -139,21 +131,21 @@ export default [
           default: 'disallow',
           rules: [
             // [R6] leaf → nothing internal
-            { from: 'leaf',      allow: [] },
+            { from: 'leaf', allow: [] },
             // infra → leaf only
-            { from: 'infra',     allow: ['leaf'] },
+            { from: 'infra', allow: ['leaf'] },
             // [R5] sdk: leaf + infra (bullmq via @octo/queue only)
-            { from: 'sdk',       allow: ['leaf', 'infra'] },
+            { from: 'sdk', allow: ['leaf', 'infra'] },
             // ui → leaf only
-            { from: 'ui',        allow: ['leaf'] },
+            { from: 'ui', allow: ['leaf'] },
             // [R1][R2][R3] frontend: leaf + sdk + ui (NOT infra)
-            { from: 'frontend',  allow: ['leaf', 'sdk', 'ui'] },
+            { from: 'frontend', allow: ['leaf', 'sdk', 'ui'] },
             // api → full internal stack
-            { from: 'api',       allow: ['leaf', 'infra', 'sdk', 'ui'] },
+            { from: 'api', allow: ['leaf', 'infra', 'sdk', 'ui'] },
             // [R4] reclaimer → leaf + infra only (no @nestjs/* = no sdk)
             { from: 'reclaimer', allow: ['leaf', 'infra'] },
             // [R7] workers → leaf + infra + sdk (adapter-only, no UI)
-            { from: 'worker',    allow: ['leaf', 'infra', 'sdk'] },
+            { from: 'worker', allow: ['leaf', 'infra', 'sdk'] },
           ],
         },
       ],

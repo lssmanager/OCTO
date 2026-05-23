@@ -30,62 +30,62 @@ export class HealthWorker implements OnModuleInit, OnModuleDestroy {
       QUEUE_NAMES.HEALTH,
       async (job: Job<HealthJobData>) => {
         this.logger.info({
-          event:        'health_job_processed',
-          trace_id:     'job',
-          worker_id:    'health-worker',
+          event: 'health_job_processed',
+          trace_id: 'job',
+          worker_id: 'health-worker',
           execution_id: job.id,
-          job_data:     job.data,
-          msg:          'Health job processed',
+          job_data: job.data,
+          msg: 'Health job processed',
         });
         return { status: 'ok', processedAt: new Date().toISOString() };
       },
-      { redisUrl, concurrency },
+      { redisUrl, concurrency }
     );
 
     this.worker.on('failed', (job: Job<HealthJobData> | undefined, err: Error) => {
       this.logger.error({
-        event:        'health_job_failed',
-        trace_id:     'job',
-        worker_id:    'health-worker',
+        event: 'health_job_failed',
+        trace_id: 'job',
+        worker_id: 'health-worker',
         execution_id: job?.id,
-        error:        err.message,
-        stack:        err.stack,
-        msg:          'Health job failed',
+        error: err.message,
+        stack: err.stack,
+        msg: 'Health job failed',
       });
     });
 
     this.worker.on('error', (err: Error) => {
       this.logger.error({
-        event:     'health_worker_error',
-        trace_id:  'system',
+        event: 'health_worker_error',
+        trace_id: 'system',
         worker_id: 'health-worker',
-        error:     err.message,
-        msg:       'Health worker error',
+        error: err.message,
+        msg: 'Health worker error',
       });
     });
 
     this.logger.info({
-      event:       'health_worker_started',
-      trace_id:    'bootstrap',
-      worker_id:   'health-worker',
+      event: 'health_worker_started',
+      trace_id: 'bootstrap',
+      worker_id: 'health-worker',
       concurrency,
-      msg:         `Health worker started (concurrency=${concurrency})`,
+      msg: `Health worker started (concurrency=${concurrency})`,
     });
   }
 
   async onModuleDestroy(): Promise<void> {
     this.logger.info({
-      event:     'health_worker_closing',
-      trace_id:  'shutdown',
+      event: 'health_worker_closing',
+      trace_id: 'shutdown',
       worker_id: 'health-worker',
-      msg:       'Closing health worker (graceful shutdown)',
+      msg: 'Closing health worker (graceful shutdown)',
     });
     await this.worker.close();
     this.logger.info({
-      event:     'health_worker_closed',
-      trace_id:  'shutdown',
+      event: 'health_worker_closed',
+      trace_id: 'shutdown',
       worker_id: 'health-worker',
-      msg:       'Health worker closed',
+      msg: 'Health worker closed',
     });
   }
 }

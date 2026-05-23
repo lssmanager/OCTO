@@ -88,7 +88,7 @@ export interface OctoEvent<T = unknown> {
 export function createEvent<T>(
   type: OctoEventType,
   payload: T,
-  metadata: Omit<EventMetadata, 'timestamp' | 'version'>,
+  metadata: Omit<EventMetadata, 'timestamp' | 'version'>
 ): OctoEvent<T> {
   return {
     id: randomUUID(),
@@ -131,8 +131,8 @@ export type OtelCarrier = Record<string, string>;
  */
 export function injectOtelContext(): OtelCarrier {
   try {
-     
-    const { context, propagation } = require('@opentelemetry/api') as typeof import('@opentelemetry/api');
+    const { context, propagation } =
+      require('@opentelemetry/api') as typeof import('@opentelemetry/api');
     const carrier: OtelCarrier = {};
     propagation.inject(context.active(), carrier);
     return carrier;
@@ -148,11 +148,10 @@ export function injectOtelContext(): OtelCarrier {
  */
 export function extractOtelContext(carrier: OtelCarrier): import('@opentelemetry/api').Context {
   try {
-     
-    const { context, propagation } = require('@opentelemetry/api') as typeof import('@opentelemetry/api');
+    const { context, propagation } =
+      require('@opentelemetry/api') as typeof import('@opentelemetry/api');
     return propagation.extract(context.active(), carrier);
   } catch {
-     
     const { context } = require('@opentelemetry/api') as typeof import('@opentelemetry/api');
     return context.active();
   }

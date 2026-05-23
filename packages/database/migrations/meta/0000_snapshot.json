@@ -126,12 +126,8 @@
           "name": "agents_parent_id_agents_id_fk",
           "tableFrom": "agents",
           "tableTo": "agents",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -492,12 +488,8 @@
           "name": "executions_agent_id_agents_id_fk",
           "tableFrom": "executions",
           "tableTo": "agents",
-          "columnsFrom": [
-            "agent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["agent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -708,12 +700,8 @@
           "name": "execution_steps_execution_id_executions_id_fk",
           "tableFrom": "execution_steps",
           "tableTo": "executions",
-          "columnsFrom": [
-            "execution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["execution_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -852,12 +840,8 @@
           "name": "execution_checkpoints_execution_id_executions_id_fk",
           "tableFrom": "execution_checkpoints",
           "tableTo": "executions",
-          "columnsFrom": [
-            "execution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["execution_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1069,12 +1053,8 @@
           "name": "execution_events_execution_id_executions_id_fk",
           "tableFrom": "execution_events",
           "tableTo": "executions",
-          "columnsFrom": [
-            "execution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["execution_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1311,12 +1291,8 @@
           "name": "execution_dlq_execution_id_executions_id_fk",
           "tableFrom": "execution_dlq",
           "tableTo": "executions",
-          "columnsFrom": [
-            "execution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["execution_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1655,12 +1631,8 @@
           "name": "tool_invocations_execution_id_executions_id_fk",
           "tableFrom": "tool_invocations",
           "tableTo": "executions",
-          "columnsFrom": [
-            "execution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["execution_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1668,12 +1640,8 @@
           "name": "tool_invocations_step_id_execution_steps_id_fk",
           "tableFrom": "tool_invocations",
           "tableTo": "execution_steps",
-          "columnsFrom": [
-            "step_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["step_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1689,12 +1657,7 @@
     "public.agent_status": {
       "name": "agent_status",
       "schema": "public",
-      "values": [
-        "active",
-        "inactive",
-        "suspended",
-        "error"
-      ]
+      "values": ["active", "inactive", "suspended", "error"]
     },
     "public.execution_status": {
       "name": "execution_status",
@@ -1715,24 +1678,12 @@
     "public.trigger_source": {
       "name": "trigger_source",
       "schema": "public",
-      "values": [
-        "api",
-        "schedule",
-        "channel",
-        "delegation",
-        "replay"
-      ]
+      "values": ["api", "schedule", "channel", "delegation", "replay"]
     },
     "public.step_status": {
       "name": "step_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "running",
-        "completed",
-        "failed",
-        "skipped"
-      ]
+      "values": ["pending", "running", "completed", "failed", "skipped"]
     },
     "public.step_type": {
       "name": "step_type",
@@ -1764,23 +1715,12 @@
     "public.idempotency_key_scope": {
       "name": "idempotency_key_scope",
       "schema": "public",
-      "values": [
-        "execution",
-        "step",
-        "tool",
-        "channel"
-      ]
+      "values": ["execution", "step", "tool", "channel"]
     },
     "public.tool_invocation_status": {
       "name": "tool_invocation_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "running",
-        "completed",
-        "failed",
-        "timeout"
-      ]
+      "values": ["pending", "running", "completed", "failed", "timeout"]
     }
   },
   "schemas": {},

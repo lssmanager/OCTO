@@ -15,53 +15,43 @@
 //
 // ADR: F0-015 (Observability), F0-007 (Replayability)
 
-import {
-  pgTable,
-  text,
-  timestamp,
-  jsonb,
-  bigint,
-  index,
-} from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, jsonb, bigint, index } from 'drizzle-orm/pg-core';
 import { executions } from './executions';
 
 export const executionEvents = pgTable(
   'execution_events',
   {
-    id: bigint('id', { mode: 'bigint' })
-      .primaryKey()
-      .generatedAlwaysAsIdentity(),
+    id: bigint('id', { mode: 'bigint' }).primaryKey().generatedAlwaysAsIdentity(),
 
     // Nullable — supports system-level events not tied to a specific execution
     // (worker health changes, governance alerts, budget warnings)
-    executionId: text('execution_id')
-      .references(() => executions.id),
+    executionId: text('execution_id').references(() => executions.id),
 
     // ── OctoEvent envelope fields (denormalized for fast filtering) ───────────
     tenantId: text('tenant_id').notNull(),
-    traceId:  text('trace_id').notNull(),
-    runId:    text('run_id').notNull(),
-    agentId:  text('agent_id'),
+    traceId: text('trace_id').notNull(),
+    runId: text('run_id').notNull(),
+    agentId: text('agent_id'),
     // Which service emitted this event (e.g. 'api', 'runtime-worker')
-    source:   text('source').notNull(),
+    source: text('source').notNull(),
 
     // ── Event data ────────────────────────────────────────────────────────────
-    type:     text('type').notNull(),         // OctoEventType string
-    payload:  jsonb('payload').notNull(),
-    metadata: jsonb('metadata').notNull(),    // full OctoEvent<T>.metadata blob
+    type: text('type').notNull(), // OctoEventType string
+    payload: jsonb('payload').notNull(),
+    metadata: jsonb('metadata').notNull(), // full OctoEvent<T>.metadata blob
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (t) => ({
-    executionIdx:     index('exec_events_execution_id_idx').on(t.executionId),
-    tenantIdx:        index('exec_events_tenant_id_idx').on(t.tenantId),
-    typeIdx:          index('exec_events_type_idx').on(t.type),
-    traceIdx:         index('exec_events_trace_id_idx').on(t.traceId),
-    runIdIdx:         index('exec_events_run_id_idx').on(t.runId),
-    createdIdx:       index('exec_events_created_at_idx').on(t.createdAt),
+    executionIdx: index('exec_events_execution_id_idx').on(t.executionId),
+    tenantIdx: index('exec_events_tenant_id_idx').on(t.tenantId),
+    typeIdx: index('exec_events_type_idx').on(t.type),
+    traceIdx: index('exec_events_trace_id_idx').on(t.traceId),
+    runIdIdx: index('exec_events_run_id_idx').on(t.runId),
+    createdIdx: index('exec_events_created_at_idx').on(t.createdAt),
     tenantCreatedIdx: index('exec_events_tenant_created_at_idx').on(t.tenantId, t.createdAt),
-  }),
+  })
 );
 
-export type ExecutionEvent    = typeof executionEvents.$inferSelect;
+export type ExecutionEvent = typeof executionEvents.$inferSelect;
 export type NewExecutionEvent = typeof executionEvents.$inferInsert;

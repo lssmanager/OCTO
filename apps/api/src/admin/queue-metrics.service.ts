@@ -42,10 +42,7 @@ export class QueueMetricsService implements OnModuleDestroy {
     // PATCH 3: names from registry — no magic strings.
     // All Queue instances share the same IORedis connection.
     this.queues = new Map(
-      MONITORED_QUEUES.map((name) => [
-        name,
-        new Queue(name, { connection: this.connection }),
-      ]),
+      MONITORED_QUEUES.map((name) => [name, new Queue(name, { connection: this.connection })])
     );
   }
 
@@ -59,19 +56,19 @@ export class QueueMetricsService implements OnModuleDestroy {
           'completed',
           'failed',
           'delayed',
-          'paused',
+          'paused'
         );
         return {
-          queue:     name,
-          waiting:   counts['waiting']   ?? 0,
-          active:    counts['active']    ?? 0,
+          queue: name,
+          waiting: counts['waiting'] ?? 0,
+          active: counts['active'] ?? 0,
           completed: counts['completed'] ?? 0,
-          failed:    counts['failed']    ?? 0,
-          delayed:   counts['delayed']   ?? 0,
-          paused:    counts['paused']    ?? 0,
+          failed: counts['failed'] ?? 0,
+          delayed: counts['delayed'] ?? 0,
+          paused: counts['paused'] ?? 0,
           timestamp: now,
         } satisfies QueueMetricsSnapshot;
-      }),
+      })
     );
     return results;
   }

@@ -48,13 +48,13 @@ import { randomUUID } from 'node:crypto';
 /** Fields injected into every BullMQ job payload for trace continuity. */
 export interface OtelTraceFields {
   /** W3C traceparent: '00-<traceId>-<spanId>-<flags>' */
-  traceparent?:   string;
+  traceparent?: string;
   /** W3C tracestate: vendor-specific key=value pairs */
-  tracestate?:    string;
+  tracestate?: string;
   /** Monotonic correlation ID for log/event correlation independent of OTEL */
   correlationId?: string;
   /** spanId of the enqueue span — convenience for log queries */
-  spanId?:        string;
+  spanId?: string;
 }
 
 /**
@@ -72,18 +72,18 @@ export interface OtelTraceFields {
  *   await queue.add('execute', payload);
  */
 export function injectOtelContext<T extends Record<string, unknown>>(
-  payload: T,
+  payload: T
 ): T & OtelTraceFields {
   const carrier: Record<string, string> = {};
   propagation.inject(context.active(), carrier);
 
   const activeSpan = trace.getActiveSpan();
-  const spanId     = activeSpan?.spanContext().spanId;
+  const spanId = activeSpan?.spanContext().spanId;
 
   return {
     ...payload,
-    ...(carrier['traceparent'] ? { traceparent:   carrier['traceparent'] } : {}),
-    ...(carrier['tracestate']  ? { tracestate:    carrier['tracestate']  } : {}),
+    ...(carrier['traceparent'] ? { traceparent: carrier['traceparent'] } : {}),
+    ...(carrier['tracestate'] ? { tracestate: carrier['tracestate'] } : {}),
     correlationId: (payload['correlationId'] as string | undefined) ?? `corr-${randomUUID()}`,
     ...(spanId ? { spanId } : {}),
   };
