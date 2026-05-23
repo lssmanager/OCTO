@@ -20,7 +20,7 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http==1.28.4",
     "opentelemetry-instrumentation-fastapi==0.49b4",
     "opentelemetry-instrumentation-httpx==0.49b4",
-    "python-multipart==0.0.22",
+    "python-multipart==0.0.27",
 ]
 
 [project.optional-dependencies]
