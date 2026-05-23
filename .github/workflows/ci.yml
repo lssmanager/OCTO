@@ -6,16 +6,15 @@ on:
   pull_request:
     branches: [main, develop]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   lockfile:
     name: Lockfile Integrity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
 
       - uses: pnpm/action-setup@v4
         with:
@@ -43,10 +42,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
 
       - uses: pnpm/action-setup@v4
         with:
@@ -103,10 +98,6 @@ jobs:
     needs: quality
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
 
       - uses: pnpm/action-setup@v4
         with:
@@ -175,10 +166,6 @@ jobs:
           - 6379:6379
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
 
       - uses: pnpm/action-setup@v4
         with:
