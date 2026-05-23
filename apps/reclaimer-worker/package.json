@@ -15,11 +15,13 @@
     "@octo/queue": "workspace:*",
     "@octo/observability": "workspace:*",
     "@opentelemetry/api": "1.9.0",
-    "drizzle-orm": "0.40.0"
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
     "@types/node": "22.0.0",
-    "tsx": "4.0.0",
+    "tsx": "4.20.6",
     "typescript": "5.4.2"
   }
 }
+
+

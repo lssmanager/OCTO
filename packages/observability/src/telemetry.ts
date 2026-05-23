@@ -1,6 +1,6 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { Resource } from '@opentelemetry/resources';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import {
   ATTR_SERVICE_NAME,
   ATTR_SERVICE_VERSION,
@@ -29,7 +29,7 @@ export function bootstrapTelemetry(config: TelemetryConfig): NodeSDK {
     : undefined;
 
   sdkInstance = new NodeSDK({
-    resource: new Resource({
+    resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: config.serviceName,
       [ATTR_SERVICE_VERSION]: config.serviceVersion ?? '0.0.1-f0',
     }),
@@ -49,3 +49,4 @@ export function bootstrapTelemetry(config: TelemetryConfig): NodeSDK {
 
   return sdkInstance;
 }
+

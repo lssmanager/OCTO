@@ -6,7 +6,7 @@ function ServiceCard({
   health,
 }: {
   label: string;
-  sublabel?: string;
+  sublabel: string | undefined;
   health: ServiceHealth;
 }) {
   const ok = health.status === 'ok';
@@ -77,7 +77,7 @@ function InfraCard({
 }: {
   label: string;
   status: 'ok' | 'error' | 'unknown';
-  latency?: string;
+  latency: string | undefined;
 }) {
   const color =
     status === 'ok'
@@ -196,6 +196,7 @@ export function SystemStatus({ health }: { health: SystemHealthData }) {
             />
             <InfraCard
               label="Queue (BullMQ)"
+              latency={undefined}
               status={
                 queue?.status === 'ok'
                   ? 'ok'
@@ -217,3 +218,8 @@ export function SystemStatus({ health }: { health: SystemHealthData }) {
     </div>
   );
 }
+
+
+
+
+
