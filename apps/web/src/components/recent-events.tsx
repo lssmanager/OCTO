@@ -90,10 +90,7 @@ export function RecentEvents() {
         ))}
       </div>
 
-      <p
-        className="text-xs mt-3 font-mono"
-        style={{ color: 'var(--color-text-faint)' }}
-      >
+      <p className="text-xs mt-3 font-mono" style={{ color: 'var(--color-text-faint)' }}>
         Live events connect in F1 via execution_events table
       </p>
     </div>

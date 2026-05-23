@@ -4,10 +4,7 @@ import { executionEvents, type NewExecutionEvent } from '../schema/events';
 
 export async function insertEvent(data: Omit<NewExecutionEvent, 'id'>) {
   const db = getDb();
-  const [created] = await db
-    .insert(executionEvents)
-    .values(data)
-    .returning();
+  const [created] = await db.insert(executionEvents).values(data).returning();
   return created;
 }
 

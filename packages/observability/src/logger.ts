@@ -40,7 +40,7 @@ export interface ExecutionLoggerContext {
 export interface JobLoggerContext {
   trace_id: string;
   execution_id: string; // required — must be present in every job payload
-  agent_id: string;     // required — must be present in every job payload
+  agent_id: string; // required — must be present in every job payload
   run_id: string;
 }
 
@@ -66,7 +66,7 @@ export function createLogger(context: LoggerContext): PinoLogger {
  */
 export function createExecutionLogger(
   base: PinoLogger,
-  context: ExecutionLoggerContext,
+  context: ExecutionLoggerContext
 ): PinoLogger {
   return base.child(context);
 }
@@ -76,9 +76,6 @@ export function createExecutionLogger(
  * All context fields (including execution_id and agent_id) are required.
  * TypeScript will reject callers that omit either field at compile time.
  */
-export function createJobLogger(
-  base: PinoLogger,
-  context: JobLoggerContext,
-): PinoLogger {
+export function createJobLogger(base: PinoLogger, context: JobLoggerContext): PinoLogger {
   return base.child(context);
 }

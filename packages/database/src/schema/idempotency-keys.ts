@@ -18,15 +18,7 @@
 //
 // ADR: F0-005 (Idempotency)
 
-import {
-  pgTable,
-  text,
-  timestamp,
-  jsonb,
-  index,
-  uniqueIndex,
-  pgEnum,
-} from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, jsonb, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
 
 export const idempotencyKeyScopeEnum = pgEnum('idempotency_key_scope', [
   'execution',
@@ -38,39 +30,42 @@ export const idempotencyKeyScopeEnum = pgEnum('idempotency_key_scope', [
 export const idempotencyKeys = pgTable(
   'idempotency_keys',
   {
-    id:       text('id').primaryKey(),       // UUID v7
+    id: text('id').primaryKey(), // UUID v7
     tenantId: text('tenant_id').notNull(),
-    scope:    idempotencyKeyScopeEnum('scope').notNull(),
+    scope: idempotencyKeyScopeEnum('scope').notNull(),
     // The key itself — caller-provided stable identifier.
     // Format convention: '<scope>:<entity-id>:<operation>'.
     // Example: 'execution:agent-123:run-xyz'
-    key:      text('key').notNull(),
+    key: text('key').notNull(),
 
     // The result cached from the first successful execution.
     // Returned verbatim on duplicate attempts.
     // Null if the operation is still in progress (locked state).
-    result:   jsonb('result'),
+    result: jsonb('result'),
 
     // Null while the first attempt is in progress (advisory lock).
     // Set to 'success' or 'failure' when the operation completes.
-    status:   text('status'),  // 'pending' | 'success' | 'failure'
+    status: text('status'), // 'pending' | 'success' | 'failure'
 
     // Reference to the canonical entity created by the first attempt.
     // e.g. execution_id for scope='execution'
     entityId: text('entity_id'),
 
-    expiresAt:  timestamp('expires_at').notNull(),  // defaultNow() + 24h set by app
-    createdAt:  timestamp('created_at').notNull().defaultNow(),
+    expiresAt: timestamp('expires_at').notNull(), // defaultNow() + 24h set by app
+    createdAt: timestamp('created_at').notNull().defaultNow(),
     resolvedAt: timestamp('resolved_at'),
   },
   (t) => ({
     // Primary lookup: (tenant_id, scope, key) — must be unique
-    tenantScopeKeyIdx: uniqueIndex('idempotency_keys_tenant_scope_key_uidx')
-                         .on(t.tenantId, t.scope, t.key),
+    tenantScopeKeyIdx: uniqueIndex('idempotency_keys_tenant_scope_key_uidx').on(
+      t.tenantId,
+      t.scope,
+      t.key
+    ),
     expiresIdx: index('idempotency_keys_expires_at_idx').on(t.expiresAt),
-    tenantIdx:  index('idempotency_keys_tenant_id_idx').on(t.tenantId),
-  }),
+    tenantIdx: index('idempotency_keys_tenant_id_idx').on(t.tenantId),
+  })
 );
 
-export type IdempotencyKey    = typeof idempotencyKeys.$inferSelect;
+export type IdempotencyKey = typeof idempotencyKeys.$inferSelect;
 export type NewIdempotencyKey = typeof idempotencyKeys.$inferInsert;

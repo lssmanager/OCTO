@@ -23,13 +23,10 @@ export type InstrumentedProcessor<T, R> = (job: Job<T, R>) => Promise<R>;
  * This ensures all worker spans are children of the HTTP request span —
  * one continuous trace from API → queue → worker in Grafana / Jaeger.
  */
-export function createInstrumentedWorker<
-  T extends OtelTraceFields,
-  R = void,
->(
+export function createInstrumentedWorker<T extends OtelTraceFields, R = void>(
   name: QueueName | string,
   processor: InstrumentedProcessor<T, R>,
-  config: WorkerConfig,
+  config: WorkerConfig
 ): Worker<T, R> {
   const tracer: Tracer = getOctoTracer();
 
@@ -42,15 +39,16 @@ export function createInstrumentedWorker<
       {
         kind: SpanKind.CONSUMER,
         attributes: {
-          'messaging.system':           'bullmq',
-          'messaging.operation':        'process',
+          'messaging.system': 'bullmq',
+          'messaging.operation': 'process',
           'messaging.destination.name': name,
-          'messaging.message.id':       job.id ?? 'unknown',
-          'octo.job.name':              job.name,
-          'octo.job.attempts':          job.attemptsMade,
-          'octo.execution.id': (job.data as Record<string, unknown>)['executionId'] as string ?? 'none',
+          'messaging.message.id': job.id ?? 'unknown',
+          'octo.job.name': job.name,
+          'octo.job.attempts': job.attemptsMade,
+          'octo.execution.id':
+            ((job.data as Record<string, unknown>)['executionId'] as string) ?? 'none',
           'octo.correlation.id': (job.data as OtelTraceFields).correlationId ?? 'none',
-          'octo.span.id':        (job.data as OtelTraceFields).spanId         ?? 'none',
+          'octo.span.id': (job.data as OtelTraceFields).spanId ?? 'none',
         },
       },
       parentCtx, // ← parent context from producer span
@@ -66,7 +64,7 @@ export function createInstrumentedWorker<
         } finally {
           span.end();
         }
-      },
+      }
     );
   };
 

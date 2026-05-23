@@ -16,11 +16,7 @@
  *   - Prometheus scrape via /metrics (F1+ — gauge export)
  *   - Frontend queue health panel (F1+)
  */
-import {
-  Controller,
-  Get,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { InternalSecretGuard } from './internal-secret.guard';
 import { QueueMetricsService } from './queue-metrics.service';
 import type { QueueMetricsSnapshot } from './queue-metrics.service';

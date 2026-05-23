@@ -187,11 +187,11 @@ export interface IAgentProfile {
 // DTO helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type CreateAgentProfileDto = Omit<
-  IAgentProfile,
-  'id' | 'createdAt' | 'updatedAt'
->;
+export type CreateAgentProfileDto = Omit<IAgentProfile, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type UpdateAgentProfileDto = Partial<
-  Omit<IAgentProfile, 'id' | 'agencyId' | 'departmentId' | 'workspaceId' | 'createdAt' | 'createdBy'>
+  Omit<
+    IAgentProfile,
+    'id' | 'agencyId' | 'departmentId' | 'workspaceId' | 'createdAt' | 'createdBy'
+  >
 >;

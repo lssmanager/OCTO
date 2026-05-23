@@ -17,7 +17,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 
-const MAX_RETRIES    = 10;
+const MAX_RETRIES = 10;
 const RETRY_DELAY_MS = 3_000;
 
 // Migrations folder is at packages/database/migrations — resolved relative
@@ -28,7 +28,7 @@ const MIGRATIONS_FOLDER = path.join(__dirname, '..', 'migrations');
 
 function log(level: 'info' | 'warn' | 'error', msg: string, extra?: Record<string, unknown>): void {
   process.stdout.write(
-    JSON.stringify({ level, msg, ts: new Date().toISOString(), ...extra }) + '\n',
+    JSON.stringify({ level, msg, ts: new Date().toISOString(), ...extra }) + '\n'
   );
 }
 
@@ -43,8 +43,9 @@ async function run(): Promise<void> {
 
   if (!databaseUrl) {
     log('error', 'db_unreachable', {
-      reason: 'DATABASE_URL env var is not set. '
-        + 'Set it as a Runtime Environment Variable in Coolify (NOT a Build Variable).',
+      reason:
+        'DATABASE_URL env var is not set. ' +
+        'Set it as a Runtime Environment Variable in Coolify (NOT a Build Variable).',
     });
     process.exit(1);
   }
@@ -77,7 +78,11 @@ async function run(): Promise<void> {
       log('warn', 'db_connect_retry', { attempt, maxRetries: MAX_RETRIES, error: message });
 
       if (sql) {
-        try { await sql.end(); } catch { /* ignore cleanup errors */ }
+        try {
+          await sql.end();
+        } catch {
+          /* ignore cleanup errors */
+        }
         sql = null;
       }
 
@@ -103,7 +108,11 @@ async function run(): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log('error', 'migration_failed', { error: message });
-    try { await sql.end(); } catch { /* ignore */ }
+    try {
+      await sql.end();
+    } catch {
+      /* ignore */
+    }
     process.exit(2);
   }
 

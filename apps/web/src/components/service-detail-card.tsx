@@ -33,10 +33,7 @@ export function ServiceDetailCard({
         <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
           {label}
         </h3>
-        <span
-          className="text-xs font-mono uppercase font-bold"
-          style={{ color: statusColor }}
-        >
+        <span className="text-xs font-mono uppercase font-bold" style={{ color: statusColor }}>
           {data.status}
         </span>
       </div>
@@ -59,8 +56,8 @@ export function ServiceDetailCard({
                     key === 'error'
                       ? 'var(--color-error)'
                       : key === 'status'
-                      ? statusColor
-                      : 'var(--color-text)',
+                        ? statusColor
+                        : 'var(--color-text)',
                 }}
               >
                 {value}
@@ -71,13 +68,19 @@ export function ServiceDetailCard({
 
       {data.checks && Object.keys(data.checks).length > 0 && (
         <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--color-border)' }}>
-          <p className="text-xs uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-faint)' }}>
+          <p
+            className="text-xs uppercase tracking-wider mb-2"
+            style={{ color: 'var(--color-text-faint)' }}
+          >
             Infra Checks
           </p>
           <div className="space-y-1">
             {Object.entries(data.checks).map(([k, v]) => (
               <div key={k} className="flex gap-3">
-                <span className="text-xs font-mono w-20 shrink-0" style={{ color: 'var(--color-text-faint)' }}>
+                <span
+                  className="text-xs font-mono w-20 shrink-0"
+                  style={{ color: 'var(--color-text-faint)' }}
+                >
                   {k}
                 </span>
                 <code className="text-xs font-mono" style={{ color: 'var(--color-text-muted)' }}>

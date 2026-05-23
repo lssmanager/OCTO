@@ -74,7 +74,7 @@ module.exports = {
             (prop) =>
               prop.type === 'Property' &&
               ((prop.key.type === 'Identifier' && prop.key.name === 'status') ||
-                (prop.key.type === 'Literal' && prop.key.value === 'status')),
+                (prop.key.type === 'Literal' && prop.key.value === 'status'))
           );
 
           if (!hasStatusKey) return;
@@ -96,7 +96,7 @@ module.exports = {
                   (arg.type === 'Identifier' && arg.name === 'executions') ||
                   (arg.type === 'MemberExpression' &&
                     arg.property.type === 'Identifier' &&
-                    arg.property.name === 'executions'),
+                    arg.property.name === 'executions')
               );
 
               if (referencesExecutions) {

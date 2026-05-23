@@ -35,7 +35,10 @@ module.exports = {
   },
   settings: {
     'import/resolver': {
-      typescript: { alwaysTryTypes: true, project: ['./apps/*/tsconfig.json', './packages/*/tsconfig.json'] },
+      typescript: {
+        alwaysTryTypes: true,
+        project: ['./apps/*/tsconfig.json', './packages/*/tsconfig.json'],
+      },
     },
   },
   ignorePatterns: ['dist', 'node_modules', 'coverage', '.turbo', '*.js', '*.d.ts'],

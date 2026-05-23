@@ -31,9 +31,7 @@ export function PhaseProgress() {
               <span
                 className="text-xs font-mono"
                 style={{
-                  color: phase.done
-                    ? 'var(--color-success)'
-                    : 'var(--color-text-muted)',
+                  color: phase.done ? 'var(--color-success)' : 'var(--color-text-muted)',
                 }}
               >
                 {phase.label}
@@ -41,9 +39,7 @@ export function PhaseProgress() {
               <span
                 className="text-xs font-mono"
                 style={{
-                  color: phase.done
-                    ? 'var(--color-success)'
-                    : 'var(--color-text-faint)',
+                  color: phase.done ? 'var(--color-success)' : 'var(--color-text-faint)',
                 }}
               >
                 {phase.done ? '✓ 100%' : '0%'}
@@ -62,9 +58,7 @@ export function PhaseProgress() {
                 className="h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${phase.progress}%`,
-                  backgroundColor: phase.done
-                    ? 'var(--color-success)'
-                    : 'var(--color-primary)',
+                  backgroundColor: phase.done ? 'var(--color-success)' : 'var(--color-primary)',
                 }}
               />
             </div>

@@ -6,10 +6,14 @@ export const revalidate = 30;
 /** Status badge color logic for service health. */
 function statusColor(status: string): string {
   switch (status) {
-    case 'ok': return '#22c55e';
-    case 'degraded': return '#f59e0b';
-    case 'error': return '#ef4444';
-    default: return '#6b7280';
+    case 'ok':
+      return '#22c55e';
+    case 'degraded':
+      return '#f59e0b';
+    case 'error':
+      return '#ef4444';
+    default:
+      return '#6b7280';
   }
 }
 
@@ -66,13 +70,29 @@ export default async function OpsPage() {
         <h2 className="text-base font-medium mb-2" style={{ color: 'var(--color-text)' }}>
           Build
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm"
-          style={{ color: 'var(--color-text-muted)' }}>
-          <div>Version: <strong style={{ color: 'var(--color-text)' }}>{build.version}</strong></div>
-          <div>Commit: <strong style={{ color: 'var(--color-text)' }}>{build.commit.slice(0, 7)}</strong></div>
-          <div>Phase: <strong style={{ color: 'var(--color-text)' }}>{build.phase}</strong></div>
-          <div>Built: <strong style={{ color: 'var(--color-text)' }}>{build.builtAt?.slice(0, 10) ?? '—'}</strong></div>
-          <div>Node: <strong style={{ color: 'var(--color-text)' }}>{build.node}</strong></div>
+        <div
+          className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          <div>
+            Version: <strong style={{ color: 'var(--color-text)' }}>{build.version}</strong>
+          </div>
+          <div>
+            Commit:{' '}
+            <strong style={{ color: 'var(--color-text)' }}>{build.commit.slice(0, 7)}</strong>
+          </div>
+          <div>
+            Phase: <strong style={{ color: 'var(--color-text)' }}>{build.phase}</strong>
+          </div>
+          <div>
+            Built:{' '}
+            <strong style={{ color: 'var(--color-text)' }}>
+              {build.builtAt?.slice(0, 10) ?? '—'}
+            </strong>
+          </div>
+          <div>
+            Node: <strong style={{ color: 'var(--color-text)' }}>{build.node}</strong>
+          </div>
         </div>
       </section>
 
@@ -98,15 +118,9 @@ export default async function OpsPage() {
                 </span>
               </div>
               <div className="text-xs space-y-0.5" style={{ color: 'var(--color-text-muted)' }}>
-                {name === 'api' && svc.uptime !== undefined && (
-                  <div>Uptime: {svc.uptime}s</div>
-                )}
-                {svc.latencyMs !== undefined && (
-                  <div>Latency: {svc.latencyMs}ms</div>
-                )}
-                {svc.error && (
-                  <div style={{ color: 'var(--color-text-error)' }}>{svc.error}</div>
-                )}
+                {name === 'api' && svc.uptime !== undefined && <div>Uptime: {svc.uptime}s</div>}
+                {svc.latencyMs !== undefined && <div>Latency: {svc.latencyMs}ms</div>}
+                {svc.error && <div style={{ color: 'var(--color-text-error)' }}>{svc.error}</div>}
               </div>
             </div>
           ))}
@@ -127,23 +141,65 @@ export default async function OpsPage() {
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <th className="text-left py-1 pr-4" style={{ color: 'var(--color-text-muted)' }}>Queue</th>
-                  <th className="text-right py-1 px-2" style={{ color: 'var(--color-text-muted)' }}>Waiting</th>
-                  <th className="text-right py-1 px-2" style={{ color: 'var(--color-text-muted)' }}>Active</th>
-                  <th className="text-right py-1 px-2" style={{ color: 'var(--color-text-muted)' }}>Completed</th>
-                  <th className="text-right py-1 px-2" style={{ color: 'var(--color-text-muted)' }}>Failed</th>
-                  <th className="text-right py-1 pl-2" style={{ color: 'var(--color-text-muted)' }}>Delayed</th>
+                  <th className="text-left py-1 pr-4" style={{ color: 'var(--color-text-muted)' }}>
+                    Queue
+                  </th>
+                  <th className="text-right py-1 px-2" style={{ color: 'var(--color-text-muted)' }}>
+                    Waiting
+                  </th>
+                  <th className="text-right py-1 px-2" style={{ color: 'var(--color-text-muted)' }}>
+                    Active
+                  </th>
+                  <th className="text-right py-1 px-2" style={{ color: 'var(--color-text-muted)' }}>
+                    Completed
+                  </th>
+                  <th className="text-right py-1 px-2" style={{ color: 'var(--color-text-muted)' }}>
+                    Failed
+                  </th>
+                  <th className="text-right py-1 pl-2" style={{ color: 'var(--color-text-muted)' }}>
+                    Delayed
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(queues).map(([name, stats]) => (
                   <tr key={name} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                    <td className="py-1 pr-4 font-mono text-xs" style={{ color: 'var(--color-text)' }}>{name}</td>
-                    <td className="text-right py-1 px-2" style={{ color: 'var(--color-text-muted)' }}>{stats.waiting}</td>
-                    <td className="text-right py-1 px-2" style={{ color: 'var(--color-text)' }}>{stats.active}</td>
-                    <td className="text-right py-1 px-2" style={{ color: 'var(--color-text-muted)' }}>{stats.completed}</td>
-                    <td className="text-right py-1 px-2" style={{ color: stats.failed > 0 ? 'var(--color-text-error)' : 'var(--color-text-muted)' }}>{stats.failed}</td>
-                    <td className="text-right py-1 pl-2" style={{ color: 'var(--color-text-muted)' }}>{stats.delayed}</td>
+                    <td
+                      className="py-1 pr-4 font-mono text-xs"
+                      style={{ color: 'var(--color-text)' }}
+                    >
+                      {name}
+                    </td>
+                    <td
+                      className="text-right py-1 px-2"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    >
+                      {stats.waiting}
+                    </td>
+                    <td className="text-right py-1 px-2" style={{ color: 'var(--color-text)' }}>
+                      {stats.active}
+                    </td>
+                    <td
+                      className="text-right py-1 px-2"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    >
+                      {stats.completed}
+                    </td>
+                    <td
+                      className="text-right py-1 px-2"
+                      style={{
+                        color:
+                          stats.failed > 0 ? 'var(--color-text-error)' : 'var(--color-text-muted)',
+                      }}
+                    >
+                      {stats.failed}
+                    </td>
+                    <td
+                      className="text-right py-1 pl-2"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    >
+                      {stats.delayed}
+                    </td>
                   </tr>
                 ))}
               </tbody>

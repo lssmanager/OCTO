@@ -34,7 +34,7 @@ export class DlqHandler {
     private readonly sourceQueueName: QueueName | string,
     redisUrl: string,
     dlq: Queue,
-    private readonly options: DlqHandlerOptions = {},
+    private readonly options: DlqHandlerOptions = {}
   ) {
     this.dlq = dlq;
     this.events = new QueueEvents(sourceQueueName, {
@@ -49,7 +49,7 @@ export class DlqHandler {
   private async handleFailed(
     jobId: string,
     failedReason: string,
-    _prev: string | undefined,
+    _prev: string | undefined
   ): Promise<void> {
     try {
       // QueueEvents doesn’t give us the full Job object directly.
@@ -60,9 +60,10 @@ export class DlqHandler {
         connection: createRedisConnection(
           // Connection string comes from the QueueEvents connection config;
           // we reconstruct from the stored redisUrl via closure.
-           
+
           (this.events as any).opts?.connection?.options?.url ??
-          (this.events as any).opts?.connection ?? {},
+            (this.events as any).opts?.connection ??
+            {}
         ),
       });
 
@@ -92,11 +93,11 @@ export class DlqHandler {
           // Preserve job ID for traceability
           jobId: `dlq:${jobId}`,
           removeOnComplete: false,
-        },
+        }
       );
 
       console.log(
-        `[octo:dlq] Job ${jobId} from '${this.sourceQueueName}' moved to DLQ after ${job.attemptsMade} attempts. Reason: ${failedReason}`,
+        `[octo:dlq] Job ${jobId} from '${this.sourceQueueName}' moved to DLQ after ${job.attemptsMade} attempts. Reason: ${failedReason}`
       );
 
       if (this.options.onDeadJob) {
@@ -105,10 +106,7 @@ export class DlqHandler {
 
       await sourceQueue.close();
     } catch (err) {
-      console.error(
-        `[octo:dlq] Failed to move job ${jobId} to DLQ:`,
-        err,
-      );
+      console.error(`[octo:dlq] Failed to move job ${jobId} to DLQ:`, err);
     }
   }
 

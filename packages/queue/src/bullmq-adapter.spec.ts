@@ -89,9 +89,9 @@ describe('writeBeforeAck', () => {
 
     const job = { id: 'job-3' };
 
-    await expect(
-      writeBeforeAck(failingDb, job, async () => ({ ok: true })),
-    ).rejects.toThrow('DB connection lost');
+    await expect(writeBeforeAck(failingDb, job, async () => ({ ok: true }))).rejects.toThrow(
+      'DB connection lost'
+    );
   });
 
   it('handler error thrown within transaction causes abort (no partial writes)', async () => {
@@ -111,7 +111,7 @@ describe('writeBeforeAck', () => {
     await expect(
       writeBeforeAck(strictDb, job, async () => {
         throw new Error('handler crash');
-      }),
+      })
     ).rejects.toThrow('transaction_aborted');
   });
 });

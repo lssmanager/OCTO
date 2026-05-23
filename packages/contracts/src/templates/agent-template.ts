@@ -11,7 +11,12 @@
  *  - ITemplateHubService — query and import interface
  */
 
-import type { LLMConfig, ExecutionLimits, MemoryConfig, ChannelBinding } from '../agents/agent-profile';
+import type {
+  LLMConfig,
+  ExecutionLimits,
+  MemoryConfig,
+  ChannelBinding,
+} from '../agents/agent-profile';
 import type { AgentCapabilities, AgentSkill } from '../protocols/mcp-a2a';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -223,6 +228,6 @@ export interface ITemplateHubService {
   instantiate(
     templateId: string,
     target: { workspaceId: string; departmentId: string; agencyId: string; createdBy: string },
-    overrides?: Record<string, unknown>,
+    overrides?: Record<string, unknown>
   ): Promise<{ agentProfileId: string }>;
 }

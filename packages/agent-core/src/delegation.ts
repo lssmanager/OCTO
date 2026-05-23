@@ -12,11 +12,7 @@
  *   ✗ @octo/queue, @octo/database, apps/api, apps/runtime-worker
  *   ✔ @octo/contracts (type imports only)
  */
-import type {
-  DelegationEdge,
-  DelegationAuthority,
-  PolicyBoundary,
-} from '@octo/contracts';
+import type { DelegationEdge, DelegationAuthority, PolicyBoundary } from '@octo/contracts';
 
 // ---------------------------------------------------------------- value objects
 
@@ -59,16 +55,8 @@ export interface DelegationChainViolation {
  */
 export interface DelegationValidator {
   validate(edge: DelegationEdge): Promise<DelegationValidationResult>;
-  checkRecursionDepth(
-    agentId: string,
-    currentDepth: number,
-    maxDepth: number,
-  ): boolean;
-  checkDelegationCap(
-    agentId: string,
-    currentChain: string[],
-    maxCap: number,
-  ): boolean;
+  checkRecursionDepth(agentId: string, currentDepth: number, maxDepth: number): boolean;
+  checkDelegationCap(agentId: string, currentChain: string[], maxCap: number): boolean;
 }
 
 export interface DelegationValidationResult {

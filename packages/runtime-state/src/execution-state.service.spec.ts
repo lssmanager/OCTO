@@ -36,9 +36,7 @@ describe('ExecutionStateService', () => {
 
       await svc.transition(tx, EXEC_ID, 'pending', 'queued');
 
-      expect(deps.updateExecutionStatus).toHaveBeenCalledWith(
-        tx, EXEC_ID, 'pending', 'queued', {},
-      );
+      expect(deps.updateExecutionStatus).toHaveBeenCalledWith(tx, EXEC_ID, 'pending', 'queued', {});
       expect(deps.appendExecutionEvent).toHaveBeenCalled();
     });
 
@@ -49,7 +47,11 @@ describe('ExecutionStateService', () => {
       await svc.transition({}, EXEC_ID, 'running', 'completed');
 
       expect(deps.updateExecutionStatus).toHaveBeenCalledWith(
-        {}, EXEC_ID, 'running', 'completed', {},
+        {},
+        EXEC_ID,
+        'running',
+        'completed',
+        {}
       );
     });
 
@@ -74,9 +76,9 @@ describe('ExecutionStateService', () => {
       });
       const svc = new ExecutionStateService(deps);
 
-      await expect(
-        svc.transition({}, EXEC_ID, 'pending', 'queued'),
-      ).rejects.toThrow(ConcurrentTransitionError);
+      await expect(svc.transition({}, EXEC_ID, 'pending', 'queued')).rejects.toThrow(
+        ConcurrentTransitionError
+      );
 
       // Event must NOT be appended when CAS is lost
       expect(deps.appendExecutionEvent).not.toHaveBeenCalled();
@@ -107,27 +109,27 @@ describe('ExecutionStateService', () => {
       const deps = mockDeps();
       const svc = new ExecutionStateService(deps);
 
-      await expect(
-        svc.transition({}, EXEC_ID, 'completed', 'running'),
-      ).rejects.toThrow(InvalidTransitionError);
+      await expect(svc.transition({}, EXEC_ID, 'completed', 'running')).rejects.toThrow(
+        InvalidTransitionError
+      );
     });
 
     it('throws when transitioning from a terminal state (FAILED → RUNNING)', async () => {
       const deps = mockDeps();
       const svc = new ExecutionStateService(deps);
 
-      await expect(
-        svc.transition({}, EXEC_ID, 'failed', 'running'),
-      ).rejects.toThrow(InvalidTransitionError);
+      await expect(svc.transition({}, EXEC_ID, 'failed', 'running')).rejects.toThrow(
+        InvalidTransitionError
+      );
     });
 
     it('throws for illegal edge (PENDING → COMPLETED — skips queue)', async () => {
       const deps = mockDeps();
       const svc = new ExecutionStateService(deps);
 
-      await expect(
-        svc.transition({}, EXEC_ID, 'pending', 'completed'),
-      ).rejects.toThrow(InvalidTransitionError);
+      await expect(svc.transition({}, EXEC_ID, 'pending', 'completed')).rejects.toThrow(
+        InvalidTransitionError
+      );
     });
 
     it('error message describes allowed transitions from current state', async () => {
