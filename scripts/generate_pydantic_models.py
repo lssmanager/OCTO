@@ -23,6 +23,7 @@ for schema in schemas:
         "--use-annotated",
         "--snake-case-field",
         "--strict-nullable",
+        "--disable-timestamp",
     ]
     subprocess.run(cmd, check=True)
 
