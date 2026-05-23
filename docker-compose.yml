@@ -64,6 +64,20 @@ services:
   # Orquestación, scheduling, estado, aprobaciones, políticas.
   # Principio #1: NUNCA ejecuta tareas de agente directamente.
   # ────────────────────────────────────────────────────────────────
+
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/migrate.Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - octonet
+    restart: "no"
+
   api:
     build:
       context: .

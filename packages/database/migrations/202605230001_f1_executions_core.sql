@@ -186,3 +186,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "idx_checkpoints_execution_step_unique" ON "ex
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_checkpoints_execution_step_source" ON "execution_checkpoints" ("execution_id", "step_index", "source");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_checkpoint_writes_tenant_checkpoint_write" ON "execution_checkpoint_writes" ("tenant_id", "checkpoint_id", "write_index");
+
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_checkpoints_parent" ON "execution_checkpoints" ("parent_checkpoint_id") WHERE parent_checkpoint_id IS NOT NULL;

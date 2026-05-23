@@ -191,3 +191,40 @@ export type {
   ExecutionCheckpoint,
   CheckpointWrite,
 } from './zod';
+
+
+export {
+  ToolKindSchema,
+  ToolInvocationStatusSchema,
+  ToolInvocationSchema,
+  ApprovalKindSchema,
+  ApprovalStatusSchema,
+  ApprovalSchema,
+  OutboxAggregateTypeSchema,
+  OutboxEventTypeSchema,
+  OutboxEventSchema,
+  AgentStatusSchema,
+  ModelPolicySchema,
+  ToolPolicySchema,
+  BudgetPolicySchema,
+  AgentConfigSchema,
+  AgentVersionSchema,
+} from './zod';
+
+export type {
+  ToolKind,
+  ToolInvocationStatus,
+  ToolInvocation as ZodToolInvocation,
+  ApprovalKind as ZodApprovalKind,
+  ApprovalStatus as ZodApprovalStatus,
+  Approval as ZodApproval,
+  OutboxAggregateType,
+  OutboxEventType,
+  OutboxEvent as ZodOutboxEvent,
+  AgentStatus as ZodAgentStatus,
+  ModelPolicy,
+  ToolPolicy,
+  BudgetPolicy,
+  AgentConfig,
+  AgentVersion as ZodAgentVersion,
+} from './zod';
