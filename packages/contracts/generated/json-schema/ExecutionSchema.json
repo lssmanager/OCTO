@@ -1,0 +1,151 @@
+{
+  "$ref": "#/definitions/ExecutionSchema",
+  "definitions": {
+    "ExecutionSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        },
+        "agentVersionId": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "QUEUED",
+            "DISPATCHED",
+            "RUNNING",
+            "PAUSED",
+            "RETRY_SCHEDULED",
+            "RECLAIMING",
+            "TIMED_OUT",
+            "SUCCEEDED",
+            "FAILED",
+            "CANCELLED",
+            "DLQ"
+          ]
+        },
+        "version": {
+          "type": "integer"
+        },
+        "inputJson": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "outputJson": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "errorCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "errorMessage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "attemptCount": {
+          "type": "integer"
+        },
+        "reclaimCount": {
+          "type": "integer"
+        },
+        "leaseOwner": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "leaseExpiresAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cancellationRequestedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "budgetSnapshotJson": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contextSnapshotJson": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "createdBy": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "agentId",
+        "agentVersionId",
+        "state",
+        "version",
+        "inputJson",
+        "attemptCount",
+        "reclaimCount",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

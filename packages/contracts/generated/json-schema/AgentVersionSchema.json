@@ -1,0 +1,145 @@
+{
+  "$ref": "#/definitions/AgentVersionSchema",
+  "definitions": {
+    "AgentVersionSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "configJson": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "instructions": {
+              "type": "string"
+            },
+            "workspaceId": {
+              "type": "string"
+            },
+            "modelPolicy": {
+              "type": "object",
+              "properties": {
+                "primaryModel": {
+                  "type": "string"
+                },
+                "fallbackModels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
+                },
+                "temperature": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2,
+                  "default": 0.2
+                },
+                "maxOutputTokens": {
+                  "type": "integer",
+                  "default": 2048
+                }
+              },
+              "required": [
+                "primaryModel"
+              ],
+              "additionalProperties": false
+            },
+            "toolPolicy": {
+              "type": "object",
+              "properties": {
+                "allow": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "deny": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
+                },
+                "requireApprovalFor": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
+                }
+              },
+              "required": [
+                "allow"
+              ],
+              "additionalProperties": false
+            },
+            "budgetPolicy": {
+              "type": "object",
+              "properties": {
+                "maxUsdPerRun": {
+                  "type": "string",
+                  "pattern": "^\\d+\\.\\d{2}$"
+                },
+                "maxUsdPerDay": {
+                  "type": "string",
+                  "pattern": "^\\d+\\.\\d{2}$"
+                },
+                "hardStop": {
+                  "type": "boolean",
+                  "default": true
+                }
+              },
+              "required": [
+                "maxUsdPerRun",
+                "maxUsdPerDay"
+              ],
+              "additionalProperties": false
+            },
+            "executionTimeoutMs": {
+              "type": "integer",
+              "default": 900000
+            }
+          },
+          "required": [
+            "name",
+            "instructions",
+            "workspaceId",
+            "modelPolicy",
+            "toolPolicy",
+            "budgetPolicy"
+          ],
+          "additionalProperties": false
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "agentId",
+        "version",
+        "configJson",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

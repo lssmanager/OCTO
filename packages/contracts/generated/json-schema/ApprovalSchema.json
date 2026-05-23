@@ -1,0 +1,103 @@
+{
+  "$ref": "#/definitions/ApprovalSchema",
+  "definitions": {
+    "ApprovalSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "executionId": {
+          "type": "string"
+        },
+        "stepId": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "tool_execution",
+            "budget_override",
+            "human_input",
+            "external_validation"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "APPROVED",
+            "REJECTED",
+            "EXPIRED",
+            "CANCELLED"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "payloadJson": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "timeoutAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolvedBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resolvedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolutionJson": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "executionId",
+        "stepId",
+        "kind",
+        "status",
+        "title",
+        "reason",
+        "payloadJson"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

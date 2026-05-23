@@ -1,0 +1,46 @@
+{
+  "$ref": "#/definitions/CheckpointWriteSchema",
+  "definitions": {
+    "CheckpointWriteSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "checkpointId": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "taskPath": {
+          "type": "string"
+        },
+        "writeIndex": {
+          "type": "integer"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "valueJson": {}
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "checkpointId",
+        "taskId",
+        "taskPath",
+        "writeIndex",
+        "channel"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

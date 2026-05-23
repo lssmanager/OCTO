@@ -131,3 +131,6 @@ CREATE INDEX IF NOT EXISTS "idx_outbox_unpublished" ON "outbox_events" ("publish
 CREATE INDEX IF NOT EXISTS "idx_outbox_tenant_aggregate_sequence" ON "outbox_events" ("tenant_id", "aggregate_type", "aggregate_id", "sequence");
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_outbox_tenant_aggregate_sequence_unique" ON "outbox_events" ("tenant_id", "aggregate_type", "aggregate_id", "sequence");
+
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_approvals_execution_status" ON "approvals" ("execution_id", "status");

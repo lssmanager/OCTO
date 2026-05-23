@@ -169,3 +169,62 @@ export type {
 export * from './events';
 export * from './hierarchy';
 export * from './memory';
+
+
+// F1-CTR-001 — Execution/checkpoint Zod contracts
+export {
+  ExecutionStateSchema,
+  ExecutionSchema,
+  ExecutionStepStatusSchema,
+  ExecutionStepSchema,
+  CheckpointSourceSchema,
+  ExecutionCheckpointSchema,
+  CheckpointWriteSchema,
+} from './zod';
+
+export type {
+  ExecutionState,
+  Execution as ZodExecution,
+  ExecutionStepStatus,
+  ExecutionStep,
+  CheckpointSource,
+  ExecutionCheckpoint,
+  CheckpointWrite,
+} from './zod';
+
+
+export {
+  ToolKindSchema,
+  ToolInvocationStatusSchema,
+  ToolInvocationSchema,
+  ApprovalKindSchema,
+  ApprovalStatusSchema,
+  ApprovalSchema,
+  OutboxAggregateTypeSchema,
+  OutboxEventTypeSchema,
+  OutboxEventSchema,
+  AgentStatusSchema,
+  ModelPolicySchema,
+  ToolPolicySchema,
+  BudgetPolicySchema,
+  AgentConfigSchema,
+  AgentVersionSchema,
+} from './zod';
+
+export type {
+  ToolKind,
+  ToolInvocationStatus,
+  ToolInvocation as ZodToolInvocation,
+  ApprovalKind as ZodApprovalKind,
+  ApprovalStatus as ZodApprovalStatus,
+  Approval as ZodApproval,
+  OutboxAggregateType,
+  OutboxEventType,
+  OutboxEvent as ZodOutboxEvent,
+  AgentStatus as ZodAgentStatus,
+  ModelPolicy,
+  ToolPolicy,
+  BudgetPolicy,
+  AgentConfig,
+  AgentVersion as ZodAgentVersion,
+} from './zod';

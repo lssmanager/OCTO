@@ -1,0 +1,34 @@
+name: Contracts Sync
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.2.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - name: Install deps
+        run: HUSKY=0 pnpm install --frozen-lockfile
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python deps
+        run: pip install datamodel-code-generator pydantic pytest
+      - name: Generate schemas
+        run: pnpm contracts:build
+      - name: Generate pydantic
+        run: pnpm contracts:python
+      - name: Drift check
+        run: pnpm contracts:check
+      - name: Python roundtrip tests
+        run: PYTHONPATH=apps/runtime-worker pytest apps/runtime-worker/tests/contracts -v
