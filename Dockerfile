@@ -25,7 +25,7 @@
 # ─────────────────────────────────────────────
 # Stage 0: base — Node.js Alpine + pnpm
 # ─────────────────────────────────────────────
-FROM node:22.16.0-alpine3.21 AS base
+FROM node:22.22.2-alpine3.22 AS base
 RUN apk add --no-cache libc6-compat
 RUN npm install -g pnpm@11.2.2
 ENV PNPM_HOME="/root/.local/share/pnpm"
@@ -79,8 +79,15 @@ RUN mkdir -p /app/deploy/packages/database \
 # ─────────────────────────────────────────────
 # Stage 3: runner — minimal final image
 # ─────────────────────────────────────────────
-FROM node:22.16.0-alpine3.21 AS runner
+FROM node:22.22.2-alpine3.22 AS runner
 RUN apk add --no-cache libc6-compat curl
+# The runtime image does not need npm; removing it drops the bundled scan findings.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/npm-cli.js \
+    /usr/local/bin/npx-cli.js \
+    /usr/local/bin/npm-prefix.js
 
 RUN addgroup --system --gid 1001 octo \
  && adduser --system --uid 1001 --ingroup octo octo
