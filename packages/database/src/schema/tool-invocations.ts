@@ -4,28 +4,14 @@ import {
   timestamp,
   jsonb,
   integer,
+  boolean,
   index,
   pgEnum,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { executions } from './executions';
 import { executionSteps } from './execution-steps';
-
-// ─────────────────────────────────────────────────────────────────
-// tool_invocations — immutable audit trail of every tool call
-//
-// Every tool call made by any worker is recorded here before
-// the call is dispatched and updated when it completes or fails.
-// This table is append-only in normal operation — rows are never
-// updated after status reaches 'completed' or 'failed'.
-//
-// toolName:   canonical tool identifier (e.g. 'web_search', 'code_exec')
-// input:      exact payload sent to the tool
-// output:     exact payload received from the tool
-// durationMs: wall-clock time from invocation to response
-// tokenUsage: if the tool is an LLM call, token counts
-// error:      { code, message, retryable } if status === 'failed'
-// spanId:     OTEL span_id for this tool invocation
-// ─────────────────────────────────────────────────────────────────
+import { approvals } from './approvals';
 
 export const toolInvocationStatusEnum = pgEnum('tool_invocation_status', [
   'pending',
@@ -33,39 +19,70 @@ export const toolInvocationStatusEnum = pgEnum('tool_invocation_status', [
   'completed',
   'failed',
   'timeout',
+  'PENDING',
+  'RUNNING',
+  'SUCCEEDED',
+  'FAILED',
+  'TIMED_OUT',
 ]);
 
 export const toolInvocations = pgTable(
   'tool_invocations',
   {
-    id: text('id').primaryKey(), // UUID v7
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().default('legacy'),
     executionId: text('execution_id')
       .notNull()
       .references(() => executions.id, { onDelete: 'cascade' }),
     stepId: text('step_id')
-      .references(() => executionSteps.id, { onDelete: 'set null' }),
+      .notNull()
+      .references(() => executionSteps.id),
     toolName: text('tool_name').notNull(),
-    toolVersion: text('tool_version'), // semver — enables audit of tool regressions
+    toolKind: text('tool_kind').notNull().default('builtin'),
     status: toolInvocationStatusEnum('status').notNull().default('pending'),
-    input: jsonb('input').notNull(),
+    argsJson: jsonb('args_json').notNull().default({}),
+    resultJson: jsonb('result_json'),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    requiresApproval: boolean('requires_approval').notNull().default(false),
+    approvalId: text('approval_id').references(() => approvals.id, { onDelete: 'set null' }),
+    idempotencyKey: text('idempotency_key').notNull(),
+    durationMs: integer('duration_ms'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+
+    toolVersion: text('tool_version'),
+    input: jsonb('input').notNull().default({}),
     output: jsonb('output'),
     error: jsonb('error'),
-    durationMs: integer('duration_ms'),
-    tokenUsage: jsonb('token_usage'), // { prompt, completion, total } | null
-    spanId: text('span_id'),          // OTEL span_id
-    traceId: text('trace_id'),        // OTEL trace_id
+    tokenUsage: jsonb('token_usage'),
+    spanId: text('span_id'),
+    traceId: text('trace_id'),
     invokedAt: timestamp('invoked_at').notNull().defaultNow(),
     completedAt: timestamp('completed_at'),
   },
   (t) => ({
-    executionIdx:  index('tool_invocations_execution_id_idx').on(t.executionId),
-    stepIdx:       index('tool_invocations_step_id_idx').on(t.stepId),
-    toolNameIdx:   index('tool_invocations_tool_name_idx').on(t.toolName),
-    statusIdx:     index('tool_invocations_status_idx').on(t.status),
-    invokedAtIdx:  index('tool_invocations_invoked_at_idx').on(t.invokedAt),
-    traceIdx:      index('tool_invocations_trace_id_idx').on(t.traceId),
-  }),
+    executionIdx: index('tool_invocations_execution_id_idx').on(t.executionId),
+    stepIdx: index('tool_invocations_step_id_idx').on(t.stepId),
+    toolNameIdx: index('tool_invocations_tool_name_idx').on(t.toolName),
+    statusIdx: index('tool_invocations_status_idx').on(t.status),
+    invokedAtIdx: index('tool_invocations_invoked_at_idx').on(t.invokedAt),
+    traceIdx: index('tool_invocations_trace_id_idx').on(t.traceId),
+    idempotencyIdx: uniqueIndex('idx_tool_invocations_idempotency').on(
+      t.tenantId,
+      t.idempotencyKey
+    ),
+    tenantExecutionIdx: index('idx_tool_invocations_tenant_execution').on(
+      t.tenantId,
+      t.executionId
+    ),
+    tenantStatusStartedIdx: index('idx_tool_invocations_tenant_status_started').on(
+      t.tenantId,
+      t.status,
+      t.startedAt.desc()
+    ),
+  })
 );
 
-export type ToolInvocation    = typeof toolInvocations.$inferSelect;
+export type ToolInvocation = typeof toolInvocations.$inferSelect;
 export type NewToolInvocation = typeof toolInvocations.$inferInsert;

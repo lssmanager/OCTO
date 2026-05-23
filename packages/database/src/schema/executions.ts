@@ -1,24 +1,3 @@
-// packages/database/src/schema/executions.ts
-// System of record for every execution run.
-// PostgreSQL IS the source of truth -- Redis is transient queue only.
-//
-// ADR: F0-004 (Durable Execution), F0-015 (Multi-Tenancy from day one)
-// ADR: ADR-0016 (Secret Hygiene), ADR-0017 (State Machine)
-//
-// H1 HARDENING -- Lease + Heartbeat columns added (migration 0003).
-// heartbeat_at      -- refreshed every 30s by the active worker
-// lease_expires_at  -- NOW() + 90s; reclaim scanner fires when expired
-//
-// H2 HARDENING -- Reclaim tracking columns added (issue #34).
-// reclaim_count  -- incremented each time a zombie is reclaimed
-// reclaimed_at   -- timestamp of last successful reclaim
-//
-// STATE MACHINE INVARIANT:
-// ALL status mutations MUST go through:
-//   packages/runtime-state/src/execution-state.service.ts -> transition()
-// Raw db.update(executions).set({ status: ... }) outside that service
-// is blocked by the ESLint rule: no-raw-execution-status-write
-
 import {
   pgTable,
   text,
@@ -31,8 +10,8 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { agents } from './agents';
+import { agentVersions } from './agent-versions';
 
-// --- STATUS ENUM ---
 export const executionStatusEnum = pgEnum('execution_status', [
   'pending',
   'queued',
@@ -49,7 +28,6 @@ export const executionStatusEnum = pgEnum('execution_status', [
   'cancelled',
 ]);
 
-// --- TRIGGER SOURCE ENUM ---
 export const triggerSourceEnum = pgEnum('trigger_source', [
   'api',
   'schedule',
@@ -58,71 +36,79 @@ export const triggerSourceEnum = pgEnum('trigger_source', [
   'replay',
 ]);
 
-// --- TABLE ---
 export const executions = pgTable(
   'executions',
   {
-    id:             text('id').primaryKey(),
-    tenantId:       text('tenant_id').notNull(),
-    agentId:        text('agent_id')
-                      .notNull()
-                      .references(() => agents.id),
-    idempotencyKey: text('idempotency_key'),
-    triggerSource:  triggerSourceEnum('trigger_source').notNull().default('api'),
-    triggerRef:     text('trigger_ref'),
-    status:         executionStatusEnum('status').notNull().default('pending'),
-    attempt:        integer('attempt').notNull().default(0),
-    queueJobId:     text('queue_job_id'),
-    workerId:       text('worker_id'),
-
-    // H1: Lease + Heartbeat
-    // INVARIANT: worker_id MUST be set when status='running'.
-    // INVARIANT: Workers must NOT reclaim executions they still own.
-    //   Use WHERE worker_id = $expectedId in reclaim UPDATE.
-    heartbeatAt:    timestamp('heartbeat_at',    { withTimezone: true }),
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id),
+    agentVersionId: text('agent_version_id')
+      .notNull()
+      .references(() => agentVersions.id),
+    state: text('state').notNull(),
+    version: integer('version').notNull().default(0),
+    inputJson: jsonb('input_json').notNull().default({}),
+    outputJson: jsonb('output_json'),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    reclaimCount: integer('reclaim_count').notNull().default(0),
+    leaseOwner: text('lease_owner'),
     leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    cancellationRequestedAt: timestamp('cancellation_requested_at', { withTimezone: true }),
+    budgetSnapshotJson: jsonb('budget_snapshot_json').notNull().default({}),
+    contextSnapshotJson: jsonb('context_snapshot_json').notNull().default({}),
+    createdBy: text('created_by').notNull().default('system'),
 
-    // H2: Reclaim tracking (issue #34)
-    // reclaimCount incremented on every successful casReclaim() call.
-    // reclaimedAt set to NOW() when status transitions running -> retrying via reclaimer.
-    reclaimCount:   integer('reclaim_count').notNull().default(0),
-    reclaimedAt:    timestamp('reclaimed_at', { withTimezone: true }),
-
-    task:           jsonb('task').notNull(),
-    governance:     jsonb('governance').notNull(),
-    result:         jsonb('result'),
-    error:          jsonb('error'),
-    traceId:        text('trace_id').notNull(),
-    runId:          text('run_id').notNull(),
-    tokenUsage:     jsonb('token_usage'),
-    costUsd:        jsonb('cost_usd'),
-    // F2: LangGraph checkpoint support (pause/resume)
-    // Stores the serialized graph state blob inline.
-    // lastCheckpointId references an external checkpoint store ID.
-    checkpoint:       jsonb('checkpoint'),
+    idempotencyKey: text('idempotency_key'),
+    triggerSource: triggerSourceEnum('trigger_source').notNull().default('api'),
+    triggerRef: text('trigger_ref'),
+    status: executionStatusEnum('status').notNull().default('pending'),
+    attempt: integer('attempt').notNull().default(0),
+    queueJobId: text('queue_job_id'),
+    workerId: text('worker_id'),
+    heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }),
+    reclaimedAt: timestamp('reclaimed_at', { withTimezone: true }),
+    task: jsonb('task').notNull().default({}),
+    governance: jsonb('governance').notNull().default({}),
+    result: jsonb('result'),
+    error: jsonb('error'),
+    traceId: text('trace_id').notNull().default(''),
+    runId: text('run_id').notNull().default(''),
+    tokenUsage: jsonb('token_usage'),
+    costUsd: jsonb('cost_usd'),
+    checkpoint: jsonb('checkpoint'),
     lastCheckpointId: text('last_checkpoint_id'),
-    startedAt:      timestamp('started_at'),
-    completedAt:    timestamp('completed_at'),
-    createdAt:      timestamp('created_at').notNull().defaultNow(),
-    updatedAt:      timestamp('updated_at').notNull().defaultNow(),
+    startedAt: timestamp('started_at'),
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    agentIdx:          index('executions_agent_id_idx').on(t.agentId),
-    tenantIdx:         index('executions_tenant_id_idx').on(t.tenantId),
-    statusIdx:         index('executions_status_idx').on(t.status),
-    traceIdx:          index('executions_trace_id_idx').on(t.traceId),
-    createdIdx:        index('executions_created_at_idx').on(t.createdAt),
-    tenantStatusIdx:   index('executions_tenant_status_idx').on(t.tenantId, t.status),
-    workerIdx:         index('executions_worker_id_idx').on(t.workerId),
-    // H1 - reclaim scanner + heartbeat monitoring indexes
-    leaseIdx:          index('idx_executions_lease').on(t.status, t.leaseExpiresAt),
-    heartbeatIdx:      index('idx_executions_heartbeat').on(t.status, t.heartbeatAt),
-    // FIX: use sql`` template -- text() returns PgTextBuilder, not SQL<unknown>
-    idempotencyIdx:    uniqueIndex('executions_idempotency_key_uidx')
-                         .on(t.tenantId, t.idempotencyKey)
-                         .where(sql`idempotency_key IS NOT NULL`),
-  }),
+    agentIdx: index('executions_agent_id_idx').on(t.agentId),
+    tenantIdx: index('executions_tenant_id_idx').on(t.tenantId),
+    statusIdx: index('executions_status_idx').on(t.status),
+    traceIdx: index('executions_trace_id_idx').on(t.traceId),
+    createdIdx: index('executions_created_at_idx').on(t.createdAt),
+    tenantStatusIdx: index('executions_tenant_status_idx').on(t.tenantId, t.status),
+    workerIdx: index('executions_worker_id_idx').on(t.workerId),
+    leaseIdx: index('idx_executions_lease').on(t.status, t.leaseExpiresAt),
+    heartbeatIdx: index('idx_executions_heartbeat').on(t.status, t.heartbeatAt),
+    f1TenantStateCreatedIdx: index('idx_executions_tenant_state_created').on(
+      t.tenantId,
+      t.state,
+      t.createdAt.desc()
+    ),
+    f1LeaseStaleIdx: index('idx_executions_lease_stale')
+      .on(t.state, t.leaseExpiresAt)
+      .where(sql`state IN ('RUNNING', 'RECLAIMING', 'DISPATCHED')`),
+    idempotencyIdx: uniqueIndex('executions_idempotency_key_uidx')
+      .on(t.tenantId, t.idempotencyKey)
+      .where(sql`idempotency_key IS NOT NULL`),
+  })
 );
 
-export type Execution    = typeof executions.$inferSelect;
+export type Execution = typeof executions.$inferSelect;
 export type NewExecution = typeof executions.$inferInsert;

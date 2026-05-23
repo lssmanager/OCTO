@@ -16,6 +16,7 @@
     "build": "tsup src/index.ts src/migrate.ts --format cjs --dts",
     "dev": "tsup src/index.ts --format cjs --dts --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
@@ -32,6 +33,7 @@
     "drizzle-kit": "0.30.6",
     "rimraf": "5.0.10",
     "tsup": "8.5.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
   }
 }

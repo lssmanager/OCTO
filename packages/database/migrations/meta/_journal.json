@@ -8,6 +8,27 @@
       "when": 1779147539733,
       "tag": "0000_pale_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779537660001,
+      "tag": "202605230001_f1_executions_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779537660002,
+      "tag": "202605230002_f1_tools_approvals_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779537660003,
+      "tag": "202605230003_f1_rls_policies",
+      "breakpoints": true
     }
   ]
 }

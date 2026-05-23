@@ -1,16 +1,17 @@
+import { sql as drizzleSql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
 
 type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
+type TenantTransaction = Parameters<Parameters<DrizzleDb['transaction']>[0]>[0];
 
 let _client: DrizzleDb | undefined;
 
 /**
  * Singleton Drizzle client factory.
- * Connection pool: max 20 in prod, 5 in dev/test (F0-004 contract).
- * ARCHITECTURAL BOUNDARY: runtime-worker MUST NOT import @octo/database.
- * Only the control-plane (apps/api) calls this.
+ * PostgreSQL is the source of truth. Runtime code must set tenant context
+ * inside the transaction that performs tenant-scoped business queries.
  */
 export function getDb(): DrizzleDb {
   if (_client) return _client;
@@ -33,7 +34,18 @@ export function getDb(): DrizzleDb {
   return _client;
 }
 
-/** Convenience accessor — same singleton, getter pattern avoids module-load-time side effects */
+export async function withTenantTx<T>(
+  tenantId: string,
+  fn: (tx: TenantTransaction) => Promise<T>
+): Promise<T> {
+  const db = getDb();
+
+  return db.transaction(async (tx) => {
+    await tx.execute(drizzleSql`SELECT set_config('app.current_tenant', ${tenantId}, true)`);
+    return fn(tx);
+  });
+}
+
 export const db = new Proxy({} as DrizzleDb, {
   get(_target, prop) {
     return (getDb() as never)[prop];
