@@ -5,8 +5,7 @@
  */
 
 const API_URL = process.env['API_URL'] ?? 'http://localhost:3001';
-const RUNTIME_WORKER_URL =
-  process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000';
+const RUNTIME_WORKER_URL = process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000';
 
 export interface ServiceHealth {
   status: 'ok' | 'error' | 'unknown';
@@ -33,10 +32,7 @@ export interface VersionInfo {
   apiUrl?: string;
 }
 
-async function fetchHealth(
-  url: string,
-  label: string,
-): Promise<ServiceHealth> {
+async function fetchHealth(url: string, label: string): Promise<ServiceHealth> {
   const start = Date.now();
   try {
     const res = await fetch(`${url}/health`, {
@@ -79,8 +75,7 @@ async function fetchHealth(
     return result;
   } catch (err) {
     const latencyMs = Date.now() - start;
-    const message =
-      err instanceof Error ? err.message : 'Connection refused';
+    const message = err instanceof Error ? err.message : 'Connection refused';
     return {
       status: 'error',
       service: label,

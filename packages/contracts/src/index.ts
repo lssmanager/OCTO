@@ -169,3 +169,6 @@ export type {
 export * from './events';
 export * from './hierarchy';
 export * from './memory';
+
+export * from './zod/execution.schema';
+export * from './zod/checkpoint.schema';

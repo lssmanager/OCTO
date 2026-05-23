@@ -3,24 +3,16 @@ import { z } from 'zod';
 const postgresUrlRefine = (v: string) =>
   v.startsWith('postgresql://') || v.startsWith('postgres://');
 
-const postgresUrlMessage =
-  'DATABASE_URL must start with postgresql:// or postgres://';
+const postgresUrlMessage = 'DATABASE_URL must start with postgresql:// or postgres://';
 
 export const apiConfigSchema = z.object({
   // Server
-  NODE_ENV: z
-    .enum(['development', 'test', 'production'])
-    .default('development'),
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1024).max(65535).default(3001),
-  LOG_LEVEL: z
-    .enum(['trace', 'debug', 'info', 'warn', 'error'])
-    .default('info'),
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 
   // Database
-  DATABASE_URL: z
-    .string()
-    .url()
-    .refine(postgresUrlRefine, { message: postgresUrlMessage }),
+  DATABASE_URL: z.string().url().refine(postgresUrlRefine, { message: postgresUrlMessage }),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(20),
 
   // Redis
@@ -37,21 +29,14 @@ export const apiConfigSchema = z.object({
 
   // LiteLLM
   LITELLM_BASE_URL: z.string().url().default('http://litellm:4000'),
-  LITELLM_MASTER_KEY: z
-    .string()
-    .min(16, 'LITELLM_MASTER_KEY must be at least 16 characters'),
+  LITELLM_MASTER_KEY: z.string().min(16, 'LITELLM_MASTER_KEY must be at least 16 characters'),
 
   // Runtime Worker inter-service
   RUNTIME_WORKER_URL: z.string().url().default('http://runtime-worker:8000'),
-  RUNTIME_API_SECRET: z
-    .string()
-    .min(32, 'RUNTIME_API_SECRET must be at least 32 characters'),
+  RUNTIME_API_SECRET: z.string().min(32, 'RUNTIME_API_SECRET must be at least 32 characters'),
 
   // OTEL
-  OTEL_EXPORTER_OTLP_ENDPOINT: z
-    .string()
-    .url()
-    .default('http://otel-collector:4318'),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().default('http://otel-collector:4318'),
   OTEL_SERVICE_NAME: z.string().default('octo-api'),
 
   // CORS — comma-separated origins, e.g. "http://localhost:3000,https://app.octo.ai"

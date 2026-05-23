@@ -19,7 +19,7 @@ import * as path from 'path';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { JOB_SCHEMAS, type JobSchemaName } from '../src/schemas/index';
 
-const OUTPUT_DIR  = path.resolve(__dirname, '..', 'generated');
+const OUTPUT_DIR = path.resolve(__dirname, '..', 'generated');
 const OUTPUT_FILE = path.join(OUTPUT_DIR, 'contracts.py');
 
 // ─── JSON Schema → Python type mapping ──────────────────────────────────────
@@ -45,10 +45,14 @@ function mapType(schema: JsonSchema, modelName: string, extra: string[]): string
   }
 
   switch (type) {
-    case 'string':  return 'str';
-    case 'integer': return 'int';
-    case 'number':  return 'float';
-    case 'boolean': return 'bool';
+    case 'string':
+      return 'str';
+    case 'integer':
+      return 'int';
+    case 'number':
+      return 'float';
+    case 'boolean':
+      return 'bool';
     case 'array': {
       const items = schema['items'] as JsonSchema | undefined;
       const inner = items ? mapType(items, modelName, extra) : 'Any';
@@ -68,9 +72,9 @@ function mapType(schema: JsonSchema, modelName: string, extra: string[]): string
 }
 
 function emitModel(name: string, schema: JsonSchema, lines: string[]): void {
-  const props     = (schema['properties'] as Record<string, JsonSchema> | undefined) ?? {};
-  const required  = (schema['required']   as string[]                   | undefined) ?? [];
-  const defs      = (schema['$defs']      as Record<string, JsonSchema>  | undefined) ?? {};
+  const props = (schema['properties'] as Record<string, JsonSchema> | undefined) ?? {};
+  const required = (schema['required'] as string[] | undefined) ?? [];
+  const defs = (schema['$defs'] as Record<string, JsonSchema> | undefined) ?? {};
 
   // Emit any referenced sub-models first
   for (const [defName, defSchema] of Object.entries(defs)) {
@@ -102,7 +106,7 @@ function emitModel(name: string, schema: JsonSchema, lines: string[]): void {
     }
 
     const fieldDefault = isRequired ? '' : ' = None';
-    const descPart     = description ? `  # ${description}` : '';
+    const descPart = description ? `  # ${description}` : '';
     lines.push(`    ${fieldName}: ${pyType}${fieldDefault}${descPart}`);
   }
 
@@ -132,7 +136,10 @@ function main(): void {
 
   const modelLines: string[] = [];
 
-  for (const [schemaName, zodSchema] of Object.entries(JOB_SCHEMAS) as [JobSchemaName, typeof JOB_SCHEMAS[JobSchemaName]][]) {
+  for (const [schemaName, zodSchema] of Object.entries(JOB_SCHEMAS) as [
+    JobSchemaName,
+    (typeof JOB_SCHEMAS)[JobSchemaName],
+  ][]) {
     const jsonSchema = zodToJsonSchema(zodSchema, {
       name: schemaName,
       errorMessages: false,
@@ -143,11 +150,7 @@ function main(): void {
   }
 
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-  fs.writeFileSync(
-    OUTPUT_FILE,
-    [...header, ...modelLines].join('\n'),
-    'utf8',
-  );
+  fs.writeFileSync(OUTPUT_FILE, [...header, ...modelLines].join('\n'), 'utf8');
 
   console.log(`[codegen] contracts.py written to ${OUTPUT_FILE}`);
   console.log(`[codegen] models: ${Object.keys(JOB_SCHEMAS).join(', ')}`);

@@ -9,7 +9,6 @@
 # #12 (PostgreSQL system of record), #16 (every phase must be deployable)
 
 services:
-
   # ────────────────────────────────────────────────────────────────
   # INFRASTRUCTURE — PostgreSQL
   # Sistema de registro (Principio Arquitectónico #12).
@@ -27,7 +26,7 @@ services:
     networks:
       - octonet
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-octo} -d ${POSTGRES_DB:-octo}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-octo} -d ${POSTGRES_DB:-octo}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,7 +52,7 @@ services:
     networks:
       - octonet
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-}", "--no-auth-warning", "ping"]
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-}', '--no-auth-warning', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -105,7 +104,7 @@ services:
       BUILD_PHASE: ${BUILD_PHASE:-F0}
       BUILD_TIME: ${BUILD_TIME:-unknown}
     ports:
-      - "${PORT:-3001}:3001"
+      - '${PORT:-3001}:3001'
     depends_on:
       postgres:
         condition: service_healthy
@@ -117,7 +116,7 @@ services:
       - octonet
     healthcheck:
       # Path correcto: incluye global prefix 'api' (main.ts: app.setGlobalPrefix('api'))
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health/live"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:3001/api/health/live']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -171,7 +170,7 @@ services:
       BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
       BUILD_PHASE: ${BUILD_PHASE:-F0}
     ports:
-      - "${WORKER_PORT:-8000}:8000"
+      - '${WORKER_PORT:-8000}:8000'
     depends_on:
       postgres:
         condition: service_healthy
@@ -180,7 +179,7 @@ services:
     networks:
       - octonet
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/health/live']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -203,14 +202,14 @@ services:
     volumes:
       - ./docker/litellm/config.yaml:/app/config.yaml:ro
     ports:
-      - "${LITELLM_PORT:-4000}:4000"
+      - '${LITELLM_PORT:-4000}:4000'
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - octonet
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health/liveliness"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:4000/health/liveliness']
       interval: 30s
       timeout: 10s
       retries: 5

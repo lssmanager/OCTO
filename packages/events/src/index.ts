@@ -24,7 +24,7 @@ interface IEventBus {
   publish<T = unknown>(event: OctoEvent<T>): Promise<void>;
   subscribe<T = unknown>(
     eventType: OctoEventType,
-    handler: (event: OctoEvent<T>) => Promise<void>,
+    handler: (event: OctoEvent<T>) => Promise<void>
   ): void;
   subscribeAll(handler: (event: OctoEvent) => Promise<void>): void;
 }
@@ -39,7 +39,7 @@ interface IEventBus {
 export function createEvent<T = unknown>(
   type: OctoEventType,
   payload: T,
-  metadata: Omit<EventMetadata, 'timestamp' | 'version'>,
+  metadata: Omit<EventMetadata, 'timestamp' | 'version'>
 ): OctoEvent<T> {
   return {
     id: crypto.randomUUID(),

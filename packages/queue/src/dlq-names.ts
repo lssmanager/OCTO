@@ -17,7 +17,7 @@ export type DlqNames = {
 };
 
 export const DLQ_NAMES = Object.fromEntries(
-  Object.entries(QUEUE_NAMES).map(([key, value]) => [key, `dlq:${value}`]),
+  Object.entries(QUEUE_NAMES).map(([key, value]) => [key, `dlq:${value}`])
 ) as DlqNames;
 
 export type DlqName = DlqNames[keyof DlqNames];

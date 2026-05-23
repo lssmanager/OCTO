@@ -209,12 +209,7 @@ export type ApprovalKind =
   | 'workflow-transition'
   | 'escalation-request';
 
-export type ApprovalStatus =
-  | 'pending'
-  | 'approved'
-  | 'rejected'
-  | 'expired'
-  | 'canceled';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'canceled';
 
 export interface ApprovalRequest {
   id: string;
@@ -237,12 +232,12 @@ export interface ApprovalRequest {
 
 export interface ApprovalService {
   requestApproval(
-    request: Omit<ApprovalRequest, 'id' | 'status' | 'requestedAt'>,
+    request: Omit<ApprovalRequest, 'id' | 'status' | 'requestedAt'>
   ): Promise<ApprovalRequest>;
   resolveApproval(
     id: string,
     decision: 'approve' | 'reject',
-    metadata?: Record<string, unknown>,
+    metadata?: Record<string, unknown>
   ): Promise<void>;
   getPendingApprovals(filter?: {
     runId?: string;

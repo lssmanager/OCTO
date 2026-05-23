@@ -1,11 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import {
-  createQueue,
-  createRedisConnection,
-  QUEUE_NAMES,
-  type HealthJobData,
-} from '@octo/queue';
+import { createQueue, createRedisConnection, QUEUE_NAMES, type HealthJobData } from '@octo/queue';
 import postgres from 'postgres';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -57,9 +52,7 @@ const CHECK_TIMEOUT_MS = 500;
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms),
-    ),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms)),
   ]);
 }
 
@@ -135,7 +128,7 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
         triggeredAt: new Date().toISOString(),
         source: 'api-healthcheck',
       },
-      { jobId: `health-${Date.now()}` },
+      { jobId: `health-${Date.now()}` }
     );
     return job.id ?? 'unknown';
   }
@@ -169,7 +162,7 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
           this.healthQueue.getActiveCount(),
           this.healthQueue.getFailedCount(),
         ]),
-        CHECK_TIMEOUT_MS,
+        CHECK_TIMEOUT_MS
       );
       return {
         status: 'ok',
@@ -203,10 +196,7 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
       onnotice: () => undefined,
     });
     try {
-      await withTimeout(
-        drizzle(probeClient).execute(sql`SELECT 1`),
-        CHECK_TIMEOUT_MS,
-      );
+      await withTimeout(drizzle(probeClient).execute(sql`SELECT 1`), CHECK_TIMEOUT_MS);
       const latencyMs = Date.now() - start;
       return { status: 'ok', latencyMs };
     } catch (err) {

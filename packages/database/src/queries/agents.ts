@@ -11,11 +11,7 @@ export async function getAgentById(id: string) {
 
 export async function listAgents(limit = 50) {
   const db = getDb();
-  return db
-    .select()
-    .from(agents)
-    .orderBy(desc(agents.createdAt))
-    .limit(limit);
+  return db.select().from(agents).orderBy(desc(agents.createdAt)).limit(limit);
 }
 
 export async function createAgent(data: NewAgent) {
@@ -24,10 +20,7 @@ export async function createAgent(data: NewAgent) {
   return created;
 }
 
-export async function updateAgentStatus(
-  id: string,
-  status: NewAgent['status'],
-) {
+export async function updateAgentStatus(id: string, status: NewAgent['status']) {
   const db = getDb();
   const [updated] = await db
     .update(agents)

@@ -23,25 +23,25 @@
  *   re-enqueued for a healthy worker.
  */
 
-export const RECLAIM_INTERVAL_MS  = 30_000; // check every 30s
-export const LEASE_DURATION_S     = 90;     // lease window in seconds
-export const HEARTBEAT_INTERVAL_S = 30;     // worker must refresh every 30s
-export const RECLAIM_BATCH_SIZE   = 100;    // max rows per scan tick
+export const RECLAIM_INTERVAL_MS = 30_000; // check every 30s
+export const LEASE_DURATION_S = 90; // lease window in seconds
+export const HEARTBEAT_INTERVAL_S = 30; // worker must refresh every 30s
+export const RECLAIM_BATCH_SIZE = 100; // max rows per scan tick
 
 export interface StaleExecutionRow {
-  readonly id:             string;
-  readonly workerId:       string | null;
-  readonly attempt:        number;
-  readonly traceId:        string;
-  readonly tenantId:       string;
+  readonly id: string;
+  readonly workerId: string | null;
+  readonly attempt: number;
+  readonly traceId: string;
+  readonly tenantId: string;
   readonly leaseExpiresAt: Date | null;
 }
 
 export interface ReclaimResult {
-  readonly executionId:  string;
-  readonly oldWorkerId:  string | null;
-  readonly newAttempt:   number;
-  readonly reclaimedAt:  Date;
+  readonly executionId: string;
+  readonly oldWorkerId: string | null;
+  readonly newAttempt: number;
+  readonly reclaimedAt: Date;
 }
 
 export interface ReclaimScannerDeps {
@@ -52,7 +52,10 @@ export interface ReclaimScannerDeps {
    * Atomically reclaims a single stale execution inside a DB transaction.
    * Returns null if already reclaimed (idempotency).
    */
-  reclaimExecution(executionId: string, expectedWorkerId: string | null): Promise<ReclaimResult | null>;
+  reclaimExecution(
+    executionId: string,
+    expectedWorkerId: string | null
+  ): Promise<ReclaimResult | null>;
 
   /** Appends reclaim event to execution_events (called inside same tx). */
   appendReclaimEvent(executionId: string, result: ReclaimResult): Promise<void>;
@@ -70,7 +73,7 @@ export interface ReclaimScannerDeps {
  */
 export async function runReclaimScan(
   deps: ReclaimScannerDeps,
-  batchSize: number = RECLAIM_BATCH_SIZE,
+  batchSize: number = RECLAIM_BATCH_SIZE
 ): Promise<string[]> {
   const stale = await deps.findStaleExecutions(batchSize);
   if (stale.length === 0) return [];

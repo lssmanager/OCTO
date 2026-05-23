@@ -1,23 +1,23 @@
 {
   "executionId": "01932b4c-1234-7abc-8def-000000000001",
-  "agentId":     "01932b4c-1234-7abc-8def-000000000002",
-  "traceId":     "4bf92f3577b34da6a3ce929d0e0e4736",
-  "spanId":      "00f067aa0ba902b7",
-  "runId":       "01932b4c-1234-7abc-8def-000000000003",
+  "agentId": "01932b4c-1234-7abc-8def-000000000002",
+  "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "spanId": "00f067aa0ba902b7",
+  "runId": "01932b4c-1234-7abc-8def-000000000003",
   "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
   "task": {
-    "id":    "task-001",
-    "type":  "llm_call",
+    "id": "task-001",
+    "type": "llm_call",
     "input": { "prompt": "Summarise the quarterly report" },
     "expectedOutputSchema": { "type": "object", "properties": { "summary": { "type": "string" } } },
     "timeout": 30000
   },
   "governance": {
-    "tokenBudget":        4096,
-    "maxIterations":      10,
+    "tokenBudget": 4096,
+    "maxIterations": 10,
     "maxDelegationDepth": 3,
-    "allowedTools":       ["web_search", "code_exec"],
-    "requireApproval":    false,
-    "timeoutMs":          60000
+    "allowedTools": ["web_search", "code_exec"],
+    "requireApproval": false,
+    "timeoutMs": 60000
   }
 }

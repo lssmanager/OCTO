@@ -27,12 +27,8 @@ import {
 } from 'bullmq';
 import { DlqReason } from '@octo/contracts';
 import { createLogger } from '@octo/observability';
-import {
-  createRedisConnection,
-} from './connection';
-import {
-  injectTraceparent,
-} from './traceparent';
+import { createRedisConnection } from './connection';
+import { injectTraceparent } from './traceparent';
 import type {
   IJob,
   IQueue,
@@ -51,7 +47,6 @@ import type {
   WorkerEventMap,
 } from './interfaces';
 
- 
 type AnyData = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const logger = createLogger({ service: 'queue:bullmq-adapter' });
@@ -73,39 +68,38 @@ function retryPolicyToJobOptions(policy: RetryPolicy): Partial<JobsOptions> {
 function buildBullJobOptions(opts?: AddJobOptions, defaultPolicy?: RetryPolicy): JobsOptions {
   const policy = opts?.retryPolicy ?? defaultPolicy;
   return {
-    jobId:    opts?.jobId,
-    delay:    opts?.delayMs,
+    jobId: opts?.jobId,
+    delay: opts?.delayMs,
     priority: opts?.priority,
-    removeOnComplete: opts?.removeOnCompleteAge !== undefined
-      ? { age: opts.removeOnCompleteAge }
-      : { age: 3600 },
-    removeOnFail: opts?.removeOnFailAge !== undefined
-      ? { age: opts.removeOnFailAge }
-      : { age: 86400 },
+    removeOnComplete:
+      opts?.removeOnCompleteAge !== undefined ? { age: opts.removeOnCompleteAge } : { age: 3600 },
+    removeOnFail:
+      opts?.removeOnFailAge !== undefined ? { age: opts.removeOnFailAge } : { age: 86400 },
     ...(policy ? retryPolicyToJobOptions(policy) : {}),
     ...(opts?.deduplicationId ? { deduplication: { id: opts.deduplicationId } } : {}),
   };
 }
 
 /** Wrap a BullMQ Job into the IJob<T> contract. */
-function adaptJob<T>(
-  bullJob: BullJob<AnyData>,
-  meta: OctoJobMeta,
-): IJob<T> {
+function adaptJob<T>(bullJob: BullJob<AnyData>, meta: OctoJobMeta): IJob<T> {
   return {
-    id:           bullJob.id ?? '',
-    data:         bullJob.data as OctoJobPayload<T>,
+    id: bullJob.id ?? '',
+    data: bullJob.data as OctoJobPayload<T>,
     meta,
     attemptsMade: bullJob.attemptsMade,
-    timestamp:    bullJob.timestamp,
+    timestamp: bullJob.timestamp,
     // BullMQ v5 changed updateProgress() return type to Promise<number>.
     // IJob.updateProgress is typed as Promise<void>. Discard the value.
     updateProgress: (progress): Promise<void> =>
-      bullJob.updateProgress(progress).then((): void => { /* discard */ }),
+      bullJob.updateProgress(progress).then((): void => {
+        /* discard */
+      }),
     // BullMQ v5 Job.log() returns Promise<number> (log entry index).
     // IJob.log is typed as Promise<void> — discard the numeric return value.
     log: (row): Promise<void> =>
-      bullJob.log(row).then((): void => { /* discard */ }),
+      bullJob.log(row).then((): void => {
+        /* discard */
+      }),
   };
 }
 
@@ -120,27 +114,23 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
   private readonly workerId: string;
 
   constructor(name: string, config: QueueConfig) {
-    this.name          = name;
+    this.name = name;
     this.defaultPolicy = config.defaultRetryPolicy;
-    this.workerId      = crypto.randomUUID();
-    const connection   = createRedisConnection(config.redisUrl);
-    this.bull          = new BullQueue<AnyData>(name, { connection });
+    this.workerId = crypto.randomUUID();
+    const connection = createRedisConnection(config.redisUrl);
+    this.bull = new BullQueue<AnyData>(name, { connection });
   }
 
-  async add(
-    jobName: string,
-    payload: OctoJobPayload<T>,
-    opts?: AddJobOptions,
-  ): Promise<string> {
+  async add(jobName: string, payload: OctoJobPayload<T>, opts?: AddJobOptions): Promise<string> {
     const data: AnyData = injectTraceparent(payload as AnyData);
-    const jobOpts       = buildBullJobOptions(opts, this.defaultPolicy);
-    const job           = await this.bull.add(jobName, data, jobOpts);
+    const jobOpts = buildBullJobOptions(opts, this.defaultPolicy);
+    const job = await this.bull.add(jobName, data, jobOpts);
     logger.debug({ jobId: job.id, queueName: this.name, jobName }, 'job enqueued');
     return job.id ?? '';
   }
 
   async addBulk(
-    jobs: Array<{ name: string; payload: OctoJobPayload<T>; opts?: AddJobOptions }>,
+    jobs: Array<{ name: string; payload: OctoJobPayload<T>; opts?: AddJobOptions }>
   ): Promise<string[]> {
     const bullJobs = jobs.map(({ name, payload, opts }) => ({
       name,
@@ -151,7 +141,9 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
     return results.map((j) => j.id ?? '');
   }
 
-  async pause(): Promise<void> { await this.bull.pause(); }
+  async pause(): Promise<void> {
+    await this.bull.pause();
+  }
 
   // BullMQ v5 Queue.resume() returns Promise<number> (resumed-job count).
   // IQueue<T>.resume() is typed as Promise<void> — discard the value.
@@ -168,16 +160,16 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
   }
 
   async getHealth(): Promise<QueueHealth> {
-    const counts  = await this.bull.getJobCounts();
+    const counts = await this.bull.getJobCounts();
     const isPaused = await this.bull.isPaused();
     return {
-      name:       this.name,
-      waiting:    counts['waiting']   ?? 0,
-      active:     counts['active']    ?? 0,
-      completed:  counts['completed'] ?? 0,
-      failed:     counts['failed']    ?? 0,
-      delayed:    counts['delayed']   ?? 0,
-      paused:     isPaused,
+      name: this.name,
+      waiting: counts['waiting'] ?? 0,
+      active: counts['active'] ?? 0,
+      completed: counts['completed'] ?? 0,
+      failed: counts['failed'] ?? 0,
+      delayed: counts['delayed'] ?? 0,
+      paused: isPaused,
       snapshotAt: new Date().toISOString(),
     };
   }
@@ -191,9 +183,9 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
     if (!bullJob) return null;
     const meta: OctoJobMeta = {
       workerName: this.name,
-      workerId:   this.workerId,
+      workerId: this.workerId,
       pickedUpAt: new Date().toISOString(),
-      queueName:  this.name,
+      queueName: this.name,
     };
     return adaptJob<T>(bullJob, meta);
   }
@@ -216,29 +208,27 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
   private readonly workerId: string;
   private readonly shutdownTimeoutMs: number;
 
-  constructor(
-    name: string,
-    handler: JobHandler<T>,
-    config: WorkerConfig,
-  ) {
-    this.name              = name;
-    this.concurrency       = config.concurrency ?? 1;
-    this.workerId          = config.workerId ?? crypto.randomUUID();
+  constructor(name: string, handler: JobHandler<T>, config: WorkerConfig) {
+    this.name = name;
+    this.concurrency = config.concurrency ?? 1;
+    this.workerId = config.workerId ?? crypto.randomUUID();
     this.shutdownTimeoutMs = config.shutdownTimeoutMs ?? 30_000;
-    this.emitter           = new EventEmitter();
+    this.emitter = new EventEmitter();
 
     const connection = createRedisConnection(config.redisUrl);
 
     const workerOptions: WorkerOptions = {
       connection,
       concurrency: this.concurrency,
-      ...(config.retryPolicy ? retryPolicyToJobOptions(config.retryPolicy) as Partial<WorkerOptions> : {}),
+      ...(config.retryPolicy
+        ? (retryPolicyToJobOptions(config.retryPolicy) as Partial<WorkerOptions>)
+        : {}),
     };
 
     this.bull = new BullWorker<AnyData>(
       name,
       async (bullJob: BullJob<AnyData>) => this._process(bullJob, handler),
-      workerOptions,
+      workerOptions
     );
 
     this._bindBullEvents();
@@ -251,15 +241,22 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
     // run() is a no-op here but fulfills the IWorker contract.
   }
 
-  async pause():  Promise<void> { await this.bull.pause(); }
-  async resume(): Promise<void> { await this.bull.resume(); }
+  async pause(): Promise<void> {
+    await this.bull.pause();
+  }
+  async resume(): Promise<void> {
+    await this.bull.resume();
+  }
 
   async close(timeoutMs?: number): Promise<void> {
     const timeout = timeoutMs ?? this.shutdownTimeoutMs;
     await Promise.race([
       this.bull.close(),
       new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error(`Worker ${this.name} shutdown timed out after ${timeout}ms`)), timeout)
+        setTimeout(
+          () => reject(new Error(`Worker ${this.name} shutdown timed out after ${timeout}ms`)),
+          timeout
+        )
       ),
     ]);
     this.emitter.emit('worker:closed');
@@ -277,21 +274,18 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
 
   // ── Internal ────────────────────────────────────────────────────────────────
 
-  private async _process(
-    bullJob: BullJob<AnyData>,
-    handler: JobHandler<T>,
-  ): Promise<void> {
+  private async _process(bullJob: BullJob<AnyData>, handler: JobHandler<T>): Promise<void> {
     const meta: OctoJobMeta = {
       workerName: this.name,
-      workerId:   this.workerId,
+      workerId: this.workerId,
       pickedUpAt: new Date().toISOString(),
-      queueName:  this.name,
+      queueName: this.name,
     };
     const job = adaptJob<T>(bullJob, meta);
 
     logger.debug(
       { jobId: job.id, executionId: job.data.executionId, workerName: this.name },
-      'job started',
+      'job started'
     );
     this.emitter.emit('job:started', job);
 
@@ -302,7 +296,7 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error(
         { jobId: job.id, error: error.message, workerName: this.name },
-        'job handler threw unhandled error',
+        'job handler threw unhandled error'
       );
       this.emitter.emit('job:failed', job, error);
       throw error;
@@ -323,7 +317,7 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
 
     logger.debug(
       { jobId: job.id, executionId: job.data.executionId, workerName: this.name },
-      'job completed',
+      'job completed'
     );
     this.emitter.emit('job:completed', job, result);
   }
@@ -343,19 +337,19 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
       if (!bullJob) return;
       const meta: OctoJobMeta = {
         workerName: this.name,
-        workerId:   this.workerId,
+        workerId: this.workerId,
         pickedUpAt: new Date().toISOString(),
-        queueName:  this.name,
+        queueName: this.name,
       };
       const job = adaptJob<T>(bullJob, meta);
       const attemptsMade = bullJob.attemptsMade;
-      const maxAttempts  = (bullJob.opts.attempts ?? 1);
+      const maxAttempts = bullJob.opts.attempts ?? 1;
 
       if (attemptsMade >= maxAttempts) {
         const reason: DlqReason = DlqReason.MAX_RETRIES_EXCEEDED;
         logger.warn(
           { jobId: job.id, executionId: job.data.executionId, reason },
-          'job exhausted retries — routing to DLQ',
+          'job exhausted retries — routing to DLQ'
         );
         this.emitter.emit('job:dead', job, reason);
       }

@@ -15,10 +15,7 @@ import type { QueueConfig } from './create-queue';
 import type { QueueName } from './queue-names';
 import { getDlqName } from './dlq-names';
 
-export function createDlq<T = unknown>(
-  sourceQueueName: QueueName,
-  config: QueueConfig,
-): Queue<T> {
+export function createDlq<T = unknown>(sourceQueueName: QueueName, config: QueueConfig): Queue<T> {
   const dlqName = getDlqName(sourceQueueName);
   const connection = createRedisConnection(config.redisUrl);
 
