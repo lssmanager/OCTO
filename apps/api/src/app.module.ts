@@ -21,12 +21,13 @@ import { OpsModule } from './ops/ops.module';
 import { MetricsController } from './metrics.controller';
 import { ExecutionModule } from './execution/execution.module';
 import { AgentModule } from './agents/agent.module';
+import { JwtAuthModule } from './auth/jwt-auth.module';
 
 /** Injection token for the API config object. */
 export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
 
 @Module({
-  imports: [SecurityModule, HealthModule, OpsModule, BullBoardModule, ExecutionModule, AgentModule],
+  imports: [SecurityModule, HealthModule, OpsModule, BullBoardModule, ExecutionModule, AgentModule, JwtAuthModule],
   controllers: [MetricsController],
   providers: [
     {
