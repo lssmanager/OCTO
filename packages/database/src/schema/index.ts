@@ -13,3 +13,4 @@ export * from './idempotency-keys';
 export * from './approvals';
 export * from './tool-invocations';
 export * from './outbox-events';
+export * from './outbox-publish-dlq';
