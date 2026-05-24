@@ -9,10 +9,10 @@ function buildService(overrides?: Partial<any>) {
     getExecutionTimeline: vi.fn(async () => [{ id: 'evt-1', executionId: 'exec-1', tenantId: 'tenant-1', eventType: 'execution.created', payloadJson: {}, createdAt: new Date() }]),
     casRequestCancellation: vi.fn(async () => true),
     casResumeSuspended: vi.fn(async () => true),
+    createOutboxEntry: vi.fn(async () => undefined),
     ...overrides,
   };
-  const queue = { add: vi.fn(async () => undefined) };
-  return { service: new ExecutionControllerService(repo, queue), repo, queue };
+  return { service: new ExecutionControllerService(repo), repo };
 }
 
 describe('ExecutionControllerService', () => {
@@ -34,17 +34,17 @@ describe('ExecutionControllerService', () => {
     await expect(service.getSummary('exec-404', 'tenant-1')).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('cancel enqueues command after CAS', async () => {
-    const { service, queue } = buildService();
+  it('cancel writes outbox after CAS', async () => {
+    const { service, repo } = buildService();
     const result = await service.cancel('exec-1', 'tenant-1');
     expect(result.accepted).toBe(true);
-    expect(queue.add).toHaveBeenCalledWith('execution.cancel', { executionId: 'exec-1', tenantId: 'tenant-1' }, { jobId: 'cancel:exec-1' });
+    expect(repo.createOutboxEntry).toHaveBeenCalledWith('exec-1', 'tenant-1', 'cancel');
   });
 
-  it('resume enqueues command after CAS', async () => {
-    const { service, queue } = buildService();
+  it('resume writes outbox after CAS', async () => {
+    const { service, repo } = buildService();
     const result = await service.resume('exec-1', 'tenant-1');
     expect(result.accepted).toBe(true);
-    expect(queue.add).toHaveBeenCalledWith('execution.resume', { executionId: 'exec-1', tenantId: 'tenant-1' }, { jobId: 'resume:exec-1' });
+    expect(repo.createOutboxEntry).toHaveBeenCalledWith('exec-1', 'tenant-1', 'resume');
   });
 });

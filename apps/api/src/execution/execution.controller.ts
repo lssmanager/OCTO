@@ -1,7 +1,16 @@
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
-import { ExecutionControllerService, type CreateExecutionRequest } from './execution-controller.service';
+import { Body, Controller, Get, Param, Post, Req, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionControllerService,
+  type CreateExecutionRequest,
+} from './execution-controller.service';
+import type { Principal } from '../auth/types/principal';
 
-type Principal = { tenantId: string; sub: string };
+function requirePrincipal(req: { user?: Principal }): Principal {
+  if (!req.user?.tenantId || !req.user?.sub) {
+    throw new UnauthorizedException('UNAUTHORIZED');
+  }
+  return req.user;
+}
 
 @Controller('/v1/executions')
 export class ExecutionController {
@@ -9,26 +18,31 @@ export class ExecutionController {
 
   @Post()
   create(@Body() body: CreateExecutionRequest, @Req() req: { user?: Principal }) {
-    return this.service.create(body, req.user?.tenantId ?? 'legacy', req.user?.sub ?? 'system');
+    const principal = requirePrincipal(req);
+    return this.service.create(body, principal.tenantId, principal.sub);
   }
 
   @Get(':id')
   getSummary(@Param('id') id: string, @Req() req: { user?: Principal }) {
-    return this.service.getSummary(id, req.user?.tenantId ?? 'legacy');
+    const principal = requirePrincipal(req);
+    return this.service.getSummary(id, principal.tenantId);
   }
 
   @Get(':id/timeline')
   getTimeline(@Param('id') id: string, @Req() req: { user?: Principal }) {
-    return this.service.getTimeline(id, req.user?.tenantId ?? 'legacy');
+    const principal = requirePrincipal(req);
+    return this.service.getTimeline(id, principal.tenantId);
   }
 
   @Post(':id/cancel')
   cancel(@Param('id') id: string, @Req() req: { user?: Principal }) {
-    return this.service.cancel(id, req.user?.tenantId ?? 'legacy');
+    const principal = requirePrincipal(req);
+    return this.service.cancel(id, principal.tenantId);
   }
 
   @Post(':id/resume')
   resume(@Param('id') id: string, @Req() req: { user?: Principal }) {
-    return this.service.resume(id, req.user?.tenantId ?? 'legacy');
+    const principal = requirePrincipal(req);
+    return this.service.resume(id, principal.tenantId);
   }
 }

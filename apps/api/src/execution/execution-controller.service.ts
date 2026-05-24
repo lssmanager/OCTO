@@ -31,13 +31,27 @@ export type CreateExecutionRequest = {
 export class ExecutionControllerService {
   constructor(
     private readonly repo: {
-      createExecution: (input: CreateExecutionRequest, tenantId: string, createdBy: string) => Promise<{ id: string }>;
-      getExecutionSummary: (executionId: string, tenantId: string) => Promise<ExecutionSummary | null>;
-      getExecutionTimeline: (executionId: string, tenantId: string) => Promise<ExecutionTimelineEvent[]>;
+      createExecution: (
+        input: CreateExecutionRequest,
+        tenantId: string,
+        createdBy: string
+      ) => Promise<{ id: string }>;
+      getExecutionSummary: (
+        executionId: string,
+        tenantId: string
+      ) => Promise<ExecutionSummary | null>;
+      getExecutionTimeline: (
+        executionId: string,
+        tenantId: string
+      ) => Promise<ExecutionTimelineEvent[]>;
       casRequestCancellation: (executionId: string, tenantId: string) => Promise<boolean>;
       casResumeSuspended: (executionId: string, tenantId: string) => Promise<boolean>;
-    },
-    private readonly queue: { add: (name: string, data: Record<string, unknown>, opts?: Record<string, unknown>) => Promise<void> }
+      createOutboxEntry: (
+        executionId: string,
+        tenantId: string,
+        command: 'cancel' | 'resume'
+      ) => Promise<void>;
+    }
   ) {}
 
   create(input: CreateExecutionRequest, tenantId: string, createdBy: string) {
@@ -57,14 +71,14 @@ export class ExecutionControllerService {
   async cancel(executionId: string, tenantId: string): Promise<{ accepted: boolean }> {
     const accepted = await this.repo.casRequestCancellation(executionId, tenantId);
     if (!accepted) return { accepted: false };
-    await this.queue.add('execution.cancel', { executionId, tenantId }, { jobId: `cancel:${executionId}` });
+    await this.repo.createOutboxEntry(executionId, tenantId, 'cancel');
     return { accepted: true };
   }
 
   async resume(executionId: string, tenantId: string): Promise<{ accepted: boolean }> {
     const accepted = await this.repo.casResumeSuspended(executionId, tenantId);
     if (!accepted) return { accepted: false };
-    await this.queue.add('execution.resume', { executionId, tenantId }, { jobId: `resume:${executionId}` });
+    await this.repo.createOutboxEntry(executionId, tenantId, 'resume');
     return { accepted: true };
   }
 }

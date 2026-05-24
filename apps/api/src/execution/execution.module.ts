@@ -8,21 +8,20 @@ import { ExecutionControllerService } from './execution-controller.service';
     {
       provide: 'ExecutionControllerRepo',
       useValue: {
-        createExecution: async () => { throw new Error('ExecutionControllerRepo.createExecution not configured'); },
+        createExecution: async () => {
+          throw new Error('ExecutionControllerRepo.createExecution not configured');
+        },
         getExecutionSummary: async () => null,
         getExecutionTimeline: async () => [],
         casRequestCancellation: async () => false,
         casResumeSuspended: async () => false,
+        createOutboxEntry: async () => undefined,
       },
     },
     {
-      provide: 'ExecutionControllerQueue',
-      useValue: { add: async () => undefined },
-    },
-    {
       provide: ExecutionControllerService,
-      useFactory: (repo: any, queue: any) => new ExecutionControllerService(repo, queue),
-      inject: ['ExecutionControllerRepo', 'ExecutionControllerQueue'],
+      useFactory: (repo: any) => new ExecutionControllerService(repo),
+      inject: ['ExecutionControllerRepo'],
     },
   ],
 })
