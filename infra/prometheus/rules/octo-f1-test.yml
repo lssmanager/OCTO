@@ -1,0 +1,55 @@
+rule_files:
+  - octo-f1.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'octo_execution_dlq_total'
+        values: '0 3 6 9 12 15 18 21 24 27 30 33 36 39 42'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: OctoDLQGrowthCritical
+        exp_alerts:
+          - exp_labels: { severity: critical, team: platform-reliability }
+  - interval: 1m
+    input_series:
+      - series: 'octo_rls_violation_total{table="executions"}'
+        values: '0 1 1 1'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: OctoRLSViolationDetected
+        exp_alerts:
+          - exp_labels: { severity: critical, team: security, table: executions }
+  - interval: 1m
+    input_series:
+      - series: 'octo_litellm_circuit_open_gauge'
+        values: '0 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OctoCircuitBreakerOpen
+        exp_alerts:
+          - exp_labels: { severity: high, team: ai-runtime }
+  - interval: 1m
+    input_series:
+      - series: 'octo_execution_active_gauge'
+        values: '1 1 1 1 1'
+      - series: 'octo_worker_heartbeat_age_seconds'
+        values: '121 121 121 121 121'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: OctoWorkerHeartbeatStale
+        exp_alerts:
+          - exp_labels: { severity: critical, team: platform-reliability }
+  - interval: 1m
+    input_series:
+      - series: 'octo_litellm_tokens_output_total'
+        values: '100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600'
+      - series: 'octo_persisted_step_tokens_output_total'
+        values: '100 199 298 397 496 595 694 793 892 991 1090 1189 1288 1387 1486 1585'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OctoTokenAccountingDrift
+        exp_alerts:
+          - exp_labels: { severity: high, team: ai-runtime }

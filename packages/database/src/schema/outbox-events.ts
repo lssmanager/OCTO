@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, bigint, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, jsonb, bigint, integer, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const outboxEvents = pgTable(
@@ -12,19 +12,18 @@ export const outboxEvents = pgTable(
     sequence: bigint('sequence', { mode: 'number' }).notNull(),
     payloadJson: jsonb('payload_json').notNull(),
     publishedAt: timestamp('published_at', { withTimezone: true }),
+    publishAttempts: integer('publish_attempts').notNull().default(0),
+    lastError: text('last_error'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     unpublishedIdx: index('idx_outbox_unpublished')
       .on(t.publishedAt, t.createdAt)
       .where(sql`published_at IS NULL`),
-    tenantAggregateSequenceIdx: index('idx_outbox_tenant_aggregate_sequence').on(
-      t.tenantId,
-      t.aggregateType,
-      t.aggregateId,
-      t.sequence
-    ),
-    tenantAggregateSequenceUniqueIdx: uniqueIndex('idx_outbox_tenant_aggregate_sequence_unique').on(
+    tenantUnpublishedIdx: index('idx_outbox_tenant_unpublished')
+      .on(t.tenantId, t.createdAt)
+      .where(sql`published_at IS NULL`),
+    tenantAggregateSequenceUniqueIdx: uniqueIndex('idx_outbox_aggregate_sequence').on(
       t.tenantId,
       t.aggregateType,
       t.aggregateId,
