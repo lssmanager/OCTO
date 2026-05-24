@@ -1,0 +1,83 @@
+{
+  "$ref": "#/definitions/ExecutionCheckpointSchema",
+  "definitions": {
+    "ExecutionCheckpointSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "executionId": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "stepIndex": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "input",
+            "loop",
+            "tool",
+            "approval",
+            "reclaim",
+            "final"
+          ]
+        },
+        "parentCheckpointId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stateJson": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "channelVersions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string"
+            ]
+          }
+        },
+        "versionsSeen": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/ExecutionCheckpointSchema/properties/channelVersions/additionalProperties"
+            }
+          }
+        },
+        "metadataJson": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "executionId",
+        "tenantId",
+        "stepIndex",
+        "source",
+        "stateJson",
+        "channelVersions",
+        "versionsSeen",
+        "metadataJson",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

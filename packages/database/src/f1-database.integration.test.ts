@@ -12,6 +12,7 @@ const migrationFiles = [
   '202605230001_f1_executions_core.sql',
   '202605230002_f1_tools_approvals_outbox.sql',
   '202605230003_f1_rls_policies.sql',
+  '202605230004_f1_rls_hardening.sql',
 ];
 
 type Sql = ReturnType<typeof postgres>;
@@ -43,7 +44,48 @@ runIfDatabase('F1 database integration', () => {
     }
   });
 
-  it('enforces compare-and-swap updates on executions.version', async () => {
+  
+
+  it('enables and forces RLS on all F1 tenant-scoped tables', async () => {
+    const tables = [
+      'agents','agent_versions','executions','execution_steps','execution_checkpoints',
+      'execution_checkpoint_writes','tool_invocations','approvals','outbox_events',
+    ];
+    const rows = await sql<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }[]>`
+      SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relname = ANY(${tables})
+      ORDER BY c.relname
+    `;
+    expect(rows).toHaveLength(tables.length);
+    for (const row of rows) {
+      expect(row.relrowsecurity).toBe(true);
+      expect(row.relforcerowsecurity).toBe(true);
+    }
+  });
+
+  it('creates tenant isolation policies with non-empty tenant guard', async () => {
+    const tables = [
+      'agents','agent_versions','executions','execution_steps','execution_checkpoints',
+      'execution_checkpoint_writes','tool_invocations','approvals','outbox_events',
+    ];
+    const rows = await sql<{ tablename: string; policyname: string; qual: string | null; with_check: string | null }[]>`
+      SELECT tablename, policyname, qual, with_check
+      FROM pg_policies
+      WHERE schemaname = 'public' AND tablename = ANY(${tables})
+      ORDER BY tablename
+    `;
+    expect(rows.length).toBeGreaterThanOrEqual(tables.length);
+    for (const table of tables) {
+      const policy = rows.find((r) => r.tablename === table && r.policyname === `tenant_isolation_${table}`);
+      expect(policy).toBeDefined();
+      expect(policy?.qual ?? '').toContain("current_setting('app.current_tenant'::text, true)");
+      expect(policy?.qual ?? '').toContain('COALESCE');
+      expect(policy?.with_check ?? '').toContain('COALESCE');
+    }
+  });
+it('enforces compare-and-swap updates on executions.version', async () => {
     await insertAgentVersion(sql, 'tenant-a', 'f1-test-agent-a', 'f1-test-agent-version-cas');
     await insertExecution(sql, {
       id: 'f1-test-execution-cas',
@@ -243,7 +285,45 @@ runIfDatabase('F1 database integration', () => {
     expect(crossTenantById).toHaveLength(0);
   });
 
-  it('does not grant BYPASSRLS to the current database role', async () => {
+  
+
+  it('blocks cross-tenant insert with WITH CHECK', async () => {
+    await insertAgentVersion(sql, 'tenant-a', 'f1-test-agent-a', 'f1-test-agent-version-cross-insert');
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`SELECT set_config('app.current_tenant', 'tenant-a', true)`;
+        await tx`
+          INSERT INTO "executions" (
+            "id", "tenant_id", "agent_id", "agent_version_id", "state", "input_json",
+            "budget_snapshot_json", "context_snapshot_json", "created_by", "task", "governance", "trace_id", "run_id"
+          ) VALUES (
+            'f1-test-execution-cross-insert', 'tenant-b', 'f1-test-agent-a', 'f1-test-agent-version-cross-insert', 'QUEUED', '{}'::jsonb,
+            '{}'::jsonb, '{}'::jsonb, 'test-user', '{}'::jsonb, '{}'::jsonb, 'trace-x', 'run-x'
+          )
+        `;
+      })
+    ).rejects.toThrow();
+  });
+
+  it('denies reads and writes when tenant context is empty', async () => {
+    const rows = await sql.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_tenant', '', true)`;
+      return tx<{ id: string }[]>`SELECT "id" FROM "executions" WHERE "id" LIKE 'f1-test-execution-rls-%'`;
+    });
+    expect(rows).toHaveLength(0);
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`SELECT set_config('app.current_tenant', '', true)`;
+        await tx`
+          INSERT INTO "agents" ("id", "tenant_id", "name", "role", "goal")
+          VALUES ('f1-test-agent-empty-tenant', 'tenant-a', 'n', 'worker', 'g')
+        `;
+      })
+    ).rejects.toThrow();
+  });
+it('does not grant BYPASSRLS to the current database role', async () => {
     const [role] = await sql<{ rolbypassrls: boolean }[]>`
       SELECT "rolbypassrls"
       FROM "pg_roles"

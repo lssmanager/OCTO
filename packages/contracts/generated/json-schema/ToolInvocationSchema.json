@@ -1,0 +1,125 @@
+{
+  "$ref": "#/definitions/ToolInvocationSchema",
+  "definitions": {
+    "ToolInvocationSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "executionId": {
+          "type": "string"
+        },
+        "stepId": {
+          "type": "string"
+        },
+        "toolName": {
+          "type": "string"
+        },
+        "toolKind": {
+          "type": "string",
+          "enum": [
+            "builtin_sync",
+            "builtin_async",
+            "mcp_stdio",
+            "mcp_http"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "EXECUTING",
+            "SUCCEEDED",
+            "FAILED",
+            "TIMED_OUT",
+            "PENDING_ASYNC",
+            "CANCELLED"
+          ]
+        },
+        "argsJson": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "resultJson": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "errorCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "errorMessage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "requiresApproval": {
+          "type": "boolean"
+        },
+        "approvalId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "durationMs": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "tenantId",
+        "executionId",
+        "stepId",
+        "toolName",
+        "toolKind",
+        "status",
+        "argsJson",
+        "requiresApproval",
+        "idempotencyKey",
+        "startedAt"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

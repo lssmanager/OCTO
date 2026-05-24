@@ -29,7 +29,7 @@ export const approvals = pgTable(
       t.status,
       t.timeoutAt
     ),
-    tenantExecutionIdx: index('idx_approvals_tenant_execution').on(t.tenantId, t.executionId),
+    executionStatusIdx: index('idx_approvals_execution_status').on(t.executionId, t.status),
   })
 );
 

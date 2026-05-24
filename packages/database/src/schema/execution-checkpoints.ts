@@ -51,6 +51,7 @@ export const executionCheckpoints = pgTable(
       t.stepIndex,
       t.source
     ),
+    parentIdx: index('idx_checkpoints_parent').on(t.parentCheckpointId),
     createdIdx: index('execution_checkpoints_created_at_idx').on(t.createdAt),
     workerIdx: index('execution_checkpoints_worker_id_idx').on(t.workerId),
   })
