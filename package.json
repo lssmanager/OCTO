@@ -20,7 +20,10 @@
     "contracts:build": "pnpm --filter @octo/contracts build && node scripts/generate-json-schema.mjs",
     "contracts:python": "python3 scripts/generate_pydantic_models.py",
     "contracts:check": "git diff --exit-code -- packages/contracts/generated apps/runtime-worker/app/contracts/generated",
-    "contracts:validate": "pnpm contracts:build && pnpm contracts:python && pnpm exec tsx scripts/validate-contract-roundtrip.ts && pnpm contracts:check"
+    "contracts:validate": "pnpm contracts:build && pnpm contracts:python && pnpm exec tsx scripts/validate-contract-roundtrip.ts && pnpm contracts:check",
+    "observability:check-rules": "bash scripts/observability/validate-prometheus-rules.sh",
+    "observability:test-rules": "bash scripts/observability/test-prometheus-rules.sh",
+    "observability:check-silences": "pnpm exec tsx scripts/observability/check-alert-silences.ts"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.59.4",

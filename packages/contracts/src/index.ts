@@ -228,3 +228,7 @@ export type {
   AgentConfig,
   AgentVersion as ZodAgentVersion,
 } from './zod';
+
+// F1 EventEnvelope contracts
+export type { EventEnvelope, F1EventType } from './zod/events';
+export { EventEnvelopeSchema, F1EventTypeSchema, EventPayloadSchemaByType, validateEventPayload } from './zod/events';
