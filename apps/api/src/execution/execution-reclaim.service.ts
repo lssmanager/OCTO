@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { ExecutionCommandQueue } from './ports/execution-command-queue';
+import type { ExecutionReclaimRepo } from './ports/execution-reclaim.repo';
 
 const RECLAIM_QUEUE = 'execution.reclaim';
 const STALE_STATES = ['RUNNING', 'DISPATCHED'] as const;
@@ -22,12 +24,8 @@ export class ExecutionReclaimService {
   private readonly logger = new Logger(ExecutionReclaimService.name);
 
   constructor(
-    private readonly executionRepo: {
-      findStaleLeases: (states: readonly string[], limit: number) => Promise<StaleExecutionRow[]>;
-      casReclaiming: (execution: StaleExecutionRow) => Promise<boolean>;
-      casRouteToDlq: (execution: StaleExecutionRow) => Promise<boolean>;
-    },
-    private readonly queue: { add: (name: string, data: Record<string, unknown>, options: Record<string, unknown>) => Promise<void> }
+    private readonly executionRepo: ExecutionReclaimRepo,
+    private readonly queue: ExecutionCommandQueue
   ) {}
 
   async scanStaleLeases(): Promise<void> {
