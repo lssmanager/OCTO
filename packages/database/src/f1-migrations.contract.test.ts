@@ -59,6 +59,29 @@ describe('F1 database migrations contract', () => {
     }
 
     expect(sql).toContain("tenant_id = current_setting('app.current_tenant', true)");
-    expect(sql).not.toMatch(/BYPASSRLS/i);
+    expect(sql).not.toMatch(/ALTER\s+ROLE\s+.*BYPASSRLS/i);
+  });
+
+  it('hardens tenant policies with non-empty tenant guard for all F1 tables', () => {
+    const sql = readMigration('202605230004_f1_rls_hardening.sql');
+    const tables = [
+      'agents',
+      'agent_versions',
+      'executions',
+      'execution_steps',
+      'execution_checkpoints',
+      'execution_checkpoint_writes',
+      'tool_invocations',
+      'approvals',
+      'outbox_events',
+    ];
+
+    for (const table of tables) {
+      expect(sql).toContain(`tenant_isolation_${table}`);
+    }
+
+    expect(sql).toContain("COALESCE(current_setting(''app.current_tenant'', true), '''') <> ''");
+    expect(sql).toContain("tenant_id = current_setting(''app.current_tenant'', true)");
+    expect(sql).not.toMatch(/ALTER\s+ROLE\s+.*BYPASSRLS/i);
   });
 });
