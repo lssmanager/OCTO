@@ -60,6 +60,7 @@ describe('F1 database migrations contract', () => {
 
     expect(sql).toContain("tenant_id = current_setting('app.current_tenant', true)");
     expect(sql).not.toMatch(/ALTER\s+ROLE\s+.*BYPASSRLS/i);
+    expect(sql).not.toMatch(/\b(GRANT|ALTER)\s+.*BYPASSRLS\b/i);
   });
 
   it('hardens tenant policies with non-empty tenant guard for all F1 tables', () => {
@@ -83,6 +84,7 @@ describe('F1 database migrations contract', () => {
     expect(sql).toContain("COALESCE(current_setting(''app.current_tenant'', true), '''') <> ''");
     expect(sql).toContain("tenant_id = current_setting(''app.current_tenant'', true)");
     expect(sql).not.toMatch(/ALTER\s+ROLE\s+.*BYPASSRLS/i);
+    expect(sql).not.toMatch(/\b(GRANT|ALTER)\s+.*BYPASSRLS\b/i);
   });
 
   it('keeps legacy 0004 migration idempotent and non-duplicative', () => {
