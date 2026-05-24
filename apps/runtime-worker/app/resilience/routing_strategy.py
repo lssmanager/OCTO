@@ -9,7 +9,10 @@ class RoutingStrategySelector:
     async def select(self, tenant_id: str, candidates: list[ModelCandidate], strategy: RoutingStrategy, requirements: ModelCapabilityRequirements, budget_remaining_usd: Decimal | None) -> RoutingDecision:
         chosen = candidates[0]
         reason = "default_first"
-        if strategy == RoutingStrategy.COST_BASED:
+        if strategy == RoutingStrategy.LEAST_BUSY:
+            chosen = sorted(candidates, key=lambda c: ((c.recent_error_rate or 0.0) * 0.15 + (c.observed_latency_ms_p50 or 1000)/1000*0.10 - c.cache_affinity_score*0.05))[0]
+            reason = "least_busy"
+        elif strategy == RoutingStrategy.COST_BASED:
             chosen = sorted(candidates, key=lambda c: c.estimated_cost_usd_per_1k_input or Decimal("999"))[0]
             reason = "cost_based"
         elif strategy == RoutingStrategy.LATENCY_BASED:

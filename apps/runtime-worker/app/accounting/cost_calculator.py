@@ -20,3 +20,24 @@ class CostCalculator:
         if prompt_cache_expected:
             variable *= Decimal("0.8")
         return base + variable
+
+
+from pydantic import BaseModel
+
+class ModelPricing(BaseModel):
+    model: str
+    input_cost_per_1m_tokens: Decimal
+    output_cost_per_1m_tokens: Decimal
+    cached_input_cost_per_1m_tokens: Decimal | None = None
+
+
+def calculate_cache_savings(model: str, cached_input_tokens: int, pricing: ModelPricing) -> Decimal:
+    if cached_input_tokens <= 0:
+        return Decimal("0")
+    input_per_token = pricing.input_cost_per_1m_tokens / Decimal(1_000_000)
+    if pricing.cached_input_cost_per_1m_tokens is not None:
+        cached_per_token = pricing.cached_input_cost_per_1m_tokens / Decimal(1_000_000)
+        savings = (input_per_token - cached_per_token) * Decimal(cached_input_tokens)
+    else:
+        savings = input_per_token * Decimal(cached_input_tokens) * Decimal("0.5")
+    return savings if savings > Decimal("0") else Decimal("0")
