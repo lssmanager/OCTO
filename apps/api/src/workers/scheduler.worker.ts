@@ -13,7 +13,7 @@ export class SchedulerWorker {
   ) {}
 
   async handleExecutionDispatch(job: { data: { executionId: string; tenantId: string } }): Promise<'dispatched' | 'noop'> {
-    const workerId = process.env.WORKER_INSTANCE_ID ?? 'scheduler-local';
+    const workerId = process.env['WORKER_INSTANCE_ID'] ?? 'scheduler-local';
     const updated = await this.repo.casDispatch(job.data.executionId, job.data.tenantId, workerId);
     if (!updated) {
       this.logger.warn('scheduler_cas_conflict', { executionId: job.data.executionId, tenantId: job.data.tenantId });
