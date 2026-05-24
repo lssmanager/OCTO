@@ -14,4 +14,6 @@ def map_http_error(status_code: int, message: str, *, provider: str | None = Non
         return LLMCanonicalError("LLM_PROVIDER_AUTH_FAILED", message, False, provider, model, status_code)
     if status_code == 404:
         return LLMCanonicalError("LLM_MODEL_NOT_ALLOWED", message, False, provider, model, status_code)
+    if status_code == 422 and "content" in message.lower() and "filter" in message.lower():
+        return LLMCanonicalError("LLM_CONTENT_FILTERED", message, False, provider, model, status_code)
     return LLMCanonicalError("LLM_BAD_REQUEST", message, False, provider, model, status_code)
