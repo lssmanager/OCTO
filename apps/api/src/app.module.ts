@@ -20,12 +20,13 @@ import { HealthModule } from './health/health.module';
 import { OpsModule } from './ops/ops.module';
 import { MetricsController } from './metrics.controller';
 import { ExecutionModule } from './execution/execution.module';
+import { AgentModule } from './agents/agent.module';
 
 /** Injection token for the API config object. */
 export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
 
 @Module({
-  imports: [SecurityModule, HealthModule, OpsModule, BullBoardModule, ExecutionModule],
+  imports: [SecurityModule, HealthModule, OpsModule, BullBoardModule, ExecutionModule, AgentModule],
   controllers: [MetricsController],
   providers: [
     {
