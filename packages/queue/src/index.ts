@@ -63,3 +63,5 @@ export {
 
 // Write-before-ack pattern
 export { writeBeforeAck } from './write-before-ack';
+
+export { F1_QUEUE_NAMES, F1_QUEUE_DEFAULT_JOB_OPTIONS } from './queues';

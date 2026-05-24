@@ -1,0 +1,2 @@
+class LeaseRevokedError(Exception):
+    pass
