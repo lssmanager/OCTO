@@ -1,21 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { QUEUES } from '@octo/queue';
-
-export type CreateExecutionDto = {
-  agentId: string;
-  agentVersionId?: string;
-  input: Record<string, unknown>;
-};
+import type { ExecutionCommandQueue } from './ports/execution-command-queue';
+import type { CreateExecutionDto, ExecutionControllerRepo } from './ports/execution-controller.repo';
 
 @Injectable()
 export class ExecutionDispatcherService {
   private readonly logger = new Logger(ExecutionDispatcherService.name);
 
   constructor(
-    private readonly repo: {
-      dispatchTx: (input: CreateExecutionDto, tenantId: string, createdBy: string) => Promise<{ id: string }>;
-    },
-    private readonly queue: { add: (name: string, data: Record<string, unknown>, opts: Record<string, unknown>) => Promise<void> }
+    private readonly repo: ExecutionControllerRepo,
+    private readonly queue: ExecutionCommandQueue
   ) {}
 
   async dispatch(input: CreateExecutionDto, tenantId: string, createdBy: string): Promise<{ id: string }> {
