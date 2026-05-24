@@ -13,7 +13,8 @@ overrides:
   qs: 6.15.2
   multer: 2.1.1
   js-yaml: 4.1.1
-  ajv: 6.14.0
+  eslint>ajv: 6.14.0
+  '@eslint/eslintrc>ajv': 6.14.0
   '@angular-devkit/core>ajv': 8.18.0
   '@angular-devkit/core>ajv-formats': 2.1.1
   file-type: 21.3.2
@@ -2433,7 +2434,7 @@ packages:
   ajv-formats@2.1.1:
     resolution: {integrity: sha512-Wx0Kx52hxE7C18hkMEggYlEifqWZtYaRgouJor+WMdPnQyEK13vgEWyVNup7SoeeoLMsr4kf5h6dOW11I15MUA==}
     peerDependencies:
-      ajv: 6.14.0
+      ajv: ^8.0.0
     peerDependenciesMeta:
       ajv:
         optional: true
@@ -2441,7 +2442,7 @@ packages:
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
     peerDependencies:
-      ajv: 6.14.0
+      ajv: ^8.0.0
     peerDependenciesMeta:
       ajv:
         optional: true
@@ -2449,12 +2450,12 @@ packages:
   ajv-keywords@3.5.2:
     resolution: {integrity: sha512-5p6WTN0DdTGVQk6VjcEju19IgaHudalcfabD7yhDGeA6bcQnmL+CpveLJq/3hvfwd1aof6L386Ougkx6RfyMIQ==}
     peerDependencies:
-      ajv: 6.14.0
+      ajv: ^6.9.1
 
   ajv-keywords@5.1.0:
     resolution: {integrity: sha512-YCS/JNFAUyr5vAuhk1DWm1CBxRHW9LbJ2ozWeemrIqpbsqKjHVxYPyi5GC0rjZIT5JxJ3virVTS8wk4i/Z+krw==}
     peerDependencies:
-      ajv: 6.14.0
+      ajv: ^8.8.2
 
   ajv@6.14.0:
     resolution: {integrity: sha512-IWrosm/yrn43eiKqkfkHis7QioDleaXQHdDVPKg0FSwwd/DuvyX79TZnFOnYpB7dcsFAMmtFztZuXPDvSePkFw==}
@@ -5491,8 +5492,8 @@ snapshots:
 
   '@fastify/ajv-compiler@4.0.5':
     dependencies:
-      ajv: 6.14.0
-      ajv-formats: 3.0.1(ajv@6.14.0)
+      ajv: 8.18.0
+      ajv-formats: 3.0.1(ajv@8.18.0)
       fast-uri: 3.1.2
 
   '@fastify/cors@11.2.0':
@@ -6871,6 +6872,10 @@ snapshots:
     optionalDependencies:
       ajv: 6.14.0
 
+  ajv-formats@3.0.1(ajv@8.18.0):
+    optionalDependencies:
+      ajv: 8.18.0
+
   ajv-keywords@3.5.2(ajv@6.14.0):
     dependencies:
       ajv: 6.14.0
@@ -6878,6 +6883,11 @@ snapshots:
   ajv-keywords@5.1.0(ajv@6.14.0):
     dependencies:
       ajv: 6.14.0
+      fast-deep-equal: 3.1.3
+
+  ajv-keywords@5.1.0(ajv@8.18.0):
+    dependencies:
+      ajv: 8.18.0
       fast-deep-equal: 3.1.3
 
   ajv@6.14.0:
@@ -7319,7 +7329,7 @@ snapshots:
       acorn-jsx-walk: 2.0.0
       acorn-loose: 8.5.2
       acorn-walk: 8.3.5
-      ajv: 6.14.0
+      ajv: 8.18.0
       commander: 13.1.0
       enhanced-resolve: 5.21.3
       ignore: 7.0.5
@@ -7799,8 +7809,8 @@ snapshots:
   fast-json-stringify@6.4.0:
     dependencies:
       '@fastify/merge-json-schemas': 0.2.1
-      ajv: 6.14.0
-      ajv-formats: 3.0.1(ajv@6.14.0)
+      ajv: 8.18.0
+      ajv-formats: 3.0.1(ajv@8.18.0)
       fast-uri: 3.1.2
       json-schema-ref-resolver: 3.0.0
       rfdc: 1.4.1
@@ -9132,9 +9142,9 @@ snapshots:
   schema-utils@4.3.3:
     dependencies:
       '@types/json-schema': 7.0.15
-      ajv: 6.14.0
-      ajv-formats: 2.1.1(ajv@6.14.0)
-      ajv-keywords: 5.1.0(ajv@6.14.0)
+      ajv: 8.18.0
+      ajv-formats: 2.1.1(ajv@8.18.0)
+      ajv-keywords: 5.1.0(ajv@8.18.0)
 
   secure-json-parse@4.1.0: {}
 
