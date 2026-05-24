@@ -27,6 +27,11 @@ class BuiltinSubprocessExecutor:
         )
         try:
             out, err = await asyncio.wait_for(proc.communicate(json.dumps(args).encode()), timeout=getattr(tool_def, "timeout_ms", 30_000) / 1000)
+        except asyncio.CancelledError:
+            if proc.returncode is None:
+                proc.kill()
+                await proc.wait()
+            raise
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()

@@ -3,11 +3,11 @@ from __future__ import annotations
 import re
 
 from app.tools.descriptor_hash import compute_descriptor_hash
-from app.tools.errors import ToolAlreadyRegisteredError, ToolDisabledError, ToolNameInvalidError, ToolNeedsReviewError, ToolNotFoundError
+from app.tools.errors import ToolAlreadyRegisteredError, ToolDescriptorHashMismatchError, ToolDisabledError, ToolNameInvalidError, ToolNeedsReviewError, ToolNotFoundError
 from app.tools.models import SideEffectLevel, ToolDefinition, ToolKind, ToolStatus
 from app.tools.schema_validator import SchemaValidator
 
-TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{1,127}$")
+TOOL_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{0,126}$")
 
 
 class ToolRegistry:
@@ -25,8 +25,11 @@ class ToolRegistry:
             raise ValueError("high side effect tools require explicit approval policy")
         if definition.kind in {ToolKind.MCP_HTTP, ToolKind.MCP_STDIO} and not definition.source_ref:
             raise ValueError("mcp tools require source_ref")
+        computed_hash = compute_descriptor_hash(definition)
         if definition.descriptor_hash is None:
-            definition.descriptor_hash = compute_descriptor_hash(definition)
+            definition.descriptor_hash = computed_hash
+        elif definition.descriptor_hash != computed_hash:
+            raise ToolDescriptorHashMismatchError(definition.name)
         self._registry[definition.name] = definition
 
     def resolve(self, name: str) -> ToolDefinition:
@@ -35,7 +38,7 @@ class ToolRegistry:
             raise ToolNotFoundError(name)
         if tool.status == ToolStatus.NEEDS_REVIEW:
             raise ToolNeedsReviewError(name)
-        if tool.status in {ToolStatus.DISABLED, ToolStatus.DEPRECATED, ToolStatus.REVOKED} or not tool.enabled:
+        if tool.status is not ToolStatus.ENABLED or not tool.enabled:
             raise ToolDisabledError(name)
         return tool
 

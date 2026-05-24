@@ -49,13 +49,17 @@ class EffectiveToolsResolver:
                     effective_tools.append(name)
 
         if strict:
+            strict_errors: list[str] = []
             for name in [*effective_tools, *disabled_by_override]:
                 try:
                     registry.resolve(name)
                 except ToolNeedsReviewError:
-                    needs_review.append(name)
-                    raise
+                    if name not in needs_review:
+                        needs_review.append(name)
+                    continue
                 except Exception as exc:
-                    raise ToolContextValidationError(str(exc)) from exc
+                    strict_errors.append(str(exc))
+            if strict_errors:
+                raise ToolContextValidationError("; ".join(strict_errors))
 
         return EffectiveToolContext(hierarchy_path=hierarchy_path, effective_tool_names=effective_tools, disabled_by_override=disabled_by_override, needs_review=needs_review)

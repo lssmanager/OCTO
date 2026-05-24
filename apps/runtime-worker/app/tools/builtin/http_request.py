@@ -1,4 +1,5 @@
 from app.tools.models import ApprovalPolicy, SideEffectLevel, ToolDefinition, ToolKind
+from app.tools.egress_policy import EgressPolicyError, validate_endpoint_against_egress_policy
 
 
 def http_request_definition() -> ToolDefinition:
@@ -11,5 +12,12 @@ def http_request_definition() -> ToolDefinition:
 
 
 def execute_http_request(args: dict) -> dict:
-    _ = args
+    try:
+        validate_endpoint_against_egress_policy(
+            url=str(args.get("url", "")),
+            network_policy="egress_allowlist",
+            egress_allowlist=[],
+        )
+    except EgressPolicyError:
+        return {"status_code": 0, "headers": {}, "body": {"error_code": "TOOL_EGRESS_DENIED", "message": "Egress denied by policy."}}
     return {"status_code": 0, "headers": {}, "body": {"error_code": "HTTP_REQUEST_EGRESS_POLICY_NOT_CONFIGURED", "message": "Egress policy is not configured for F1."}}

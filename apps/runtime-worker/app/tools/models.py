@@ -42,7 +42,7 @@ class ToolDefinition(BaseModel):
     description: str = Field(min_length=1)
     input_schema: dict[str, Any]
     output_schema: dict[str, Any]
-    timeout_ms: int = 30_000
+    timeout_ms: int = Field(default=30_000, gt=0)
     retryable: bool = False
     side_effect_level: SideEffectLevel = SideEffectLevel.NONE
     approval_policy: ApprovalPolicy = ApprovalPolicy.POLICY_BASED
@@ -58,7 +58,7 @@ class ToolDefinition(BaseModel):
     source: Literal["builtin", "mcp", "hub", "custom"] = "builtin"
     source_ref: str | None = None
     descriptor_hash: str | None = None
-    version: int = 1
+    version: int = Field(default=1, ge=1)
     status: ToolStatus = ToolStatus.ENABLED
     enabled: bool = True
 
