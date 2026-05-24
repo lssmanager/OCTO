@@ -151,3 +151,7 @@ export interface AgentSpawnedPayload {
 export type { OctoEvent, OctoEventType, EventMetadata } from '@octo/contracts';
 
 export * from './outbox';
+
+export * from './event-factory';
+export * from './redis-stream-contract';
+export * from './redis-stream-parser';

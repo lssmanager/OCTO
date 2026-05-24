@@ -1,43 +1,33 @@
+import { EventEnvelopeSchema, validateEventPayload, type EventEnvelope, type F1EventType } from '@octo/contracts';
+
 export interface OutboxInsertTransaction {
   insert: (table: unknown) => {
     values: (record: Record<string, unknown>) => Promise<unknown>;
   };
 }
 
-export interface InsertOutboxEventParams {
-  tenantId: string;
-  aggregateType: string;
-  aggregateId: string;
-  eventType: string;
-  sequence: number;
-  payload: Record<string, unknown>;
-  traceId?: string;
-  spanId?: string;
-  occurredAt?: string;
-  eventId?: string;
-}
-
 export async function insertOutboxEvent(
   tx: OutboxInsertTransaction,
   outboxTable: unknown,
-  params: InsertOutboxEventParams
+  event: EventEnvelope
 ): Promise<string> {
-  const eventId = params.eventId ?? crypto.randomUUID();
-  const occurredAt = params.occurredAt ?? new Date().toISOString();
+  const parsed = EventEnvelopeSchema.parse(event);
+  validateEventPayload(parsed.eventType as F1EventType, parsed.payload);
 
   await tx.insert(outboxTable).values({
-    id: eventId,
-    tenantId: params.tenantId,
-    aggregateType: params.aggregateType,
-    aggregateId: params.aggregateId,
-    eventType: params.eventType,
-    sequence: params.sequence,
+    id: parsed.eventId,
+    tenantId: parsed.tenantId,
+    aggregateType: parsed.aggregateType,
+    aggregateId: parsed.aggregateId,
+    eventType: parsed.eventType,
+    sequence: parsed.sequence,
     payloadJson: {
-      ...params.payload,
+      ...parsed.payload,
       _meta: {
-        traceId: params.traceId ?? null,
-        spanId: params.spanId ?? null,
-        occurredAt,
+        traceId: parsed.traceId,
+        spanId: parsed.spanId,
+        occurredAt: parsed.occurredAt,
+        schemaVersion: parsed.schemaVersion,
       },
     },
     publishedAt: null,
@@ -45,5 +35,5 @@ export async function insertOutboxEvent(
     lastError: null,
   });
 
-  return eventId;
+  return parsed.eventId;
 }
