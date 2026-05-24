@@ -23,4 +23,10 @@ describe('AgentController', () => {
     expect(service.list).toHaveBeenCalledWith('tenant-1', 25);
     expect(service.versions).toHaveBeenCalledWith('tenant-1', 'a1', 10);
   });
+
+  it('throws when principal missing', async () => {
+    const service = { create: vi.fn() } as any;
+    const c = new AgentController(service);
+    expect(() => c.create({ name: 'n', role: 'r', goal: 'g' }, {} as any)).toThrow();
+  });
 });

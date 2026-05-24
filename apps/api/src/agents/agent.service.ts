@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { AgentPolicyResolverService } from './agent-policy-resolver.service';
 
 export type AgentRecord = {
   id: string;
@@ -50,7 +51,8 @@ export class AgentService {
       listAgentVersions: (tenantId: string, agentId: string, limit: number) => Promise<AgentVersionRecord[]>;
       getLatestAgentVersion: (tenantId: string, agentId: string) => Promise<AgentVersionRecord | null>;
       resolveEffectivePolicySnapshot: (tenantId: string, agentId: string) => Promise<Record<string, unknown> | null>;
-    }
+    },
+    private readonly policyResolver: AgentPolicyResolverService
   ) {}
 
   create(tenantId: string, createdBy: string, input: CreateAgentDto) { return this.repo.createAgentWithVersionTx(tenantId, createdBy, input); }
@@ -61,6 +63,8 @@ export class AgentService {
   async delete(tenantId: string, id: string, deletedBy: string) { const ok = await this.repo.deleteAgentTx(tenantId, id, deletedBy); if (!ok) throw new NotFoundException('agent_not_found'); return { deleted: true }; }
 
   async versions(tenantId: string, id: string, limit = 50) { const a = await this.repo.getAgentById(tenantId, id); if (!a) throw new NotFoundException('agent_not_found'); return this.repo.listAgentVersions(tenantId, id, limit); }
-  async getEffectivePolicySnapshot(tenantId: string, id: string) { const p = await this.repo.resolveEffectivePolicySnapshot(tenantId, id); if (!p) throw new NotFoundException('agent_not_found'); return p; }
+  async getEffectivePolicySnapshot(tenantId: string, id: string) {
+    return this.policyResolver.resolveEffectivePolicies(tenantId, id);
+  }
   async getLatestVersionSnapshot(tenantId: string, id: string) { const v = await this.repo.getLatestAgentVersion(tenantId, id); if (!v) throw new NotFoundException('agent_not_found'); return v; }
 }

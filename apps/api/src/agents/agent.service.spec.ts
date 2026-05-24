@@ -14,7 +14,8 @@ function build(overrides?: Partial<any>) {
     resolveEffectivePolicySnapshot: vi.fn(async () => ({ maxSteps: 10 })),
     ...overrides,
   };
-  return { svc: new AgentService(repo), repo };
+  const policy = { resolveEffectivePolicies: vi.fn(async () => ({ agentId: "a1" })) };
+  return { svc: new AgentService(repo, policy as any), repo, policy };
 }
 
 describe('AgentService', () => {
@@ -34,3 +35,5 @@ describe('AgentService', () => {
     await expect(svc.versions('t1','missing')).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+
