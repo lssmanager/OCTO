@@ -19,12 +19,13 @@ import { BullBoardModule } from './admin/bullboard.module';
 import { HealthModule } from './health/health.module';
 import { OpsModule } from './ops/ops.module';
 import { MetricsController } from './metrics.controller';
+import { ExecutionModule } from './execution/execution.module';
 
 /** Injection token for the API config object. */
 export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
 
 @Module({
-  imports: [SecurityModule, HealthModule, OpsModule, BullBoardModule],
+  imports: [SecurityModule, HealthModule, OpsModule, BullBoardModule, ExecutionModule],
   controllers: [MetricsController],
   providers: [
     {
