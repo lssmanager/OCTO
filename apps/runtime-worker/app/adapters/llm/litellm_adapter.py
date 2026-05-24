@@ -24,12 +24,14 @@ except Exception:  # pragma: no cover
 
 
 class LiteLLMAdapter(ILLMProvider):
-    def __init__(self, proxy_url: str, proxy_api_key: str, metrics: Any | None = None, logger: Any | None = None) -> None:
+    def __init__(self, proxy_url: str, proxy_api_key: str, metrics: Any | None = None, logger: Any | None = None, circuit_registry: Any | None = None, rate_limiter: Any | None = None) -> None:
         if AsyncOpenAI is None:
             raise RuntimeError("openai package is required for LiteLLMAdapter")
         self.client = AsyncOpenAI(base_url=f"{proxy_url.rstrip('/')}/v1", api_key=proxy_api_key, max_retries=0)
         self.metrics = metrics
         self.logger = logger
+        self.circuit_registry = circuit_registry
+        self.rate_limiter = rate_limiter
 
     def _build_payload(self, req: ChatCompletionRequest) -> dict[str, Any]:
         provider = resolve_provider(req.model)
@@ -107,6 +109,14 @@ class LiteLLMAdapter(ILLMProvider):
         provider = resolve_provider(req.model)
         start = time.perf_counter()
         try:
+            if self.circuit_registry is not None:
+                cb = self.circuit_registry.get(req.tenant_id, provider, req.model)
+                if not await cb.can_attempt():
+                    raise LLMCanonicalError("LLM_CIRCUIT_OPEN", "circuit open", True, provider=provider, model=req.model)
+            if self.rate_limiter is not None:
+                allowed = await self.rate_limiter.acquire(req.tenant_id, req.model, max(1, req.max_output_tokens), 100000, 1000.0)
+                if not allowed:
+                    raise LLMCanonicalError("LLM_RATE_LIMITED", "local rate limiter", True, provider=provider, model=req.model)
             payload = self._build_payload(req)
             raw = await self.client.chat.completions.create(**payload)
             res = self._normalize(req, raw)
@@ -115,6 +125,8 @@ class LiteLLMAdapter(ILLMProvider):
                     json.loads(res.content or "{}")
                 except Exception as exc:
                     raise LLMCanonicalError("LLM_STRUCTURED_OUTPUT_INVALID", "invalid json output", False, provider=provider, model=req.model) from exc
+            if self.circuit_registry is not None:
+                await self.circuit_registry.get(req.tenant_id, provider, req.model).record_success()
             self._emit("success", provider, req.model, res, int((time.perf_counter() - start) * 1000), None)
             return res
         except (RateLimitError,) as exc:
@@ -131,6 +143,8 @@ class LiteLLMAdapter(ILLMProvider):
             err = map_http_error(getattr(exc, "status_code", 500) or 500, str(exc), provider=provider, model=req.model)
         except LLMCanonicalError as exc:
             err = exc
+        if self.circuit_registry is not None:
+            await self.circuit_registry.get(req.tenant_id, provider, req.model).record_failure(getattr(err, "canonical_code", "ERR"), getattr(err, "retryable", False))
         self._emit("error", provider, req.model, None, int((time.perf_counter() - start) * 1000), err)
         raise err
 

@@ -66,6 +66,8 @@ async def test_normal_chat_response() -> None:
     adapter.metrics = None
     adapter.logger = None
     adapter.client = DummyClient(_raw_response())
+    adapter.circuit_registry = None
+    adapter.rate_limiter = None
     res = await adapter.chat(_req())
     assert res.finish_reason == "stop"
     assert res.usage.estimated_cost_usd == Decimal("0.00012")
@@ -77,6 +79,8 @@ async def test_tool_calls_normalization() -> None:
     adapter.metrics = None
     adapter.logger = None
     adapter.client = DummyClient(_raw_response(content="", finish_reason="tool_calls", with_tool=True))
+    adapter.circuit_registry = None
+    adapter.rate_limiter = None
     res = await adapter.chat(_req())
     assert res.tool_calls is not None
     assert res.tool_calls[0]["name"] == "sum"
