@@ -149,3 +149,9 @@ export interface AgentSpawnedPayload {
 
 // Re-export contract types usados frecuentemente por consumers del bus
 export type { OctoEvent, OctoEventType, EventMetadata } from '@octo/contracts';
+
+export * from './outbox';
+
+export * from './event-factory';
+export * from './redis-stream-contract';
+export * from './redis-stream-parser';
