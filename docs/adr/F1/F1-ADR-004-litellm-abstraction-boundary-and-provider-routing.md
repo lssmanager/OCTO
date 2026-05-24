@@ -715,3 +715,10 @@ Observability is required for agents to become "glass boxes" (not black boxes). 
 - [LangGraph + LiteLLM starter](https://github.com/CopilotKit/copilotkit-starter-langgraph-litellm)
 - [Microsoft AI Agents for Beginners — Production](https://microsoft.github.io/ai-agents-for-beginners/translations/es/10-ai-agents-production/)
 - [Microsoft AI Agents for Beginners — Agentic Protocols](https://microsoft.github.io/ai-agents-for-beginners/translations/es/11-agentic-protocols/)
+
+
+## 2026-05 hardening addendum
+- Budget `pause_for_approval` integrates with durable approvals workflow in runtime-worker.
+- Provider health metrics are collected by periodic worker and materialized into tenant-scoped Redis snapshots (`octo:{tenant_id}:provider_health:{provider}:{model}`).
+- Routing decisions and fallback metadata must be persisted per step for auditability.
+- Semantic cache remains deferred for F2 when Qdrant production backend is fully enabled; F1 may use disabled/guarded mode only.
