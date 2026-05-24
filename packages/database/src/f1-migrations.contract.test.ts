@@ -42,6 +42,7 @@ describe('F1 database migrations contract', () => {
   it('enables forced tenant RLS policies for every F1 tenant-scoped table', () => {
     const sql = readMigration('202605230003_f1_rls_policies.sql');
     const tables = [
+      'agents',
       'agent_versions',
       'executions',
       'execution_steps',
