@@ -84,4 +84,15 @@ describe('F1 database migrations contract', () => {
     expect(sql).toContain("tenant_id = current_setting(''app.current_tenant'', true)");
     expect(sql).not.toMatch(/ALTER\s+ROLE\s+.*BYPASSRLS/i);
   });
+
+  it('keeps legacy 0004 migration idempotent and non-duplicative', () => {
+    const sql = readMigration('0004_shocking_yellow_claw.sql');
+
+    expect(sql).toContain("ALTER TYPE \"public\".\"step_status\" ADD VALUE IF NOT EXISTS 'QUEUED'");
+    expect(sql).toContain("ALTER TYPE \"public\".\"tool_invocation_status\" ADD VALUE IF NOT EXISTS 'PENDING'");
+    expect(sql).toContain("ALTER TYPE \"public\".\"execution_status\" ADD VALUE IF NOT EXISTS 'dispatched'");
+    expect(sql).not.toContain('CREATE TABLE "agent_versions"');
+    expect(sql).not.toContain("ALTER TYPE \"public\".\"step_status\" ADD VALUE 'QUEUED';");
+  });
+
 });
