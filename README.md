@@ -149,6 +149,8 @@ cd OCTO
 # Copy env
 cp .env.example .env
 
+# Edit .env and replace all placeholder secret values
+
 # Install dependencies
 pnpm install
 
