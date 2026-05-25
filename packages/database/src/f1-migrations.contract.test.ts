@@ -98,4 +98,13 @@ describe('F1 database migrations contract', () => {
     expect(sql).not.toContain("ALTER TYPE \"public\".\"step_status\" ADD VALUE 'QUEUED';");
   });
 
+  it('enforces tenant RLS on outbox publish DLQ table', () => {
+    const sql = readMigration('202605250001_f1_outbox_publish_dlq_rls.sql');
+    expect(sql).toContain('ALTER TABLE "outbox_publish_dlq" ENABLE ROW LEVEL SECURITY');
+    expect(sql).toContain('ALTER TABLE "outbox_publish_dlq" FORCE ROW LEVEL SECURITY');
+    expect(sql).toContain('tenant_isolation_outbox_publish_dlq');
+    expect(sql).toContain("tenant_id = current_setting('app.current_tenant', true)");
+    expect(sql).toContain("COALESCE(current_setting('app.current_tenant', true), '') <> ''");
+  });
+
 });

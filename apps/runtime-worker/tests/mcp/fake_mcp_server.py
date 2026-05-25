@@ -8,6 +8,8 @@ for line in sys.stdin:
     rid = req.get("id")
     if SCENARIO == "malformed_json":
         print("{bad json", flush=True); continue
+    if SCENARIO == "oversized":
+        print("x" * 300000, flush=True); continue
     if method == "initialize":
         if SCENARIO == "initialize_failure":
             print(json.dumps({"jsonrpc":"2.0","id":rid,"error":{"code":-32000,"message":"init failed"}}), flush=True)

@@ -16,6 +16,7 @@ class BuiltinSubprocessExecutor:
         workdir = create_tool_workdir(context)
         proc = await asyncio.create_subprocess_exec(
             sys.executable,
+            "-I",
             "-m",
             "app.tools.builtin.runner",
             getattr(tool_def, "name"),

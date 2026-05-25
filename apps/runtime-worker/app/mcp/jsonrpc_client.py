@@ -3,9 +3,10 @@ import asyncio, json
 from app.mcp.errors import MCPProtocolError, MCPToolCallError
 
 class MCPJsonRpcClient:
-    def __init__(self, process, timeout_ms: int = 30000) -> None:
+    def __init__(self, process, timeout_ms: int = 30000, max_line_bytes: int = 256_000) -> None:
         self.process = process
         self.timeout_ms = timeout_ms
+        self.max_line_bytes = max_line_bytes
         self._id = 0
 
     async def _request(self, method: str, params: dict) -> dict:
@@ -18,6 +19,10 @@ class MCPJsonRpcClient:
             line = await asyncio.wait_for(self.process.proc.stdout.readline(), timeout=self.timeout_ms/1000)
         except asyncio.TimeoutError as exc:
             raise MCPToolCallError("timeout") from exc
+        if len(line) > self.max_line_bytes:
+            raise MCPProtocolError("response too large")
+        if not line.endswith(b"\n"):
+            raise MCPProtocolError("truncated response")
         try:
             resp = json.loads(line.decode())
         except Exception as exc:
