@@ -44,6 +44,7 @@ export interface OutboxPublisherMetrics {
 
 export function outboxRowToEnvelope(row: OutboxRow): EventEnvelope {
   const meta = (row.payloadJson._meta ?? {}) as Record<string, unknown>;
+  const { _meta, ...payloadWithoutMeta } = row.payloadJson;
   return EventEnvelopeSchema.parse({
     eventId: row.id,
     eventType: row.eventType,
@@ -55,7 +56,7 @@ export function outboxRowToEnvelope(row: OutboxRow): EventEnvelope {
     spanId: String(meta.spanId ?? ''),
     occurredAt: String(meta.occurredAt ?? row.occurredAt ?? new Date().toISOString()),
     schemaVersion: String(meta.schemaVersion ?? '1.0'),
-    payload: row.payloadJson,
+    payload: payloadWithoutMeta,
   });
 }
 

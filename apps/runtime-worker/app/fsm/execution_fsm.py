@@ -115,13 +115,16 @@ class ExecutionFSM:
                     lease_expires_at_expr = "$5::timestamptz"
                     lease_expires_at_arg = "now()"  # replaced below with SQL expression in query
 
+                # Define the lease_expires_at expression outside the f-string to avoid backslash in f-string
+                lease_expires_at_sql = "now() + ($8::int * interval '1 second')" if lease_owner is not None else "lease_expires_at"
+
                 update_query = f"""
                 UPDATE executions
                 SET state = $1,
                     version = version + 1,
                     updated_at = now(),
                     lease_owner = $4,
-                    lease_expires_at = {'now() + ($8::int * interval \'1 second\')' if lease_owner is not None else 'lease_expires_at'}
+                    lease_expires_at = {lease_expires_at_sql}
                 WHERE id = $2
                   AND tenant_id = $3
                   AND state = $6

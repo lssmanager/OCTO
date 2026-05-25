@@ -1,12 +1,24 @@
 import { context, propagation, trace, SpanKind } from '@opentelemetry/api';
 import type { EventEnvelope } from '@octo/contracts';
 
-export function buildTraceparent(traceId: string, spanId: string): string {
+export function buildTraceparent(traceId: string, spanId: string): string | null {
+  // Validate traceId: must be exactly 32 lowercase hex characters
+  if (traceId.length !== 32 || !/^[0-9a-f]{32}$/.test(traceId)) {
+    return null;
+  }
+  // Validate spanId: must be exactly 16 lowercase hex characters
+  if (spanId.length !== 16 || !/^[0-9a-f]{16}$/.test(spanId)) {
+    return null;
+  }
   return `00-${traceId}-${spanId}-01`;
 }
 
 export function extractEventParentContext(event: Pick<EventEnvelope, 'traceId'|'spanId'>) {
-  return propagation.extract(context.active(), { traceparent: buildTraceparent(event.traceId, event.spanId) });
+  const traceparent = buildTraceparent(event.traceId, event.spanId);
+  if (!traceparent) {
+    return context.active();
+  }
+  return propagation.extract(context.active(), { traceparent });
 }
 
 export async function withProcessEventSpan<T>(event: EventEnvelope, fn: () => Promise<T>): Promise<T> {
@@ -23,7 +35,7 @@ export async function withProcessEventSpan<T>(event: EventEnvelope, fn: () => Pr
   });
 }
 
-export const buildTraceParentFromEvent = (event: EventEnvelope) => buildTraceparent(event.traceId, event.spanId);
+export const buildTraceParentFromEvent = (event: EventEnvelope): string | null => buildTraceparent(event.traceId, event.spanId);
 export function startEventConsumerSpan(params: { tracer: ReturnType<typeof trace.getTracer>; event: EventEnvelope; spanName?: string; }) {
   const parent = extractEventParentContext(params.event);
   return params.tracer.startSpan(params.spanName ?? 'process_event', { kind: SpanKind.CONSUMER, attributes: {

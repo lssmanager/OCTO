@@ -9,7 +9,7 @@ const row: OutboxRow = {
   eventType: 'ExecutionQueued',
   sequence: 0,
   publishAttempts: 0,
-  payloadJson: { agentId: 'a1', inputHash: 'h1', _meta: { traceId: 'trace', spanId: 'span', occurredAt: '2026-05-25T00:00:00.000Z', schemaVersion: '1.0' } },
+  payloadJson: { agentId: 'a1', inputHash: 'h1', _meta: { traceId: '0123456789abcdef0123456789abcdef', spanId: '0123456789abcdef', occurredAt: '2026-05-25T00:00:00.000Z', schemaVersion: '1.0' } },
 };
 
 describe('publishOutboxBatch', () => {

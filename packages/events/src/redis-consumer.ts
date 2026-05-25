@@ -6,8 +6,8 @@ export const OCTO_EVENT_GROUPS = {
 } as const;
 
 export interface RedisGroupClient {
-  xgroup: (subcommand: 'CREATE', key: string, group: string, id: '$', mkstream: 'MKSTREAM') => Promise<unknown>;
-  set: (key: string, value: string, mode: 'EX', ttlSeconds: number, nx: 'NX') => Promise<'OK' | null>;
+  xgroup: (subcommand: string, key: string, group: string, id: string, ...args: (string | number)[]) => Promise<unknown>;
+  set: (key: string, value: string, ...args: (string | number)[]) => Promise<'OK' | null>;
 }
 
 export async function ensureConsumerGroups(redis: RedisGroupClient, stream = OCTO_EVENTS_STREAM): Promise<void> {
@@ -15,8 +15,10 @@ export async function ensureConsumerGroups(redis: RedisGroupClient, stream = OCT
     try {
       await redis.xgroup('CREATE', stream, group, '$', 'MKSTREAM');
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (!msg.includes('BUSYGROUP')) throw error;
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'BUSYGROUP') {
+        continue;
+      }
+      throw error;
     }
   }
 }

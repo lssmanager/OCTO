@@ -8,8 +8,8 @@ describe('createEventEnvelope', () => {
       tenantId: 't1',
       aggregateId: 'tool-1',
       sequence: 0,
-      traceId: 'trace',
-      spanId: 'span',
+      traceId: '0123456789abcdef0123456789abcdef',
+      spanId: '0123456789abcdef',
       payload: { toolName: 'bash', toolKind: 'system', argsHash: 'h' },
     });
     expect(evt.aggregateType).toBe('ToolInvocation');
@@ -23,8 +23,8 @@ describe('createEventEnvelope', () => {
         tenantId: 't1',
         aggregateId: 'tool-1',
         sequence: 0,
-        traceId: 'trace',
-        spanId: 'span',
+        traceId: '0123456789abcdef0123456789abcdef',
+        spanId: '0123456789abcdef',
         payload: { toolName: 'bash' },
       })
     ).toThrow();
