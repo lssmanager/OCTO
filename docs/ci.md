@@ -1,0 +1,30 @@
+# CI Pipeline (Issue #89 - F1 Quality Gate)
+
+Required checks for merge to `main`/`develop`:
+- lint
+- typecheck
+- contracts-check
+- unit-tests
+- python-lint-typecheck
+- integration-tests
+- python-integration-tests
+
+Main-only release checks:
+- docker-build
+- docker-scan
+
+## Local commands
+- `pnpm formatcheck`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm contracts:build`
+- `pnpm contracts:python`
+- `pnpm contracts:check`
+- `pnpm testunit --coverage`
+- `pnpm db:migrate`
+- `pnpm testintegration --reporter=verbose`
+- `ruff check apps/runtime-worker`
+- `mypy apps/runtime-worker --ignore-missing-imports`
+- `pytest apps/runtime-worker/tests/ -v --tb=short`
+
+Use real Postgres/Redis for integration checks.

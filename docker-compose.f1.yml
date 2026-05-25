@@ -1,0 +1,90 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-octo}
+      POSTGRES_USER: ${POSTGRES_USER:-octo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-octo}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-octo} -d ${POSTGRES_DB:-octo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    image: octo/migrate:sha-${GIT_SHA:-local}
+    build:
+      context: .
+      dockerfile: docker/migrate.Dockerfile
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: octo/api:sha-${GIT_SHA:-local}
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+    ports: ["3001:3001"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+
+  runtime-worker:
+    image: octo/runtime-worker:sha-${GIT_SHA:-local}
+    build:
+      context: .
+      dockerfile: docker/runtime-worker.Dockerfile
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL}
+    ports: ["8000:8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+
+  scheduler-worker:
+    image: octo/scheduler-worker:sha-${GIT_SHA:-local}
+    build:
+      context: .
+      dockerfile: docker/scheduler-worker.Dockerfile
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL}
+    ports: ["3003:3003"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]

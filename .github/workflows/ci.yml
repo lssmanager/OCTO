@@ -1,146 +1,102 @@
 name: CI
 
 on:
-  push:
-    branches: [main, develop, 'feat/**']
   pull_request:
     branches: [main, develop]
+  push:
+    branches: [main]
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  PNPM_VERSION: "9"
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+  POSTGRES_VERSION: "16"
+  REDIS_VERSION: "7"
 
 jobs:
-  lockfile:
-    name: Lockfile Integrity
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
-          version: 11.2.2
-
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'pnpm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: HUSKY=0 pnpm install --frozen-lockfile
+      - run: pnpm formatcheck
+      - run: pnpm lint
+      - run: pnpm arch:check
 
-      # C4: Fails if pnpm-lock.yaml is missing or desynchronized from package.json.
-      # --frozen-lockfile prevents pnpm from generating/updating the lockfile on the fly;
-      # if the lockfile is absent or stale, install fails immediately.
-      - name: Verify lockfile sync
-        run: |
-          if [ ! -f pnpm-lock.yaml ]; then
-            echo "FAIL: pnpm-lock.yaml is missing."
-            exit 1
-          fi
-          HUSKY=0 pnpm install --frozen-lockfile
-
-  quality:
-    name: Quality Check
-    needs: lockfile
+  typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
-          version: 11.2.2
-
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'pnpm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: HUSKY=0 pnpm install --frozen-lockfile
+      - run: pnpm typecheck
 
-      - name: Install dependencies
-        run: HUSKY=0 pnpm install --frozen-lockfile
-
-      - name: Format check
-        run: pnpm format:check
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Boundary enforcement
-        run: pnpm lint:boundaries
-
-      - name: Check runtime-state import allowlist
-        run: pnpm --filter @octo/runtime-state check:deps
-
-      - name: Type check
-        run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
-
-  # ─────────────────────────────────────────────────────────────────────────
-  # Contract Parity — must pass before tests run.
-  #
-  # What this job does:
-  #   1. Builds @octo/contracts (compiles Zod schemas to JS)
-  #   2. Runs codegen to emit packages/contracts/generated/contracts.py
-  #   3. Runs validate-contract-parity.py against all 5 fixtures
-  #
-  # Why it runs AFTER quality but BEFORE test:
-  #   - quality ensures the TS compiles; codegen needs compiled output
-  #   - test jobs consume queue jobs validated here; if contracts drift,
-  #     failing here gives a clearer signal than a cryptic Python traceback
-  #
-  # Failure scenarios this catches:
-  #   A) TypeScript schema changed, contracts.py not regenerated (drift)
-  #   B) contracts.py regenerated but fixture not updated (stale fixture)
-  #   C) contracts.py import error (codegen script broke)
-  #   D) Pydantic model rejects valid fixture (type mapping regression)
-  # ─────────────────────────────────────────────────────────────────────────
-  contract-parity:
-    name: Contract Parity
+  contracts-check:
     runs-on: ubuntu-latest
-    needs: quality
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
-          version: 11.2.2
-
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'pnpm'
-
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: HUSKY=0 pnpm install --frozen-lockfile
+      - run: pnpm contracts:build
+      - run: pnpm contracts:python
+      - run: pnpm contracts:check
+      - run: pytest packages/contracts/tests/ -v
 
-      - name: Install Node dependencies
-        run: HUSKY=0 pnpm install --frozen-lockfile
-
-      - name: Build @octo/contracts
-        run: pnpm turbo build --filter=@octo/contracts
-
-      - name: Generate contracts.py
-        run: |
-          cd packages/contracts
-          GIT_COMMIT=${{ github.sha }} pnpm codegen
-
-      - name: Install Python dependencies
-        run: pip install pydantic==2.11.5
-
-      - name: Validate contract parity
-        run: python packages/contracts/tests/validate-contract-parity.py
-
-      - name: Upload contracts.py artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: contracts-py-${{ github.sha }}
-          path: packages/contracts/generated/contracts.py
-          retention-days: 30
-
-  test:
-    name: Tests
+  unit-tests:
     runs-on: ubuntu-latest
-    needs: [quality, contract-parity]
+    needs: [lint, typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: HUSKY=0 pnpm install --frozen-lockfile
+      - run: pnpm testunit --coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-ts
+          path: coverage/
+
+  python-lint-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r apps/runtime-worker/requirements.txt ruff mypy
+      - run: python -m ruff check apps/runtime-worker
+      - run: python -m mypy apps/runtime-worker --ignore-missing-imports
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: [unit-tests, contracts-check]
     services:
       postgres:
         image: postgres:16-alpine
@@ -148,61 +104,128 @@ jobs:
           POSTGRES_USER: octo
           POSTGRES_PASSWORD: octo
           POSTGRES_DB: octo_test
+        ports: ["5432:5432"]
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7-alpine
+        ports: ["6379:6379"]
         options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://octo:octo@localhost:5432/octo_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-secret-ci
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
-          version: 11.2.2
-
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'pnpm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: HUSKY=0 pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - run: pnpm testintegration --reporter=verbose
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-results
+          path: test-results/
 
-      - name: Install dependencies
-        run: HUSKY=0 pnpm install --frozen-lockfile
-
-      - name: Run tests
-        run: pnpm test
-        env:
-          DATABASE_URL: postgresql://octo:octo@localhost:5432/octo_test
-          REDIS_URL: redis://localhost:6379
-
-  # C3: Docker build validation for the API image.
-  # Uses the root Dockerfile (context = repo root, required for turbo prune).
-  # Does NOT push — only validates that the image builds successfully.
-  docker-build:
-    name: Docker Build (API)
+  python-integration-tests:
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [integration-tests, python-lint-typecheck]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: octo
+          POSTGRES_PASSWORD: octo
+          POSTGRES_DB: octo_test
+        ports: ["5432:5432"]
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: postgresql://octo:octo@localhost:5432/octo_test
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r apps/runtime-worker/requirements.txt
+      - run: pytest apps/runtime-worker/tests/ -v --tb=short
 
+  docker-build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [integration-tests]
+    strategy:
+      matrix:
+        service: [api, runtime-worker, scheduler-worker, migrate]
+    steps:
+      - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+      - run: |
+          docker build -f docker/${{ matrix.service }}.Dockerfile \
+            --build-arg VERSION=${{ github.ref_name }} \
+            --build-arg REVISION=${{ github.sha }} \
+            --build-arg CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            -t octo/${{ matrix.service }}:sha-${{ github.sha }} \
+            --cache-from type=gha --cache-to type=gha,mode=max .
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            docker tag octo/${{ matrix.service }}:sha-${{ github.sha }} octo/${{ matrix.service }}:pr-${{ github.event.pull_request.number }}
+          fi
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            docker tag octo/${{ matrix.service }}:sha-${{ github.sha }} octo/${{ matrix.service }}:latest
+          fi
+          docker save octo/${{ matrix.service }}:sha-${{ github.sha }} -o ${{ matrix.service }}.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.service }}
+          path: ${{ matrix.service }}.tar
 
-      - name: Build API image
+      - name: Generate SBOM
         run: |
-          docker build \
-            --build-arg BUILD_VERSION=ci-test \
-            --build-arg BUILD_COMMIT=${{ github.sha }} \
-            --build-arg BUILD_PHASE=F0 \
-            --build-arg BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-            -t octo-api:ci \
-            .
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          syft octo/${{ matrix.service }}:sha-${{ github.sha }} -o cyclonedx-json > sbom-${{ matrix.service }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.service }}
+          path: sbom-${{ matrix.service }}.json
+      - name: Verify docker hardening
+        run: pnpm docker:verify-hardening
+
+  docker-scan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    strategy:
+      matrix:
+        service: [api, runtime-worker, scheduler-worker, migrate]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-${{ matrix.service }}
+      - run: docker load -i ${{ matrix.service }}.tar
+      - uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: octo/${{ matrix.service }}:sha-${{ github.sha }}
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+      - name: Cosign sign (main + secret)
+        if: github.ref == 'refs/heads/main' && secrets.COSIGN_KEY != ''
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/sigstore/cosign/main/install.sh | sh -s -- -b /usr/local/bin
+          COSIGN_PASSWORD=${{ secrets.COSIGN_PASSWORD }} cosign sign --key env://COSIGN_KEY octo/${{ matrix.service }}:sha-${{ github.sha }}
+        env:
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
