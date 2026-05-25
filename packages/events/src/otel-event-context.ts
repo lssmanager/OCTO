@@ -22,3 +22,20 @@ export async function withProcessEventSpan<T>(event: EventEnvelope, fn: () => Pr
     try { return await fn(); } finally { span.end(); }
   });
 }
+
+export const buildTraceParentFromEvent = (event: EventEnvelope) => buildTraceparent(event.traceId, event.spanId);
+export function startEventConsumerSpan(params: { tracer: ReturnType<typeof trace.getTracer>; event: EventEnvelope; spanName?: string; }) {
+  const parent = extractEventParentContext(params.event);
+  return params.tracer.startSpan(params.spanName ?? 'process_event', { kind: SpanKind.CONSUMER, attributes: {
+    'octo.event_id': params.event.eventId,
+    'octo.event_type': params.event.eventType,
+    'octo.tenant_id': params.event.tenantId,
+    'octo.aggregate_type': params.event.aggregateType,
+    'octo.aggregate_id': params.event.aggregateId,
+    'octo.sequence': params.event.sequence,
+    'octo.schema_version': params.event.schemaVersion,
+    'messaging.system': 'redis',
+    'messaging.destination.name': 'octo.events',
+    'messaging.operation': 'process',
+  } }, parent);
+}

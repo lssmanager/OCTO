@@ -32,3 +32,7 @@ After max publish attempts, rows are moved to `outbox_publish_dlq` for operator 
 
 ## OTel propagation
 Build `traceparent` as `00-{traceId}-{spanId}-01`; consumers extract and create `process_event` child span with event attributes.
+
+
+## Catalog note
+Issue #85 mentions 28 events, but the normative enumerated catalog currently defines 27 event types. This repo implements those 27 enumerated contracts pending ADR/issue clarification for a potential 28th event.

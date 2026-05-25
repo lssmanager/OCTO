@@ -31,3 +31,9 @@ export async function shouldProcessEventIdempotent(
   const result = await redis.set(key, '1', 'EX', ttlSeconds, 'NX');
   return result === 'OK';
 }
+
+export const OCTO_EVENT_CONSUMER_GROUPS = OCTO_EVENT_GROUPS;
+export async function ensureEventConsumerGroups(redis: RedisGroupClient): Promise<void> { return ensureConsumerGroups(redis); }
+export async function markEventProcessedOnce(params: { redis: RedisGroupClient; tenantId: string; eventId: string; ttlSeconds?: number; }): Promise<boolean> {
+  return shouldProcessEventIdempotent(params.redis, params.tenantId, params.eventId, params.ttlSeconds ?? 3600);
+}
