@@ -377,6 +377,10 @@ The outbox publisher is a separate worker process, not the API and not the runti
 
 It must not live in `apps/web`, API controllers, or runtime tool execution code.
 
+**Concurrency model (normative):** row claiming MUST use `FOR UPDATE SKIP LOCKED` with `locked_by` / `locked_until` lease semantics.  
+Single-replica F1 deployments are supported, but the claim algorithm remains the same for restart safety.  
+`pg_try_advisory_lock(...)` MAY be used as optional belt-and-suspenders in local/dev, but MUST NOT replace row-level claim correctness.
+
 ---
 
 ## 7. Canonical Contracts
@@ -387,19 +391,14 @@ It must not live in `apps/web`, API controllers, or runtime tool execution code.
 export type OctoAggregateType = 'Execution' | 'Agent' | 'Approval' | 'ToolInvocation';
 
 export type OctoEventType =
-  | 'ExecutionQueued'
-  | 'ExecutionDispatched'
-  | 'ExecutionStarted'
-  | 'ExecutionStepCompleted'
-  | 'ExecutionCheckpointed'
-  | 'ToolInvocationStarted'
-  | 'ToolInvocationCompleted'
-  | 'ApprovalRequested'
-  | 'ApprovalResolved'
-  | 'ExecutionSucceeded'
-  | 'ExecutionFailed'
-  | 'ExecutionCancelled'
-  | 'ExecutionReclaimed';
+  | 'ExecutionQueued' | 'ExecutionDispatched' | 'ExecutionStarted' | 'ExecutionStepCompleted'
+  | 'ExecutionPaused' | 'ExecutionResumed' | 'ExecutionReclaiming' | 'ExecutionReclaimed'
+  | 'ExecutionRetryScheduled' | 'ExecutionSucceeded' | 'ExecutionFailed' | 'ExecutionCancelled'
+  | 'ExecutionTimedOut' | 'ExecutionDLQ'
+  | 'ToolInvocationStarted' | 'ToolInvocationSucceeded' | 'ToolInvocationFailed'
+  | 'ToolInvocationTimedOut' | 'ToolApprovalRequested'
+  | 'LLMCallStarted' | 'LLMCallCompleted' | 'LLMCallFailed' | 'LLMBudgetExceeded'
+  | 'ApprovalRequested' | 'ApprovalGranted' | 'ApprovalDenied' | 'ApprovalExpired';
 
 export interface OctoEventEnvelope<TPayload extends Record<string, unknown> = Record<string, unknown>> {
   eventId: string;          // UUIDv7
@@ -413,7 +412,7 @@ export interface OctoEventEnvelope<TPayload extends Record<string, unknown> = Re
   spanId: string;
   occurredAt: string;       // ISO 8601
   sequence: number;         // monotonic per aggregate
-  schemaVersion: 1;
+  schemaVersion: "1.0";
   payload: TPayload;
 }
 ```
@@ -430,15 +429,29 @@ export const OctoEventEnvelopeSchema = z.object({
     'ExecutionDispatched',
     'ExecutionStarted',
     'ExecutionStepCompleted',
-    'ExecutionCheckpointed',
-    'ToolInvocationStarted',
-    'ToolInvocationCompleted',
-    'ApprovalRequested',
-    'ApprovalResolved',
+    'ExecutionPaused',
+    'ExecutionResumed',
+    'ExecutionReclaiming',
+    'ExecutionReclaimed',
+    'ExecutionRetryScheduled',
     'ExecutionSucceeded',
     'ExecutionFailed',
     'ExecutionCancelled',
-    'ExecutionReclaimed',
+    'ExecutionTimedOut',
+    'ExecutionDLQ',
+    'ToolInvocationStarted',
+    'ToolInvocationSucceeded',
+    'ToolInvocationFailed',
+    'ToolInvocationTimedOut',
+    'ToolApprovalRequested',
+    'LLMCallStarted',
+    'LLMCallCompleted',
+    'LLMCallFailed',
+    'LLMBudgetExceeded',
+    'ApprovalRequested',
+    'ApprovalGranted',
+    'ApprovalDenied',
+    'ApprovalExpired',
   ]),
   tenantId: z.string().min(1),
   aggregateType: z.enum(['Execution', 'Agent', 'Approval', 'ToolInvocation']),
@@ -449,7 +462,7 @@ export const OctoEventEnvelopeSchema = z.object({
   spanId: z.string().min(1),
   occurredAt: z.string().datetime(),
   sequence: z.number().int().positive(),
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal("1.0"),
   payload: z.record(z.unknown()),
 });
 
@@ -467,15 +480,29 @@ OctoEventType = Literal[
     'ExecutionDispatched',
     'ExecutionStarted',
     'ExecutionStepCompleted',
-    'ExecutionCheckpointed',
-    'ToolInvocationStarted',
-    'ToolInvocationCompleted',
-    'ApprovalRequested',
-    'ApprovalResolved',
+    'ExecutionPaused',
+    'ExecutionResumed',
+    'ExecutionReclaiming',
+    'ExecutionReclaimed',
+    'ExecutionRetryScheduled',
     'ExecutionSucceeded',
     'ExecutionFailed',
     'ExecutionCancelled',
-    'ExecutionReclaimed',
+    'ExecutionTimedOut',
+    'ExecutionDLQ',
+    'ToolInvocationStarted',
+    'ToolInvocationSucceeded',
+    'ToolInvocationFailed',
+    'ToolInvocationTimedOut',
+    'ToolApprovalRequested',
+    'LLMCallStarted',
+    'LLMCallCompleted',
+    'LLMCallFailed',
+    'LLMBudgetExceeded',
+    'ApprovalRequested',
+    'ApprovalGranted',
+    'ApprovalDenied',
+    'ApprovalExpired',
 ]
 
 class OctoEventEnvelope(BaseModel):
@@ -490,7 +517,7 @@ class OctoEventEnvelope(BaseModel):
     span_id: str = Field(min_length=1)
     occurred_at: str
     sequence: int = Field(gt=0)
-    schema_version: Literal[1] = 1
+    schema_version: Literal["1.0"] = "1.0"
     payload: dict[str, Any]
 ```
 
@@ -498,21 +525,37 @@ class OctoEventEnvelope(BaseModel):
 
 ## 8. Mandatory F1 Domain Events
 
-| Event Type | Aggregate | Trigger | Producer | Required Payload Fields |
-|---|---|---|---|---|
-| `ExecutionQueued` | Execution | `POST /executions` accepted | API | `agent_id`, `source`, `input_hash` |
-| `ExecutionDispatched` | Execution | scheduler CAS to `DISPATCHED` | scheduler-worker | `worker_id`, `lease_expires_at`, `attempt` |
-| `ExecutionStarted` | Execution | runtime CAS to `RUNNING` | runtime-worker | `worker_id`, `checkpoint_id`, `attempt` |
-| `ExecutionStepCompleted` | Execution | step commit | runtime-worker | `step_id`, `step_index`, `step_type`, `duration_ms` |
-| `ExecutionCheckpointed` | Execution | checkpoint persisted | runtime-worker | `checkpoint_id`, `parent_checkpoint_id`, `step_index` |
-| `ToolInvocationStarted` | ToolInvocation | tool execution begins | runtime-worker | `tool_invocation_id`, `tool_name`, `kind` |
-| `ToolInvocationCompleted` | ToolInvocation | tool result persisted | runtime-worker | `tool_invocation_id`, `status`, `duration_ms` |
-| `ApprovalRequested` | Approval | run enters `PAUSED` | runtime-worker | `approval_id`, `reason`, `timeout_at` |
-| `ApprovalResolved` | Approval | human or policy resolves approval | API | `approval_id`, `resolution`, `resolved_by` |
-| `ExecutionSucceeded` | Execution | terminal success | runtime-worker | `final_output_ref`, `duration_ms`, `cost_usd` |
-| `ExecutionFailed` | Execution | terminal failure | runtime-worker/scheduler | `error_code`, `error_class`, `retryable` |
-| `ExecutionCancelled` | Execution | cancel applied | API/runtime-worker | `cancelled_by`, `reason` |
-| `ExecutionReclaimed` | Execution | stale lease recovered | scheduler-worker | `old_worker_id`, `new_worker_id`, `checkpoint_id` |
+**Normative rule:** this table is the canonical F1-EVT-002 catalog. Zod/Pydantic contracts MUST stay in sync with it.
+
+| Event Type | Aggregate | Trigger | Producer | Required Payload Fields | Notes |
+|---|---|---|---|---|---|
+| `ExecutionQueued` | Execution | execution accepted | API | `agentId`, `inputSummary` or `inputHash`, `source` | requires `inputSummary` OR `inputHash` |
+| `ExecutionDispatched` | Execution | CAS `QUEUED->DISPATCHED` | scheduler-worker | `attemptNumber`, `leaseOwner` | |
+| `ExecutionStarted` | Execution | CAS `DISPATCHED->RUNNING` | runtime-worker | `workerId`, `checkpointId` | `checkpointId` optional |
+| `ExecutionStepCompleted` | Execution | step/checkpoint persisted | runtime-worker | `stepIndex`, `stepType`, `status` | replaces standalone `ExecutionCheckpointed` |
+| `ExecutionPaused` | Execution | approval/policy gate | runtime-worker | `approvalId`, `reason` | |
+| `ExecutionResumed` | Execution | approval resolved | API/runtime-worker | `approvalId`, `resolution` | |
+| `ExecutionReclaiming` | Execution | stale lease detected | scheduler-worker | `staleLeaseOwner`, `newLeaseOwner` | |
+| `ExecutionReclaimed` | Execution | lease recovered | scheduler-worker | `lastCheckpointId`, `stepIndex` | |
+| `ExecutionRetryScheduled` | Execution | retry planned | scheduler/runtime | `errorCode`, `nextAttemptAt`, `attemptNumber` | |
+| `ExecutionSucceeded` | Execution | terminal success | runtime-worker | `outputSummary`, `totalTokens`, `durationMs` | |
+| `ExecutionFailed` | Execution | terminal failure | runtime/scheduler | `errorCode`, `errorMessage`, `finalAttempt` | |
+| `ExecutionCancelled` | Execution | cancel applied | API/runtime-worker | `cancelledBy`, `reason` | |
+| `ExecutionTimedOut` | Execution | timeout enforced | runtime/scheduler | `timeoutMs`, `lastStepIndex` | |
+| `ExecutionDLQ` | Execution | poison workflow | scheduler/runtime | `poisonSignature`, `jobId` | |
+| `ToolInvocationStarted` | ToolInvocation | tool call starts | runtime-worker | `toolName`, `toolKind`, `argsHash` | |
+| `ToolInvocationSucceeded` | ToolInvocation | tool call completes | runtime-worker | `toolName`, `durationMs` | |
+| `ToolInvocationFailed` | ToolInvocation | tool call fails | runtime-worker | `toolName`, `errorCode` | |
+| `ToolInvocationTimedOut` | ToolInvocation | tool call timeout | runtime-worker | `toolName`, `timeoutMs` | |
+| `ToolApprovalRequested` | ToolInvocation | approval required for tool | runtime-worker | `toolName`, `approvalId` | |
+| `LLMCallStarted` | Execution | LLM request started | runtime-worker | `model`, `provider`, `stepIndex` | |
+| `LLMCallCompleted` | Execution | LLM response persisted | runtime-worker | `model`, `inputTokens`, `outputTokens`, `finishReason`, `latencyMs` | |
+| `LLMCallFailed` | Execution | LLM request failed | runtime-worker | `errorCode`, `provider`, `model`, `attempt` | |
+| `LLMBudgetExceeded` | Execution | budget policy gate | runtime-worker | `remainingBudgetUsd`, `requiredMinUsd` | |
+| `ApprovalRequested` | Approval | approval created | runtime-worker/API | `kind`, `title`, `reason`, `timeoutAt` | |
+| `ApprovalGranted` | Approval | approval granted | API | `resolvedBy`, `resolutionSummary` | |
+| `ApprovalDenied` | Approval | approval denied | API | `resolvedBy`, `denyReason` | |
+| `ApprovalExpired` | Approval | approval timeout | scheduler/API | `timeoutAt` | |
 
 ---
 
@@ -640,7 +683,9 @@ import Redis from 'ioredis';
 const STREAM_NAME = 'octo.events';
 const STREAM_MAXLEN = 10_000;
 const BATCH_SIZE = 100;
-const MAX_ATTEMPTS = 10;
+const MAX_PUBLISH_ATTEMPTS = 10;
+const OUTBOX_RETRY_BASE_MS = 500;
+const OUTBOX_RETRY_MAX_MS = 30_000;
 
 @Injectable()
 export class OutboxPublisherService implements OnModuleDestroy {
@@ -664,8 +709,11 @@ export class OutboxPublisherService implements OnModuleDestroy {
           const attempts = row.attempt_count + 1;
           await this.db.recordPublishFailure(row.id, error, attempts);
 
-          if (attempts >= MAX_ATTEMPTS) {
+          if (attempts >= MAX_PUBLISH_ATTEMPTS) {
             await this.db.moveToDlq(row.id, error, attempts);
+          } else {
+            const backoffMs = Math.min(OUTBOX_RETRY_MAX_MS, OUTBOX_RETRY_BASE_MS * 2 ** Math.min(attempts, 6));
+            await this.db.scheduleNextAttempt(row.id, backoffMs);
           }
         }
       }
@@ -847,15 +895,14 @@ CREATE TABLE IF NOT EXISTS outbox_events (
   trace_id TEXT NOT NULL,
   span_id TEXT NOT NULL,
   sequence BIGINT NOT NULL,
-  schema_version INTEGER NOT NULL DEFAULT 1,
+  schema_version TEXT NOT NULL DEFAULT '1.0',
   payload_json JSONB NOT NULL,
   occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   published_at TIMESTAMPTZ NULL,
-  attempt_count INTEGER NOT NULL DEFAULT 0,
-  last_attempted_at TIMESTAMPTZ NULL,
-  last_error_code TEXT NULL,
-  last_error_message TEXT NULL,
+  publish_attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMPTZ NULL,
+  last_error TEXT NULL,
   locked_by TEXT NULL,
   locked_until TIMESTAMPTZ NULL
 );
@@ -863,8 +910,8 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_events_aggregate_sequence
   ON outbox_events (tenant_id, aggregate_type, aggregate_id, sequence);
 
-CREATE INDEX IF NOT EXISTS idx_outbox_events_unpublished
-  ON outbox_events (created_at ASC)
+CREATE INDEX IF NOT EXISTS idx_outbox_unpublished_due
+  ON outbox_events (next_attempt_at, created_at ASC)
   WHERE published_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_outbox_events_execution
@@ -1029,6 +1076,28 @@ Every command job and event publication must include:
 | `trace_id` | `tr_abc` |
 | `span_id` | `sp_def` |
 
+Consumers MUST reconstruct parent context from envelope values:
+
+```ts
+const parentContext = propagation.extract(ROOT_CONTEXT, {
+  traceparent: `00-${event.traceId}-${event.spanId}-01`,
+});
+const span = tracer.startSpan('process_event', undefined, parentContext);
+```
+
+```py
+carrier = {"traceparent": f"00-{event.trace_id}-{event.span_id}-01"}
+ctx = extract(carrier)
+with trace.get_tracer(__name__).start_as_current_span("process_event", context=ctx):
+    ...
+```
+
+Required attributes for consumer spans:
+`octo.event_id`, `octo.event_type`, `octo.tenant_id`, `octo.aggregate_type`,
+`octo.aggregate_id`, `octo.sequence`, `octo.schema_version`,
+`messaging.system=redis`, `messaging.destination.name=octo.events`,
+`messaging.operation=process`.
+
 ### 12.2 Prometheus Metrics
 
 | Metric | Type | Labels | Meaning |
@@ -1036,13 +1105,16 @@ Every command job and event publication must include:
 | `octo_queue_depth` | gauge | `queue_name` | Jobs waiting/delayed |
 | `octo_queue_failed_total` | counter | `queue_name`, `error_code` | Failed jobs |
 | `octo_queue_dlq_total` | counter | `queue_name` | Jobs moved to DLQ |
-| `octo_outbox_unpublished_total` | gauge | none | Rows pending publication |
+| `octo_outbox_pending_total` | gauge | none | `SELECT count(*) FROM outbox_events WHERE published_at IS NULL` |
+| `octo_outbox_publish_latency_ms_bucket` | histogram | `event_type` | End-to-end publish latency from `created_at` to `published_at` |
+| `octo_outbox_batch_size_bucket` | histogram | none | Outbox rows processed per poll cycle |
 | `octo_outbox_published_total` | counter | `event_type` | Events published to stream |
 | `octo_outbox_publish_failed_total` | counter | `event_type`, `error_code` | Publish failures |
 | `octo_outbox_dlq_total` | counter | `event_type` | Events moved to publish DLQ |
-| `octo_stream_consumer_lag_seconds` | gauge | `consumer_group` | Stream lag estimate |
-| `octo_stream_pending_total` | gauge | `consumer_group` | Pending entries count |
-| `octo_event_dedupe_hit_total` | counter | `consumer_group` | Duplicate event skipped |
+| `octo_event_consumer_duplicate_total` | counter | `group`, `event_type` | Duplicate deliveries skipped by dedupe |
+| `octo_event_consumer_processed_total` | counter | `group`, `event_type` | Processed events per consumer group |
+| `octo_event_consumer_failed_total` | counter | `group`, `event_type` | Consumer handler failures |
+| `octo_event_consumer_lag_ms_bucket` | histogram | `group` | Consumer lag from `occurred_at` |
 
 ### 12.3 Alerts
 

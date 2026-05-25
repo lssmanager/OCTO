@@ -3,7 +3,10 @@ import { z } from 'zod';
 export const OutboxAggregateTypeSchema = z.enum(['execution', 'agent', 'tool_invocation', 'approval']);
 
 export const OutboxEventTypeSchema = z.enum([
-  'ExecutionQueued','ExecutionDispatched','ExecutionStarted','ExecutionStepCompleted','ExecutionCheckpointed','ExecutionPaused','ExecutionResumed','ExecutionSucceeded','ExecutionFailed','ExecutionCancelled','ExecutionReclaiming','ExecutionReclaimed','CheckpointCreated','ToolInvoked','ToolInvocationStarted','ToolInvocationCompleted','ToolCompleted','ToolFailed','ApprovalRequested','ApprovalResolved',
+  'ExecutionQueued','ExecutionDispatched','ExecutionStarted','ExecutionStepCompleted','ExecutionPaused','ExecutionResumed','ExecutionReclaiming','ExecutionReclaimed','ExecutionRetryScheduled','ExecutionSucceeded','ExecutionFailed','ExecutionCancelled','ExecutionTimedOut','ExecutionDLQ',
+  'ToolInvocationStarted','ToolInvocationSucceeded','ToolInvocationFailed','ToolInvocationTimedOut','ToolApprovalRequested',
+  'LLMCallStarted','LLMCallCompleted','LLMCallFailed','LLMBudgetExceeded',
+  'ApprovalRequested','ApprovalGranted','ApprovalDenied','ApprovalExpired',
 ]);
 
 export const OutboxEventSchema = z.object({

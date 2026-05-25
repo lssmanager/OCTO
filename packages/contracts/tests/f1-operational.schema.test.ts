@@ -35,7 +35,7 @@ describe('OutboxEventSchema', () => {
   it('nullable publishedAt passes', () => expect(() => OutboxEventSchema.parse({ ...base, publishedAt: null })).not.toThrow());
   it('event type enum includes all mandatory F1 events', () => {
     const values = OutboxEventTypeSchema.options;
-    ['ExecutionQueued','ExecutionDispatched','ExecutionStarted','ExecutionStepCompleted','ExecutionCheckpointed','ExecutionPaused','ExecutionResumed','ExecutionSucceeded','ExecutionFailed','ExecutionCancelled','ExecutionReclaiming','ExecutionReclaimed','CheckpointCreated','ToolInvoked','ToolInvocationStarted','ToolInvocationCompleted','ToolCompleted','ToolFailed','ApprovalRequested','ApprovalResolved'].forEach((v)=>expect(values).toContain(v));
+    ['ExecutionQueued','ExecutionDispatched','ExecutionStarted','ExecutionStepCompleted','ExecutionPaused','ExecutionResumed','ExecutionReclaiming','ExecutionReclaimed','ExecutionRetryScheduled','ExecutionSucceeded','ExecutionFailed','ExecutionCancelled','ExecutionTimedOut','ExecutionDLQ','ToolInvocationStarted','ToolInvocationSucceeded','ToolInvocationFailed','ToolInvocationTimedOut','ToolApprovalRequested','LLMCallStarted','LLMCallCompleted','LLMCallFailed','LLMBudgetExceeded','ApprovalRequested','ApprovalGranted','ApprovalDenied','ApprovalExpired'].forEach((v)=>expect(values).toContain(v));
   });
 });
 

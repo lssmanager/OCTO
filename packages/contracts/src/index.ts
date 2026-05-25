@@ -231,4 +231,14 @@ export type {
 
 // F1 EventEnvelope contracts
 export type { EventEnvelope, F1EventType } from './zod/events';
-export { EventEnvelopeSchema, F1EventTypeSchema, EventPayloadSchemaByType, validateEventPayload } from './zod/events';
+export {
+  EventEnvelopeSchema,
+  F1EventTypeSchema,
+  EventPayloadSchemaByType,
+  validateEventPayload,
+  EventAggregateTypeSchema,
+  getPayloadSchemaForEventType,
+  getAggregateTypeForEventType,
+  validateEventEnvelope,
+  validateTypedEventEnvelope,
+} from './zod/events';
