@@ -156,3 +156,6 @@ export * from './event-factory';
 export * from './redis-stream-contract';
 export * from './redis-stream-parser';
 export * from './otel-event-context';
+
+export * from './outbox-publisher';
+export * from './redis-consumer';
