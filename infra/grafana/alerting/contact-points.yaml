@@ -1,0 +1,26 @@
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: pagerduty-critical
+    receivers:
+      - uid: pagerduty-critical
+        type: pagerduty
+        settings: { integrationKey: ${PAGERDUTY_INTEGRATION_KEY} }
+  - orgId: 1
+    name: slack-octo-incidents
+    receivers:
+      - uid: slack-octo-incidents
+        type: slack
+        settings: { url: ${SLACK_OCTO_INCIDENTS_WEBHOOK_URL}, recipient: "#octo-incidents" }
+  - orgId: 1
+    name: slack-octo-alerts
+    receivers:
+      - uid: slack-octo-alerts
+        type: slack
+        settings: { url: ${SLACK_OCTO_ALERTS_WEBHOOK_URL}, recipient: "#octo-alerts" }
+  - orgId: 1
+    name: slack-octo-monitoring
+    receivers:
+      - uid: slack-octo-monitoring
+        type: slack
+        settings: { url: ${SLACK_OCTO_MONITORING_WEBHOOK_URL}, recipient: "#octo-monitoring" }
