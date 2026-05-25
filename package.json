@@ -26,7 +26,13 @@
     "formatcheck": "prettier --check .",
     "testunit": "turbo run test --filter=@octo/contracts --filter=@octo/api --filter=@octo/database --filter=@octo/events --filter=@octo/runtime-state -- --coverage",
     "testintegration": "vitest run packages/database/src/f1-database.integration.test.ts",
-    "arch:check": "bash scripts/arch-check.sh"
+    "arch:check": "bash scripts/arch-check.sh",
+    "docker:build:api": "docker build -f docker/api.Dockerfile -t octo/api:sha-local --build-arg VERSION=local --build-arg REVISION=local --build-arg CREATED=local .",
+    "docker:build:runtime-worker": "docker build -f docker/runtime-worker.Dockerfile -t octo/runtime-worker:sha-local --build-arg VERSION=local --build-arg REVISION=local --build-arg CREATED=local .",
+    "docker:build:scheduler-worker": "docker build -f docker/scheduler-worker.Dockerfile -t octo/scheduler-worker:sha-local --build-arg VERSION=local --build-arg REVISION=local --build-arg CREATED=local .",
+    "docker:build:migrate": "docker build -f docker/migrate.Dockerfile -t octo/migrate:sha-local --build-arg VERSION=local --build-arg REVISION=local --build-arg CREATED=local .",
+    "docker:build:f1": "pnpm docker:build:api && pnpm docker:build:runtime-worker && pnpm docker:build:scheduler-worker && pnpm docker:build:migrate",
+    "docker:verify-hardening": "bash scripts/verify-docker-hardening.sh"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.59.4",
