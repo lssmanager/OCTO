@@ -28,6 +28,23 @@ else
   echo "ℹ️  .env already exists, skipping copy"
 fi
 
+# Validate required secrets were changed from placeholders
+required_secrets=(
+  "POSTGRES_PASSWORD"
+  "REDIS_PASSWORD"
+  "QDRANT_API_KEY"
+  "MINIO_ACCESS_KEY"
+  "MINIO_SECRET_KEY"
+)
+
+for secret in "${required_secrets[@]}"; do
+  value=$(grep -E "^${secret}=" .env | cut -d'=' -f2- || true)
+  if [ -z "$value" ] || [[ "$value" == replace-with-strong-* ]]; then
+    echo "❌ ${secret} must be set in .env with a strong value before startup"
+    exit 1
+  fi
+done
+
 # Install Node dependencies
 echo "📦 Installing Node dependencies..."
 pnpm install
