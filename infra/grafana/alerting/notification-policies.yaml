@@ -1,0 +1,15 @@
+apiVersion: 1
+policies:
+  - orgId: 1
+    receiver: slack-octo-monitoring
+    group_by: [alertname, severity, team]
+    routes:
+      - receiver: pagerduty-critical
+        matchers: [severity = critical]
+        continue: true
+      - receiver: slack-octo-incidents
+        matchers: [severity = critical]
+      - receiver: slack-octo-alerts
+        matchers: [severity = high]
+      - receiver: slack-octo-monitoring
+        matchers: [severity = medium]
