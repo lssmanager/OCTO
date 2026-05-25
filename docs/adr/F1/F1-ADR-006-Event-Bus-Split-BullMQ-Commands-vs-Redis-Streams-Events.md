@@ -1327,3 +1327,95 @@ F1 cannot be declared stable unless:
 ---
 
 **Status Change:** This ADR moves from Proposed to Accepted. The split between BullMQ commands and Redis Streams events is mandatory for F1 complete. It prevents the event bus from becoming a hidden scheduler, preserves PostgreSQL as the source of truth, and provides the projection substrate needed for UI timelines, audit, Ops metrics and future agent-to-agent messaging without compromising durable execution correctness.
+
+
+Qué agregar:
+Reemplazar la tabla de §8 con el catálogo completo (o añadir una nota clara que indique que el catálogo se mantiene en packages/contracts y se referencia aquí). Los eventos faltantes incluyen:
+
+ExecutionReclaiming, ExecutionRetryScheduled, ExecutionTimedOut, ExecutionDLQ
+
+LLMCallStarted, LLMCallCompleted, LLMCallFailed, LLMBudgetExceeded
+
+ToolInvocationTimedOut, ToolApprovalRequested
+
+ApprovalGranted, ApprovalDenied, ApprovalExpired
+
+ExecutionPaused, ExecutionResumed
+
+2. Métricas de outbox faltantes
+Estado actual: ADR-006 §12.2 solo incluye octo_outbox_published_total, octo_outbox_publish_failed_total, octo_outbox_dlq_total.
+
+Lo que falta: Métricas de monitoreo operativo del publisher.
+
+Qué agregar:
+Al listado de métricas añadir:
+
+text
+octo_outbox_pending_total            # gauge: eventos no publicados
+octo_outbox_publish_latency_ms_bucket # histograma: tiempo desde created_at hasta published_at
+octo_outbox_batch_size_bucket         # histograma: eventos por ciclo de polling
+3. Estrategia de concurrencia del publisher
+Estado actual: El ADR-006 §6.5 y §10 usan locked_by + locked_until + FOR UPDATE SKIP LOCKED, pero el issue #84 menciona pg_try_advisory_lock.
+
+Lo que falta: Decisión clara y consistente. En F1 se recomienda SKIP LOCKED por su mejor escalabilidad.
+
+Qué agregar:
+En §9 (Implementation Blueprint) o §6.5, escribir explícitamente:
+
+El outbox publisher usa SELECT ... FOR UPDATE SKIP LOCKED para reclamar lotes de eventos. No se utiliza pg_try_advisory_lock en F1 para evitar cuellos de botella. El esquema de locked_by y locked_until es suficiente para prevenir duplicados.
+
+4. Consistencia del campo schemaVersion
+Estado actual: ADR-006 §7.1 define schemaVersion: 1 (entero). Issue #85 usa '1.0' (string).
+
+Lo que falta: Alineación.
+
+Qué agregar:
+En §7.1, especificar claramente:
+
+typescript
+schemaVersion: 1   // número entero, no string. Se incrementa ante cambios rompecontratos.
+Además, añadir una nota de que la generación de modelos Python debe reflejar ese tipo entero.
+
+5. Propagación de contexto OTel en consumidores
+Estado actual: El ADR-006 no explica cómo los consumidores de eventos deben propagar la traza.
+
+Lo que falta: Instrucciones para mantener trazabilidad end-to-end.
+
+Qué agregar:
+En §11 (Consumers and Idempotency) o §5 (Redis Streams Event Bus), añadir un párrafo:
+
+Cada consumidor DEBE reconstruir el contexto de tracing a partir de los campos traceId y spanId del evento, utilizando el formato traceparent estándar de W3C:
+00-{event.traceId}-{event.spanId}-01.
+Ejemplo de extracción en TypeScript y Python (ver issue #85).
+
+6. Política de reintentos con backoff en outbox publisher
+Estado actual: Solo se menciona MAX_ATTEMPTS = 10 y un sleep fijo de 1 segundo cuando no hay filas.
+
+Lo que falta: Backoff exponencial ante fallos de Redis.
+
+Qué agregar:
+En §9.5 (Outbox Publisher Loop), modificar la lógica:
+
+typescript
+let backoffMs = 500;
+while (!stopped) {
+  const rows = await claimBatch();
+  if (rows.length === 0) {
+    await sleep(backoffMs);
+    backoffMs = Math.min(backoffMs * 2, 5000);
+  } else {
+    backoffMs = 500;
+    // procesar lote...
+  }
+}
+Además, especificar que en caso de error de Redis se incrementa attempt_count y se respeta el backoff.
+
+Resumen de los cambios al ADR-006
+Sección	Cambio requerido
+§8 (Mandatory F1 Domain Events)	Ampliar tabla con todos los eventos definidos en issue #85.
+§12.2 (Prometheus Metrics)	Añadir octo_outbox_pending_total, publish_latency_ms_bucket, batch_size_bucket.
+§6.5 o §9	Estandarizar concurrencia: solo FOR UPDATE SKIP LOCKED, eliminar mención a advisory lock.
+§7.1 (Canonical Contracts)	Fijar schemaVersion como entero (1) y eliminar versión string.
+§11 (Consumers)	Agregar sección de propagación OTel con ejemplo de extracción de traceparent.
+§9.5 (Outbox Publisher Loop)	Incluir backoff exponencial ante lotes vacíos o errores de Redis.
+
