@@ -49,18 +49,18 @@ export class InternalSecretGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    // Development bypass
-    const nodeEnv = process.env['NODE_ENV'] ?? 'development';
-    if (nodeEnv === 'development') {
+    // Explicit insecure bypass (opt-in only for local debugging)
+    const bypass = process.env['ALLOW_INSECURE_INTERNAL_SECRET_BYPASS'] === 'true';
+    if (bypass) {
       logger.warn({
-        event: 'guard_dev_bypass',
+        event: 'guard_explicit_insecure_bypass',
         trace_id: 'security',
-        msg: 'InternalSecretGuard bypassed in development mode.',
+        msg: 'InternalSecretGuard bypass enabled via ALLOW_INSECURE_INTERNAL_SECRET_BYPASS=true.',
       });
       return true;
     }
 
-    // Production enforcement
+    // Default enforcement (fail-closed)
     const expected = process.env['INTERNAL_SECRET'];
     if (!expected) {
       logger.error({

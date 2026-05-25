@@ -5,8 +5,9 @@ F2: consulta dinámica al LiteLLM proxy /models endpoint.
 """
 from __future__ import annotations
 
+import os
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, HTTPException, status
 
 from ..schemas.models import ModelInfo
 
@@ -59,6 +60,18 @@ _F0_MODELS: list[ModelInfo] = [
     summary="List available LLM models",
     description="F0: lista estática. F2: dinámica via LiteLLM proxy.",
 )
-async def list_models() -> list[ModelInfo]:
+async def list_models(x_internal_secret: str | None = Header(default=None, alias="X-Internal-Secret")) -> list[ModelInfo]:
+    expected_secret = os.getenv("API_INTERNAL_SECRET")
+    if not expected_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Service misconfigured: API_INTERNAL_SECRET not set",
+        )
+    if not x_internal_secret or x_internal_secret != expected_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid X-Internal-Secret header",
+        )
+
     log.info("models.list", count=len(_F0_MODELS))
     return _F0_MODELS

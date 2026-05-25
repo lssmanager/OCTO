@@ -118,7 +118,7 @@ services:
       BUILD_PHASE: ${BUILD_PHASE:-F0}
       BUILD_TIME: ${BUILD_TIME:-unknown}
     ports:
-      - '${PORT:-3001}:3001'
+      - '127.0.0.1:${PORT:-3001}:3001'
     depends_on:
       postgres:
         condition: service_healthy
@@ -184,7 +184,7 @@ services:
       BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
       BUILD_PHASE: ${BUILD_PHASE:-F0}
     ports:
-      - '${WORKER_PORT:-8000}:8000'
+      - '127.0.0.1:${WORKER_PORT:-8000}:8000'
     depends_on:
       postgres:
         condition: service_healthy
@@ -216,7 +216,7 @@ services:
     volumes:
       - ./docker/litellm/config.yaml:/app/config.yaml:ro
     ports:
-      - '${LITELLM_PORT:-4000}:4000'
+      - '127.0.0.1:${LITELLM_PORT:-4000}:4000'
     depends_on:
       postgres:
         condition: service_healthy
