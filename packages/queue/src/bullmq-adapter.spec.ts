@@ -17,8 +17,8 @@ import { DlqReason } from '@octo/contracts';
 vi.mock('@octo/contracts', () => ({
   DlqReason: {
     MAX_RETRIES_EXCEEDED: 'max_retries_exceeded',
-    TOOL_TIMEOUT: 'tool_timeout',
-    PERMANENT_FAILURE: 'permanent_failure',
+    TIMEOUT: 'timeout',
+    NON_RETRYABLE_ERROR: 'non_retryable_error',
   },
 }));
 
@@ -121,11 +121,11 @@ describe('DlqReason — contract validation', () => {
     expect(DlqReason.MAX_RETRIES_EXCEEDED).toBe('max_retries_exceeded');
   });
 
-  it('PERMANENT_FAILURE is a valid DLQ reason string', () => {
-    expect(DlqReason.PERMANENT_FAILURE).toBe('permanent_failure');
+  it('NON_RETRYABLE_ERROR is a valid DLQ reason string', () => {
+    expect(DlqReason.NON_RETRYABLE_ERROR).toBe('non_retryable_error');
   });
 
-  it('TOOL_TIMEOUT is a valid DLQ reason string', () => {
-    expect(DlqReason.TOOL_TIMEOUT).toBe('tool_timeout');
+  it('TIMEOUT is a valid DLQ reason string', () => {
+    expect(DlqReason.TIMEOUT).toBe('timeout');
   });
 });

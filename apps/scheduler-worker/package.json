@@ -3,8 +3,8 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "build": "tsup src/main.ts src/index.ts --format cjs --dts",
-    "dev": "tsup src/main.ts src/index.ts --format cjs --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"

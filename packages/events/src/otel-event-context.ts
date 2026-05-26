@@ -18,7 +18,7 @@ export async function withProcessEventSpan<T>(event: EventEnvelope, fn: () => Pr
     eventType: event.eventType,
     eventId: event.eventId,
     sequence: event.sequence,
-  } }, parent, async (span) => {
+  } }, parent, async (span: import('@opentelemetry/api').Span) => {
     try { return await fn(); } finally { span.end(); }
   });
 }

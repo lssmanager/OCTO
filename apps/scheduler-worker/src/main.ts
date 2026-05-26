@@ -21,7 +21,7 @@ async function start() {
       workerId,
       leaseSeconds,
       invokeRuntime: async (payload) => {
-        await (globalThis.fetch as any)(runtimeUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-internal-secret': runtimeSecret }, body: JSON.stringify(payload) });
+        await fetch(runtimeUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-internal-secret': runtimeSecret }, body: JSON.stringify(payload) });
       },
     });
   }, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379', concurrency: Number(process.env['WORKER_CONCURRENCY'] ?? '5') });
@@ -36,7 +36,7 @@ async function start() {
         await q.getWaitingCount();
         await q.close();
         if ((process.env['RUNTIME_HEALTH_REQUIRED'] ?? 'false') === 'true') {
-          const rr = await (globalThis.fetch as any)((process.env['RUNTIME_WORKER_HEALTH_URL'] ?? 'http://localhost:8000/health/ready'));
+          const rr = await fetch((process.env['RUNTIME_WORKER_HEALTH_URL'] ?? 'http://localhost:8000/health/ready'));
           if (!rr.ok) throw new Error('runtime_not_ready');
         }
         res.statusCode = ready ? 200 : 503; res.end(ready ? 'ready' : 'booting');
