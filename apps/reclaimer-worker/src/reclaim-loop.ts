@@ -8,8 +8,7 @@
  */
 
 import { and, eq, lt, sql } from 'drizzle-orm';
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { executions } from '@octo/database';
+import { executions, getDb } from '@octo/database';
 import { createQueue } from '@octo/queue';
 import { casReclaim } from './cas-reclaim';
 import { reclaimedCounter, alreadyTakenCounter, reclaimErrorCounter } from './metrics';
@@ -22,7 +21,7 @@ interface LoopConfig {
 let timer: NodeJS.Timeout | null = null;
 
 export async function startReclaimLoop(
-  db: NodePgDatabase,
+  db: ReturnType<typeof getDb>,
   redisUrl: string,
   config: LoopConfig
 ): Promise<void> {

@@ -122,7 +122,7 @@ export class ExecutionStateService {
     if (from === to) return;
 
     // 2. FSM guard — throws InvalidTransitionError on illegal edge
-    assertValidTransition(from, to);
+    assertValidTransition(executionId, from, to);
 
     // 3. CAS DB write — WHERE status = from ensures atomic compare-and-swap.
     //    Returns false if another worker already changed the status.

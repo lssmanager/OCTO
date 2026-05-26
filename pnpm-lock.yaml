@@ -530,6 +530,9 @@ importers:
       '@octo/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@opentelemetry/api':
+        specifier: 1.9.0
+        version: 1.9.0
     devDependencies:
       '@types/node':
         specifier: 22.0.0
