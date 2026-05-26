@@ -31,14 +31,12 @@ vi.mock('@octo/queue', () => ({
 }));
 
 vi.mock('postgres', () => {
-  const mockSql = vi.fn().mockResolvedValue([{ '?column?': 1 }]);
-  const mockEnd = vi.fn().mockResolvedValue(undefined);
-  const fn = vi.fn(() => fn);
-  fn.end = mockEnd;
-  fn.unsafe = vi.fn();
-  const postgresFn = vi.fn(() => fn) as any;
-  postgresFn.default = postgresFn;
-  return postgresFn;
+  const client = {
+    end: vi.fn().mockResolvedValue(undefined),
+    unsafe: vi.fn(),
+  } as any;
+  const postgresDefault = vi.fn(() => client);
+  return { default: postgresDefault };
 });
 
 vi.mock('drizzle-orm', () => ({
@@ -56,13 +54,9 @@ describe('HealthController', () => {
   let service: HealthService;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [HealthController],
-      providers: [HealthService],
-    }).compile();
-
-    controller = module.get<HealthController>(HealthController);
+    const module: TestingModule = await Test.createTestingModule({ providers: [HealthService] }).compile();
     service = module.get<HealthService>(HealthService);
+    controller = new HealthController(service);
 
     // Simulate module init
     process.env['REDIS_URL'] = 'redis://localhost:6379';

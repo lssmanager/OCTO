@@ -11,8 +11,12 @@ const runtime = async (executionId: string, tenantId: string) => {
   execFileSync('python', ['-c', `import asyncio; from src.f1_runtime import run_f1_execution; asyncio.run(run_f1_execution("${executionId}","${tenantId}","trace-test"))`], { cwd: '../../runtime-worker', env: process.env, stdio: 'inherit' });
 };
 
-describe('F1 dispatch->runtime e2e', () => {
+const hasInfra = Boolean(process.env.DATABASE_URL && process.env.REDIS_URL);
+const describeIfInfra = hasInfra ? describe : describe.skip;
+
+describeIfInfra('F1 dispatch->runtime integration', () => {
   it('runs queued execution to succeeded with checkpoints and timeline', async () => {
+    if (!hasInfra) throw new Error('integration infra missing: set DATABASE_URL and REDIS_URL');
     const tenantA = `tenant-a-${Date.now()}`;
     const tenantB = `tenant-b-${Date.now()}`;
     const agentId = randomUUID();

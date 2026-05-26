@@ -14,7 +14,8 @@
     "@octo/queue": "workspace:*",
     "@octo/observability": "workspace:*",
     "@octo/database": "workspace:*",
-    "@octo/runtime-state": "workspace:*"
+    "@octo/runtime-state": "workspace:*",
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
     "@octo/config": "workspace:*",

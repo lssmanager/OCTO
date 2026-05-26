@@ -7,15 +7,13 @@ const pkg = (name: string) => resolve(__dirname, `../../packages/${name}/src/ind
 export default defineConfig({
   resolve: {
     alias: {
-      '@octo/queue': pkg('queue'),
-      '@octo/observability': pkg('observability'),
-      '@octo/database': pkg('database'),
-      '@octo/events': pkg('events'),
-      '@octo/runtime-state': pkg('runtime-state'),
-      '@octo/config': pkg('config'),
-      '@octo/security': pkg('security'),
-      '@octo/contracts': pkg('contracts'),
+      '@octo/queue': pkg('queue'), '@octo/observability': pkg('observability'), '@octo/database': pkg('database'), '@octo/events': pkg('events'), '@octo/runtime-state': pkg('runtime-state'), '@octo/config': pkg('config'), '@octo/security': pkg('security'), '@octo/contracts': pkg('contracts'),
     },
   },
-  test: { globals: true, environment: 'node', include: ['src/**/*.spec.ts', 'src/**/*.test.ts', 'src/**/*.e2e.test.ts'] },
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['src/**/*.spec.ts', 'src/**/*.test.ts'],
+    exclude: ['src/**/*.integration.test.ts'],
+  },
 });
