@@ -95,13 +95,21 @@ async def get_execution_status(
     execution_id: str,
     x_internal_secret: str | None = Header(default=None),
 ) -> dict[str, str]:
-    """F0 stub — real status polling wired in F1 via DB query."""
+    """Execution status from PostgreSQL."""
     _verify_internal_secret(x_internal_secret)
-    return {
-        "execution_id": execution_id,
-        "status": "unknown",
-        "message": "Status polling not yet implemented (F1).",
-    }
+    
+    import os, asyncpg
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        raise HTTPException(status_code=500, detail="DATABASE_URL required")
+    conn = await asyncpg.connect(dsn)
+    try:
+        row = await conn.fetchrow("SELECT state FROM executions WHERE id=$1", execution_id)
+    finally:
+        await conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="execution_not_found")
+    return {"execution_id": execution_id, "status": str(row["state"])}
 
 
 @router.post('/execute/internal', status_code=status.HTTP_202_ACCEPTED)
