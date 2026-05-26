@@ -19,6 +19,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from ..config import Settings
 from ..schemas import ExecutionRequest, ExecutionResult
 from ..services.executor import ExecutionService
+from ..f1_runtime import run_f1_execution
 
 log = structlog.get_logger(__name__)
 router = APIRouter(tags=["execute"])
@@ -101,3 +102,15 @@ async def get_execution_status(
         "status": "unknown",
         "message": "Status polling not yet implemented (F1).",
     }
+
+
+@router.post('/execute/internal', status_code=status.HTTP_202_ACCEPTED)
+async def submit_execution_internal(body: dict, x_internal_secret: str | None = Header(default=None)) -> dict:
+    _verify_internal_secret(x_internal_secret)
+    execution_id = str(body.get('executionId', ''))
+    tenant_id = str(body.get('tenantId', ''))
+    trace_id = body.get('traceId')
+    if not execution_id or not tenant_id:
+        raise HTTPException(status_code=400, detail='executionId and tenantId required')
+    result = await run_f1_execution(execution_id, tenant_id, trace_id)
+    return {'accepted': True, **result}

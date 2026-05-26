@@ -1,15 +1,19 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { executions, outboxEvents, withTenantTx } from '@octo/database';
 import { randomUUID } from 'crypto';
+import { createQueue, QUEUES } from '@octo/queue';
 
 export class PostgresExecutionRepo {
   async createExecution(input: any, tenantId: string, createdBy: string): Promise<{ id: string }> {
-    return withTenantTx(tenantId, async (tx) => {
-      const id = randomUUID();
+    const id = randomUUID();
+    await withTenantTx(tenantId, async (tx) => {
       await tx.insert(executions).values({ id, tenantId, agentId: input.agentId, agentVersionId: input.agentVersionId, status: 'queued', state: 'QUEUED', createdBy, inputJson: input.input ?? {}, task: input.input ?? {} });
       await tx.insert(outboxEvents).values({ id: randomUUID(), tenantId, aggregateType: 'execution', aggregateId: id, eventType: 'ExecutionQueued', sequence: 1, payloadJson: { executionId: id } });
-      return { id };
     });
+    const queue = createQueue<any>(QUEUES.EXECUTION_DISPATCH, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
+    await queue.add('dispatch', { executionId: id, tenantId, agentId: input.agentId, traceId: randomUUID(), expectedState: 'QUEUED' }, { jobId: id });
+    await queue.close();
+    return { id };
   }
   async getExecutionSummary(executionId: string, tenantId: string) { return withTenantTx(tenantId, async (tx) => (await tx.select().from(executions).where(and(eq(executions.id, executionId), eq(executions.tenantId, tenantId))).limit(1))[0] ?? null); }
   getExecutionTimeline(executionId: string, tenantId: string) { return withTenantTx(tenantId, (tx) => tx.select().from(outboxEvents).where(and(eq(outboxEvents.aggregateId, executionId), eq(outboxEvents.tenantId, tenantId))).orderBy(asc(outboxEvents.sequence), asc(outboxEvents.createdAt))); }
