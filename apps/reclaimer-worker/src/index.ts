@@ -13,7 +13,7 @@
  *   OTEL_EXPORTER_OTLP_ENDPOINT  optional
  */
 
-import { createDb } from '@octo/database';
+import { getDb } from '@octo/database';
 import { startReclaimLoop, stopReclaimLoop } from './reclaim-loop';
 import { initMetrics } from './metrics';
 
@@ -36,7 +36,7 @@ async function main() {
     })
   );
 
-  const db = createDb(DATABASE_URL!);
+  const db = getDb();
   initMetrics();
 
   await startReclaimLoop(db, REDIS_URL!, {

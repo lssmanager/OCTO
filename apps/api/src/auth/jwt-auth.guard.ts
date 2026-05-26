@@ -14,12 +14,13 @@ export class JwtAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [context.getHandler(), context.getClass()])) return true;
     const req = context.switchToHttp().getRequest<{ headers: Record<string, string>; user?: OctoJwtPayload }>();
-    const auth = req.headers.authorization ?? '';
+    const auth = req.headers['authorization'] ?? '';
     if (!auth.startsWith('Bearer ')) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'INVALID_TOKEN' });
     const token = auth.slice(7);
     const parts = token.split('.');
     if (parts.length !== 3) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'INVALID_TOKEN' });
-    const [h, p, s] = parts;
+    const h = parts[0]; const p = parts[1]; const s = parts[2];
+    if (!h || !p || !s) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'INVALID_TOKEN' });
     const header = JSON.parse(b64url(h)) as { alg?: string; kid?: string };
     if (!header.kid || !header.alg) throw new UnauthorizedException({ code: 'JWT_KID_UNKNOWN', message: 'JWT_KID_UNKNOWN' });
     const key = this.keyStore.getVerificationKey(header.kid, header.alg);
@@ -31,7 +32,7 @@ export class JwtAuthGuard implements CanActivate {
       if (expected !== s) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'INVALID_TOKEN' });
     }
     if (header.alg === 'RS256') {
-      const ok = createVerify('RSA-SHA256').update(data).end().verify(key.publicKey ?? '', Buffer.from(s, 'base64url'));
+      const ok = createVerify('RSA-SHA256').update(data).end().verify(key.publicKey ?? '', Buffer.from(s ?? '', 'base64url'));
       if (!ok) throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'INVALID_TOKEN' });
     }
     if (!payload.tenant_id || !payload.sub) throw new UnauthorizedException({ code: 'JWT_TENANT_MISSING', message: 'JWT_TENANT_MISSING' });

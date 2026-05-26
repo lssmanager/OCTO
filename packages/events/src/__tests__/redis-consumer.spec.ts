@@ -3,7 +3,7 @@ import { ensureConsumerGroups, shouldProcessEventIdempotent } from '../redis-con
 
 describe('ensureConsumerGroups', () => {
   it('ignores BUSYGROUP errors', async () => {
-    const redis = { xgroup: vi.fn().mockRejectedValue(new Error('BUSYGROUP Consumer Group name already exists')) };
+    const redis = { xgroup: vi.fn().mockRejectedValue(new Error('BUSYGROUP Consumer Group name already exists')), set: vi.fn() };
     await expect(ensureConsumerGroups(redis)).resolves.toBeUndefined();
   });
 });

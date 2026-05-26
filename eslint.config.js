@@ -38,7 +38,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
 // Custom rules
-const noRawExecutionStatusWrite = require('./eslint-rules/no-raw-execution-status-write.js');
+const noRawExecutionStatusWrite = require('./eslint-rules/no-raw-execution-status-write.cjs');
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
@@ -152,7 +152,7 @@ export default [
 
       // External deps (node_modules) are valid; only flag truly unknown
       // internal imports that don't match any element pattern.
-      'boundaries/no-unknown': ['error', { allowExternal: true }],
+      'boundaries/no-unknown': 'error',
 
       // [ADR-0017] Prevent raw execution status writes outside runtime-state.
       // Use ExecutionStateService.transition() instead.

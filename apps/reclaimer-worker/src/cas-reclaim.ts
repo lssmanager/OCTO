@@ -14,16 +14,15 @@
  */
 
 import { and, eq, lt, sql } from 'drizzle-orm';
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
-import { executions } from '@octo/database';
+import { executions, getDb } from '@octo/database';
 import { extractOtelContext } from '@octo/queue';
 import type { OtelTraceFields } from '@octo/queue';
 
 export type ReclaimOutcome = 'reclaimed' | 'already_taken' | 'not_found';
 
 export async function casReclaim(
-  db: NodePgDatabase,
+  db: ReturnType<typeof getDb>,
   executionId: string,
   traceFields?: OtelTraceFields
 ): Promise<ReclaimOutcome> {

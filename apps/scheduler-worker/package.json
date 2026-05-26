@@ -3,9 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "build": "tsup src/index.ts --format cjs --dts",
-    "dev": "tsup src/index.ts --format cjs --watch",
-    "start": "node dist/index.js",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
   },
@@ -14,7 +14,8 @@
     "@octo/queue": "workspace:*",
     "@octo/observability": "workspace:*",
     "@octo/database": "workspace:*",
-    "@octo/runtime-state": "workspace:*"
+    "@octo/runtime-state": "workspace:*",
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
     "@octo/config": "workspace:*",

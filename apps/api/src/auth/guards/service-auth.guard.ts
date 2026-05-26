@@ -8,7 +8,7 @@ export class ServiceAuthGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<OctoRequest>();
     const serviceName = String(req.headers['x-service-name'] ?? '');
     const apiKey = String(req.headers['x-service-api-key'] ?? '');
-    const map = JSON.parse(process.env.INTERNAL_SERVICE_API_KEYS ?? '{}') as Record<string, { keyHash: string; scopes: string[]; roles: string[] }>;
+    const map = JSON.parse(process.env['INTERNAL_SERVICE_API_KEYS'] ?? '{}') as Record<string, { keyHash: string; scopes: string[]; roles: string[] }>;
     const item = map[serviceName];
     if (!item) throw new UnauthorizedException({ code: 'SERVICE_UNAUTHORIZED', message: 'Invalid service credentials' });
     const hash = `sha256:${createHash('sha256').update(apiKey).digest('hex')}`;

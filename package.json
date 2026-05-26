@@ -25,7 +25,7 @@
     "observability:check-silences": "tsx scripts/observability/check-alert-silences.ts",
     "formatcheck": "prettier --check .",
     "testunit": "turbo run test --filter=@octo/contracts --filter=@octo/api --filter=@octo/database --filter=@octo/events --filter=@octo/runtime-state -- --coverage",
-    "testintegration": "vitest run packages/database/src/f1-database.integration.test.ts",
+    "testintegration": "vitest run packages/database/src/f1-database.integration.test.ts apps/api/src/**/*.integration.test.ts",
     "arch:check": "bash scripts/arch-check.sh",
     "docker:build:api": "docker build -f docker/api.Dockerfile -t octo/api:sha-local --build-arg VERSION=local --build-arg REVISION=local --build-arg CREATED=local .",
     "docker:build:runtime-worker": "docker build -f docker/runtime-worker.Dockerfile -t octo/runtime-worker:sha-local --build-arg VERSION=local --build-arg REVISION=local --build-arg CREATED=local .",
