@@ -40,8 +40,11 @@ class Settings(BaseSettings):
     )
 
     # ── Database ──────────────────────────────────────────────────────────────
-    # NOTE: runtime-worker reads DB only for health checks.
-    # Orchestration and writes go through the control plane (Principle #1).
+    # F1 current behavior: runtime-worker requires direct DB access because
+    # execution-state durability (steps/checkpoints/transitions) is persisted
+    # from runtime paths implemented in this repository.
+    # Control Plane still owns user-facing orchestration APIs, authz/policy,
+    # and execution dispatch lifecycle.
     database_url: str = Field(pattern=r"^postgresql://")
 
     # ── Redis (BullMQ transport) ───────────────────────────────────────────────

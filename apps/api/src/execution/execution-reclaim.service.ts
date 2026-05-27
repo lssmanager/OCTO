@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { QUEUES } from '@octo/queue';
 import type { ExecutionCommandQueue } from './ports/execution-command-queue';
 import type { ExecutionReclaimRepo } from './ports/execution-reclaim.repo';
 
-const RECLAIM_QUEUE = 'execution.reclaim';
+const RECLAIM_QUEUE = QUEUES.EXECUTION_DISPATCH;
 const STALE_STATES = ['RUNNING', 'DISPATCHED'] as const;
 const TERMINAL_STATES = ['TIMED_OUT', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'DLQ'] as const;
 

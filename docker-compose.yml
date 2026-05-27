@@ -81,7 +81,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: docker/api.Dockerfile
       args:
         BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f0}
         BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
@@ -149,7 +149,7 @@ services:
       # turbo prune with access to pnpm-lock.yaml and all workspace
       # package.json files. Matches the api service pattern.
       context: .
-      dockerfile: apps/runtime-worker/Dockerfile
+      dockerfile: docker/runtime-worker.Dockerfile
       args:
         BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f0}
         BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
@@ -203,7 +203,7 @@ services:
   scheduler-worker:
     build:
       context: .
-      dockerfile: apps/scheduler-worker/Dockerfile
+      dockerfile: docker/scheduler-worker.Dockerfile
     container_name: octo-scheduler-worker
     environment:
       REDIS_URL: ${REDIS_URL}
@@ -232,7 +232,7 @@ services:
   reclaimer-worker:
     build:
       context: .
-      dockerfile: apps/reclaimer-worker/Dockerfile
+      dockerfile: docker/reclaimer-worker.Dockerfile
     container_name: octo-reclaimer-worker
     environment:
       REDIS_URL: ${REDIS_URL}

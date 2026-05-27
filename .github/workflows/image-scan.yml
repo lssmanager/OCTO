@@ -34,7 +34,7 @@ jobs:
       # Build the API image first — Trivy and Syft need the image to exist.
       - name: Build API image
         run: |
-          docker build \
+          docker build -f docker/api.Dockerfile \
             --build-arg BUILD_VERSION=scan \
             --build-arg BUILD_COMMIT=${{ github.sha }} \
             --build-arg BUILD_PHASE=F0 \
