@@ -66,7 +66,10 @@ export class ExecutionReclaimService {
       {
         executionId: execution.id,
         tenantId: execution.tenantId,
+        reason: 'reclaim_replay',
+        attempt: nextReclaimCount,
         reclaimCount: nextReclaimCount,
+        enqueuedAt: new Date().toISOString(),
       },
       {
         jobId: `reclaim:${execution.id}:${nextReclaimCount}`,

@@ -27,7 +27,7 @@ export class ExecutionDispatcherService {
   async enqueueDispatchJob(executionId: string, tenantId: string): Promise<void> {
     await this.queue.add(
       QUEUES.EXECUTION_DISPATCH,
-      { executionId, tenantId },
+      { executionId, tenantId, reason: 'api_request', attempt: 1, enqueuedAt: new Date().toISOString() },
       { jobId: executionId, priority: 5 }
     );
   }
