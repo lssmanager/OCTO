@@ -1,6 +1,9 @@
 export type OctoJwtPayload = {
   sub: string;
   tenant_id: string;
+  agency_ids?: string[];
+  workspace_ids?: string[];
+  role?: string;
   roles: string[];
   scopes: string[];
   iss: string;

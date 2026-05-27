@@ -8,4 +8,5 @@ export type OctoRequest = {
   scopes?: string[];
   roles?: string[];
   serviceId?: string;
+  hierarchyContext?: Record<string, unknown>;
 };
