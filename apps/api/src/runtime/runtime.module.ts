@@ -28,14 +28,20 @@ import { RuntimeService } from './runtime.service';
           { name: QUEUES.EXECUTION_RECLAIM, waiting: reclaimWaiting, active: reclaimActive },
         ] };
       },
-      workers: async (_tenantId: string) => ({
-        checkedAt: new Date().toISOString(),
-        workers: [
-          { name: 'runtime-worker', status: process.env['RUNTIME_WORKER_URL'] ? 'configured' : 'not_configured' },
-          { name: 'scheduler-worker', status: process.env['SCHEDULER_WORKER_URL'] ? 'configured' : 'not_configured' },
-          { name: 'reclaimer-worker', status: process.env['RECLAIMER_WORKER_URL'] ? 'configured' : 'not_configured' },
-        ],
-      }),
+      workers: async (tenantId: string) => {
+        const latest = await db.select({ updatedAt: executions.updatedAt, leaseOwner: executions.leaseOwner }).from(executions).where(eq(executions.tenantId, tenantId)).orderBy(executions.updatedAt).limit(200);
+        const hb = latest.filter((r) => r.leaseOwner).map((r) => r.updatedAt).filter(Boolean).sort((a, b) => +new Date(b as any) - +new Date(a as any))[0] ?? null;
+        const staleSecs = Number(process.env['OPS_WORKER_HEARTBEAT_STALE_SECONDS'] ?? '90');
+        const runtimeOk = hb ? (Date.now() - new Date(hb as any).getTime()) <= staleSecs * 1000 : false;
+        return {
+          checkedAt: new Date().toISOString(),
+          workers: [
+            { name: 'runtime-worker', status: runtimeOk ? 'ok' : 'unknown', lastHeartbeatAt: hb, reason: runtimeOk ? undefined : 'heartbeat_unavailable_or_stale' },
+            { name: 'scheduler-worker', status: 'unknown', reason: 'no_heartbeat_source' },
+            { name: 'reclaimer-worker', status: 'unknown', reason: 'no_heartbeat_source' },
+          ],
+        };
+      },
       getExecution: async (tenantId: string, executionId: string) => {
         const row = await db.select().from(executions).where(and(eq(executions.tenantId, tenantId), eq(executions.id, executionId))).limit(1);
         const ex = row[0]; if (!ex) return null;

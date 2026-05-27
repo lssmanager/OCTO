@@ -9,12 +9,17 @@ export class OpsV1Service {
     metrics: (tenantId: string) => Promise<any>;
     stale: (tenantId: string) => Promise<any>;
     reset: (tenantId: string, actorId: string, executionId: string, b: any) => Promise<any>;
+    f1Status: (tenantId: string, windowMinutes: number) => Promise<any>;
   }) {}
   listDlq(tenantId: string, q: any) { return this.deps.listDlq(tenantId, q); }
   async requeue(tenantId: string, actorId: string, jobId: string, b: any) { if (!b?.reason) throw new BadRequestException('VALIDATION_ERROR'); return this.deps.requeue(tenantId, actorId, jobId, b); }
   async discard(tenantId: string, actorId: string, jobId: string, b: any) { if (!b?.reason) throw new BadRequestException('VALIDATION_ERROR'); await this.deps.discard(tenantId, actorId, jobId, b); return; }
   metrics(tenantId: string) { return this.deps.metrics(tenantId); }
   stale(tenantId: string) { return this.deps.stale(tenantId); }
+  f1Status(tenantId: string, windowMinutes?: number) {
+    const window = Number(windowMinutes ?? 15);
+    return this.deps.f1Status(tenantId, Number.isFinite(window) && window > 0 ? window : 15);
+  }
   async reset(tenantId: string, actorId: string, executionId: string, b: any) {
     if (b?.confirm !== 'RESET_EXECUTION_FOR_REQUEUE') throw new BadRequestException('VALIDATION_ERROR');
     const row = await this.deps.reset(tenantId, actorId, executionId, b);
