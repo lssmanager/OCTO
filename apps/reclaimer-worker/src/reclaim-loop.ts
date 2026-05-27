@@ -52,10 +52,10 @@ export async function startReclaimLoop(
             reclaimedCounter.add(1, { executionId: zombie.id });
 
             await dispatchQueue.add(
-              'dispatch',
+              QUEUES.EXECUTION_DISPATCH,
               { executionId: zombie.id, tenantId: (zombie.task as { tenantId?: string })?.tenantId, reason: 'reclaim_replay', attempt: (zombie.attempt ?? 0) + 1, enqueuedAt: new Date().toISOString() },
               {
-                jobId: `reclaim:${zombie.id}:${Date.now()}`,
+                jobId: `reclaim:${zombie.id}:${(zombie.attempt ?? 0) + 1}`,
                 attempts: 3,
               }
             );

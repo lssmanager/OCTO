@@ -12,6 +12,17 @@ describe('ExecutionDispatcherService', () => {
 
     const created = await svc.dispatch(dto, 'tenant-1', 'user-1');
     expect(created.id).toBe('exec-1');
-    expect(queue.add).toHaveBeenCalledWith(QUEUES.EXECUTION_DISPATCH, { executionId: 'exec-1', tenantId: 'tenant-1' }, { jobId: 'exec-1', priority: 5 });
+    expect(queue.add).toHaveBeenCalledWith(QUEUES.EXECUTION_DISPATCH, expect.objectContaining({ executionId: 'exec-1', tenantId: 'tenant-1', reason: 'api_request', attempt: 1 }), { jobId: 'exec-1', priority: 5 });
+  });
+
+  it('enqueue payload includes enqueuedAt timestamp', async () => {
+    const repo = { dispatchTx: vi.fn(async () => ({ id: 'exec-2' })) };
+    const queue = { add: vi.fn(async () => undefined) };
+    const svc = new ExecutionDispatcherService(repo, queue);
+
+    await svc.dispatch(dto, 'tenant-1', 'user-1');
+    const payload = queue.add.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(typeof payload.enqueuedAt).toBe('string');
+    expect(payload.enqueuedAt).toMatch(/T/);
   });
 });

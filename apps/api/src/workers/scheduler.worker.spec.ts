@@ -9,7 +9,7 @@ describe('SchedulerWorker', () => {
     const worker = new SchedulerWorker(repo, queue);
     const result = await worker.handleExecutionDispatch({ data: { executionId: 'exec-1', tenantId: 'tenant-1' } });
     expect(result).toBe('dispatched');
-    expect(queue.add).toHaveBeenCalledWith(QUEUES.EXECUTION_DISPATCH, { executionId: 'exec-1', tenantId: 'tenant-1', attemptNumber: 1 }, { jobId: 'exec-1:1' });
+    expect(queue.add).toHaveBeenCalledWith(QUEUES.EXECUTION_DISPATCH, expect.objectContaining({ executionId: 'exec-1', tenantId: 'tenant-1', reason: 'scheduled', attempt: 1 }), { jobId: 'exec-1:1' });
   });
 
   it('CAS conflict is no-op', async () => {

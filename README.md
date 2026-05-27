@@ -189,7 +189,7 @@ Current F1 behavior (as implemented in this repository):
 - **F1 complete**: durable execution kernel is functionally implemented and executable end-to-end on canonical F1 path.
 - **F1 closed**: F1 complete **plus** operational consistency (queues, ops metrics, deployment paths, tests, and documentation all aligned).
 
-For the full current-vs-future narrative, see `docs/architecture/F1-architecture-status.md`.
+For the F1 operational closure architecture baseline, see `docs/f1/architecture.md`.
 
 ---
 

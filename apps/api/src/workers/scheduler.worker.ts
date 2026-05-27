@@ -21,7 +21,7 @@ export class SchedulerWorker {
     }
     await this.queue.add(
       QUEUES.EXECUTION_DISPATCH,
-      { executionId: job.data.executionId, tenantId: job.data.tenantId, attemptNumber: updated.attemptNumber },
+      { executionId: job.data.executionId, tenantId: job.data.tenantId, reason: 'scheduled', attempt: updated.attemptNumber, enqueuedAt: new Date().toISOString() },
       { jobId: `${job.data.executionId}:${updated.attemptNumber}` }
     );
     return 'dispatched';
