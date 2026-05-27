@@ -1,30 +1,15 @@
-"""Execute router — receives execution jobs from the Control Plane.
-
-Prefix: /api/v1  (registered in main.py)
-Endpoints:
-  POST /api/v1/execute          — submit an execution job
-  GET  /api/v1/execute/{id}/status — poll execution status (F1+)
-
-In F0 this is a scaffold: it validates the request, propagates trace_id
-to all log entries, and returns a stub response via ExecutionService.
-The real LangGraph / CrewAI execution engine is wired in F2.
-
-Architectural rule (F0-002):
-  All execution LOGIC lives in services/executor.py — never in the router.
-  The router is responsible only for: HTTP contract, auth, logging, dispatch.
-"""
+"""Execute router — single durable F1 execution entrypoint."""
 import structlog
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
 from ..config import Settings
 from ..schemas import ExecutionRequest, ExecutionResult
 from ..services.executor import ExecutionService
-from ..f1_runtime import run_f1_execution
 
 log = structlog.get_logger(__name__)
 router = APIRouter(tags=["execute"])
 _settings = Settings()
-_executor = ExecutionService(settings=_settings)
+_executor = ExecutionService()
 
 
 def _verify_internal_secret(x_internal_secret: str | None) -> None:
@@ -43,8 +28,7 @@ def _verify_internal_secret(x_internal_secret: str | None) -> None:
     summary="Submit an execution job",
     description=(
         "Receives an ExecutionRequest from the Control Plane and "
-        "dispatches it to the AI execution engine. "
-        "F0: returns a stub acknowledgement. F2: full LangGraph execution."
+        "dispatches it to the durable F1 runtime pipeline."
     ),
 )
 async def submit_execution(
@@ -117,8 +101,18 @@ async def submit_execution_internal(body: dict, x_internal_secret: str | None = 
     _verify_internal_secret(x_internal_secret)
     execution_id = str(body.get('executionId', ''))
     tenant_id = str(body.get('tenantId', ''))
-    trace_id = body.get('traceId')
+    trace_id = str(body.get('traceId', ''))
     if not execution_id or not tenant_id:
         raise HTTPException(status_code=400, detail='executionId and tenantId required')
-    result = await run_f1_execution(execution_id, tenant_id, trace_id)
-    return {'accepted': True, **result}
+    request = ExecutionRequest(
+        execution_id=execution_id,
+        tenant_id=tenant_id,
+        agent_id=str(body.get('agentId', 'scheduler-agent')),
+        workspace_id=str(body.get('workspaceId', 'scheduler-workspace')),
+        task=str(body.get('task', 'dispatched_execution')),
+        llm={'primary': 'litellm/default'},
+        trace_id=trace_id or execution_id,
+        run_id=str(body.get('runId', '1')),
+    )
+    result = await _executor.run(request)
+    return {'accepted': True, 'status': result.status, 'executionId': execution_id}

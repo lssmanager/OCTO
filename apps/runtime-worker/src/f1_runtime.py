@@ -31,4 +31,4 @@ async def run_f1_execution(execution_id:str, tenant_id:str, trace_id:str|None=No
         await conn.execute("INSERT INTO outbox_events (id,tenant_id,aggregate_type,aggregate_id,event_type,sequence,payload_json) VALUES ($1,$2,'execution',$3,'ExecutionCheckpointed',4,$4::jsonb), ($5,$2,'execution',$3,'ExecutionSucceeded',5,$6::jsonb)",str(uuid.uuid4()),tenant_id,execution_id,json.dumps({'executionId':execution_id,'checkpointId':cp1}),str(uuid.uuid4()),json.dumps({'executionId':execution_id,'output':output}))
     finally:
       await conn.close()
-    return {'status':'succeeded'}
+    return {'status':'succeeded','output':output}
