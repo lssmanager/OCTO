@@ -58,6 +58,7 @@ export class AgentController {
 
   @Get(':id')
   @RequireScopes('agents:read')
+  @HierarchyContextMeta({ agentIdPath: 'id' })
   get(@Param('id') id: string, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.get(p.tenantId, id);
@@ -65,6 +66,7 @@ export class AgentController {
 
   @Patch(':id')
   @RequireScopes('agents:write')
+  @HierarchyContextMeta({ agentIdPath: 'id' })
   patch(@Param('id') id: string, @Body() body: PatchAgentDto, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.patch(p.tenantId, id, body, p.sub);
@@ -72,6 +74,7 @@ export class AgentController {
 
   @Delete(':id')
   @RequireScopes('agents:write')
+  @HierarchyContextMeta({ agentIdPath: 'id' })
   delete(@Param('id') id: string, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.delete(p.tenantId, id, p.sub);
@@ -79,6 +82,7 @@ export class AgentController {
 
   @Get(':id/versions')
   @RequireScopes('agents:read')
+  @HierarchyContextMeta({ agentIdPath: 'id' })
   versions(
     @Param('id') id: string,
     @Req() req: OctoRequest & { user?: Principal },

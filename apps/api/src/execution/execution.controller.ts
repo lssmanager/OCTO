@@ -36,6 +36,7 @@ export class ExecutionController {
 
   @Get(':id')
   @RequireScopes('executions:read')
+  @HierarchyContextMeta({ executionIdPath: 'id' })
   getSummary(@Param('id') id: string, @Req() req: OctoRequest & { user?: Principal }) {
     const principal = requirePrincipal(req);
     return this.service.getSummary(id, principal.tenantId);
@@ -43,6 +44,7 @@ export class ExecutionController {
 
   @Get(':id/timeline')
   @RequireScopes('executions:read')
+  @HierarchyContextMeta({ executionIdPath: 'id' })
   getTimeline(@Param('id') id: string, @Req() req: OctoRequest & { user?: Principal }) {
     const principal = requirePrincipal(req);
     return this.service.getTimeline(id, principal.tenantId);
@@ -50,6 +52,7 @@ export class ExecutionController {
 
   @Post(':id/cancel')
   @RequireScopes('executions:write')
+  @HierarchyContextMeta({ executionIdPath: 'id' })
   cancel(@Param('id') id: string, @Req() req: OctoRequest & { user?: Principal }) {
     const principal = requirePrincipal(req);
     return this.service.cancel(id, principal.tenantId);
@@ -57,6 +60,7 @@ export class ExecutionController {
 
   @Post(':id/resume')
   @RequireScopes('executions:write')
+  @HierarchyContextMeta({ executionIdPath: 'id' })
   resume(@Param('id') id: string, @Req() req: OctoRequest & { user?: Principal }) {
     const principal = requirePrincipal(req);
     return this.service.resume(id, principal.tenantId);

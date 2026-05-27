@@ -4,7 +4,13 @@ import { HierarchyAccessGuard } from './hierarchy-access.guard';
 
 function ctx(req: any, cfg: any) {
   const reflector = { getAllAndOverride: () => cfg } as unknown as Reflector;
-  const guard = new HierarchyAccessGuard(reflector);
+  const hierarchy = {
+    assertCanAccessExecution: async () => ({ ok: true }),
+    assertCanAccessAgent: async () => ({ ok: true }),
+    assertCanAccessWorkspace: async () => ({ ok: true }),
+    assertCanAccessAgency: async () => ({ ok: true }),
+  } as any;
+  const guard = new HierarchyAccessGuard(reflector, hierarchy);
   const context: any = {
     getHandler: () => ({}),
     getClass: () => ({}),
@@ -14,7 +20,7 @@ function ctx(req: any, cfg: any) {
 }
 
 describe('HierarchyAccessGuard', () => {
-  it('allows request inside agency/workspace claims', () => {
+  it('allows request inside agency/workspace claims', async () => {
     const { guard, context } = ctx(
       {
         user: { tenant_id: 't1', agency_ids: ['a1'], workspace_ids: ['w1'] },
@@ -22,10 +28,10 @@ describe('HierarchyAccessGuard', () => {
       },
       { agencyIdPath: 'metadata.agencyId', workspaceIdPath: 'metadata.workspaceId' }
     );
-    expect(guard.canActivate(context)).toBe(true);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
   });
 
-  it('denies request outside agency claims', () => {
+  it('denies request outside agency claims', async () => {
     const { guard, context } = ctx(
       {
         user: { tenant_id: 't1', agency_ids: ['a2'], workspace_ids: ['w1'] },
@@ -33,6 +39,6 @@ describe('HierarchyAccessGuard', () => {
       },
       { agencyIdPath: 'metadata.agencyId', workspaceIdPath: 'metadata.workspaceId' }
     );
-    expect(() => guard.canActivate(context)).toThrow();
+    await expect(guard.canActivate(context)).rejects.toThrow();
   });
 });
