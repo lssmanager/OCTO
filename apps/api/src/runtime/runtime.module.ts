@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
+import { JwtAuthModule } from '../auth/jwt-auth.module';
 import { RuntimeController } from './runtime.controller';
 import { RuntimeService } from './runtime.service';
 
 @Module({
+  imports: [JwtAuthModule],
   controllers: [RuntimeController],
   providers: [{
     provide: RuntimeService,
