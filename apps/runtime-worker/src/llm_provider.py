@@ -48,7 +48,8 @@ def resolve_models_from_snapshot(snapshot: dict[str, Any], env_default: str) -> 
 
 
 async def call_llm(tenant_id: str, execution_id: str, agent_id: str, messages: list[dict[str, Any]], snapshot: dict[str, Any]) -> LLMCallResult:
-    if os.environ.get("OCTO_TEST_LLM_FAKE", "false").lower() == "true":
+    fake_mode = os.environ.get("OCTO_TEST_LLM_FAKE", "false").lower()
+    if fake_mode == "true":
         return LLMCallResult(
             content="F1 fake LLM response",
             tool_calls=None,
@@ -60,6 +61,17 @@ async def call_llm(tenant_id: str, execution_id: str, agent_id: str, messages: l
             fallback_level=0,
             accounting_error=False,
         )
+    if fake_mode in {"tool_echo", "tool_math_add", "tool_unknown", "tool_invalid_args"}:
+        if any(m.get('role') == 'tool' for m in messages):
+            return LLMCallResult(content="Tool result received and finalized", tool_calls=None, finish_reason="stop", usage={"input_tokens": 20, "output_tokens": 10, "total_tokens": 30, "estimated_cost_usd": "0"}, provider="fake", model="fake/f1-test", retry_count=0, fallback_level=0, accounting_error=False)
+        call = {"id": "tc1", "name": "builtin.echo", "arguments_json": '{"text":"hello"}'}
+        if fake_mode == "tool_math_add":
+            call = {"id": "tc1", "name": "builtin.math_add", "arguments_json": '{"a":2,"b":3}'}
+        if fake_mode == "tool_unknown":
+            call = {"id": "tc1", "name": "builtin.unknown", "arguments_json": '{"x":1}'}
+        if fake_mode == "tool_invalid_args":
+            call = {"id": "tc1", "name": "builtin.math_add", "arguments_json": '{"a":"oops"}'}
+        return LLMCallResult(content="", tool_calls=[call], finish_reason="tool_calls", usage={"input_tokens": 15, "output_tokens": 8, "total_tokens": 23, "estimated_cost_usd": "0"}, provider="fake", model="fake/f1-test", retry_count=0, fallback_level=0, accounting_error=False)
 
     import httpx
 
