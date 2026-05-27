@@ -25,7 +25,7 @@ export async function startReclaimLoop(
   redisUrl: string,
   config: LoopConfig
 ): Promise<void> {
-  const reclaimQueue = createQueue(QUEUES.EXECUTION_RECLAIM, { redisUrl });
+  const dispatchQueue = createQueue(QUEUES.EXECUTION_DISPATCH, { redisUrl });
 
   const tick = async () => {
     try {
@@ -51,9 +51,9 @@ export async function startReclaimLoop(
           if (outcome === 'reclaimed') {
             reclaimedCounter.add(1, { executionId: zombie.id });
 
-            await reclaimQueue.add(
-              'reclaim',
-              { executionId: zombie.id, tenantId: (zombie.task as { tenantId?: string })?.tenantId, reason: 'lease_expired', attempt: (zombie.attempt ?? 0) + 1, detectedAt: new Date().toISOString() },
+            await dispatchQueue.add(
+              'dispatch',
+              { executionId: zombie.id, tenantId: (zombie.task as { tenantId?: string })?.tenantId, reason: 'reclaim_replay', attempt: (zombie.attempt ?? 0) + 1, enqueuedAt: new Date().toISOString() },
               {
                 jobId: `reclaim:${zombie.id}:${Date.now()}`,
                 attempts: 3,

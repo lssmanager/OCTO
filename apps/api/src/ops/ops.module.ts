@@ -23,10 +23,10 @@ import { OpsV1Service } from './ops-v1.service';
           return { jobs, total: jobs.length, page, pageSize };
         },
         requeue: async (tenantId, _actorId, jobId, _b) => {
-          const q = createQueue(QUEUES.EXECUTION_RECLAIM, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
-          await q.add('requeue', { tenantId, executionId: jobId, mode: 'reclaim' }, { jobId: `requeue:${jobId}` });
+          const q = createQueue(QUEUES.EXECUTION_DISPATCH, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
+          await q.add('dispatch', { tenantId, executionId: jobId, reason: 'manual_replay', attempt: 1, enqueuedAt: new Date().toISOString() }, { jobId: `requeue:${jobId}` });
           await q.close();
-          return { jobId, executionId: jobId, requeued: true, targetQueue: QUEUES.EXECUTION_RECLAIM };
+          return { jobId, executionId: jobId, requeued: true, targetQueue: QUEUES.EXECUTION_DISPATCH };
         },
         discard: async () => undefined,
         metrics: async (tenantId) => {

@@ -20,7 +20,7 @@ export class SchedulerWorker {
       return 'noop';
     }
     await this.queue.add(
-      QUEUES.RUNTIME_EXECUTE,
+      QUEUES.EXECUTION_DISPATCH,
       { executionId: job.data.executionId, tenantId: job.data.tenantId, attemptNumber: updated.attemptNumber },
       { jobId: `${job.data.executionId}:${updated.attemptNumber}` }
     );

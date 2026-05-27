@@ -64,7 +64,7 @@ describe('ExecutionReclaimService', () => {
     const { service, queue } = makeService();
     await service.reclaimExecution({ ...baseExecution, reclaimCount: 1 });
     expect(queue.add).toHaveBeenCalledWith(
-      QUEUES.EXECUTION_RECLAIM,
+      QUEUES.EXECUTION_DISPATCH,
       expect.objectContaining({ reclaimCount: 2 }),
       expect.objectContaining({ jobId: 'reclaim:exec-1:2', priority: 1 })
     );
