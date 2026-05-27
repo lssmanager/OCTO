@@ -88,3 +88,22 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+
+
+  reclaimer-worker:
+    image: octo/reclaimer-worker:sha-${GIT_SHA:-local}
+    build:
+      context: .
+      dockerfile: docker/reclaimer-worker.Dockerfile
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]

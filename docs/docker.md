@@ -4,6 +4,7 @@ Images:
 - `docker/api.Dockerfile` (3001, `/api/health/live`)
 - `docker/runtime-worker.Dockerfile` (8000, `/health/live`)
 - `docker/scheduler-worker.Dockerfile` (3003, `/health/live`)
+- `docker/reclaimer-worker.Dockerfile` (reclaimer process)
 - `docker/migrate.Dockerfile` (one-shot, `HEALTHCHECK NONE`)
 
 ## Local
