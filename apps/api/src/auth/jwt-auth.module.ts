@@ -5,10 +5,12 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { TenantScopeGuard } from './guards/tenant-scope.guard';
 import { RbacGuard } from './guards/rbac.guard';
 import { ServiceAuthGuard } from './guards/service-auth.guard';
+import { HierarchyAccessGuard } from './guards/hierarchy-access.guard';
+import { HierarchyAccessService } from './hierarchy-access.service';
 
 @Module({
   controllers: [JwksController],
-  providers: [JwtKeyStoreService, JwtAuthGuard, TenantScopeGuard, RbacGuard, ServiceAuthGuard],
-  exports: [JwtKeyStoreService, JwtAuthGuard, TenantScopeGuard, RbacGuard, ServiceAuthGuard],
+  providers: [JwtKeyStoreService, JwtAuthGuard, TenantScopeGuard, RbacGuard, ServiceAuthGuard, HierarchyAccessGuard, HierarchyAccessService],
+  exports: [JwtKeyStoreService, JwtAuthGuard, TenantScopeGuard, RbacGuard, ServiceAuthGuard, HierarchyAccessGuard, HierarchyAccessService],
 })
 export class JwtAuthModule {}

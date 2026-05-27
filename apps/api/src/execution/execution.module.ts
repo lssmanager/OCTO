@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { JwtAuthModule } from '../auth/jwt-auth.module';
 import { ExecutionController } from './execution.controller';
 import { ExecutionControllerService } from './execution-controller.service';
 import { PostgresExecutionRepo } from './postgres-execution.repo';
 
 @Module({
+  imports: [JwtAuthModule],
   controllers: [ExecutionController],
   providers: [
     { provide: 'ExecutionControllerRepo', useClass: PostgresExecutionRepo },

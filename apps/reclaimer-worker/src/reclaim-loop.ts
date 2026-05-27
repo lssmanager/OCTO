@@ -53,7 +53,7 @@ export async function startReclaimLoop(
 
             await executionQueue.add(
               'execute',
-              { executionId: zombie.id, task: zombie.task },
+              { executionId: zombie.id, task: zombie.task, mode: 'reclaim' },
               {
                 jobId: `reclaim:${zombie.id}:${Date.now()}`,
                 attempts: 3,

@@ -200,6 +200,68 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  scheduler-worker:
+    build:
+      context: .
+      dockerfile: apps/scheduler-worker/Dockerfile
+    container_name: octo-scheduler-worker
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL}
+      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
+      RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute/internal}
+      EXECUTION_LEASE_SECONDS: ${EXECUTION_LEASE_SECONDS:-90}
+      WORKER_CONCURRENCY: ${SCHEDULER_WORKER_CONCURRENCY:-5}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_SCHEDULER:-octo-scheduler-worker}
+      OTEL_SERVICE_VERSION: ${BUILD_VERSION:-0.1.0-f0}
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      runtime-worker:
+        condition: service_healthy
+    networks:
+      - octonet
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3003/health/ready']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  reclaimer-worker:
+    build:
+      context: .
+      dockerfile: apps/reclaimer-worker/Dockerfile
+    container_name: octo-reclaimer-worker
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL}
+      RECLAIM_INTERVAL_MS: ${RECLAIM_INTERVAL_MS:-15000}
+      LEASE_TIMEOUT_MS: ${LEASE_TIMEOUT_MS:-30000}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_RECLAIMER:-octo-reclaimer-worker}
+      OTEL_SERVICE_VERSION: ${BUILD_VERSION:-0.1.0-f0}
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - octonet
+    healthcheck:
+      test: ['CMD-SHELL', 'pgrep -f "dist/index.js" >/dev/null']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
   # ────────────────────────────────────────────────────────────────
   # LLM GATEWAY — LiteLLM
   # Proxy unificado para todos los proveedores LLM.

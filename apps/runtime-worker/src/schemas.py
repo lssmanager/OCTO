@@ -74,6 +74,7 @@ class ExecutionRequest(OctoModel):
     """
 
     execution_id: str = Field(description="UUIDv7 assigned by the Control Plane")
+    tenant_id: str | None = Field(default=None, description="Tenant boundary for runtime durable transitions")
     agent_id: str
     workspace_id: str
     task: str = Field(min_length=1, max_length=32_000)
