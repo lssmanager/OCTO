@@ -58,7 +58,7 @@ class ExecutionLimitsSchema(OctoModel):
 
 class ExecutionRequest(OctoModel):
     execution_id: str
-    tenant_id: str | None = None
+    tenant_id: str
     agent_id: str
     workspace_id: str
     task: str = Field(min_length=1, max_length=32_000)
