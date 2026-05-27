@@ -4,8 +4,9 @@ from datetime import datetime, UTC
 import asyncpg
 from .llm_provider import call_llm
 from .tools.executor import execute_tool_call
+from .reclaim_lineage import validate_checkpoint_lineage
 
-async def run_f1_execution(execution_id:str, tenant_id:str, trace_id:str|None=None)->dict:
+async def run_f1_execution(execution_id:str, tenant_id:str, trace_id:str|None=None, mode:str='normal')->dict:
     dsn=os.environ.get('DATABASE_URL')
     if not dsn:
         raise RuntimeError('DATABASE_URL required')
@@ -16,12 +17,21 @@ async def run_f1_execution(execution_id:str, tenant_id:str, trace_id:str|None=No
         row=await conn.fetchrow("SELECT id, state, version, input_json, context_snapshot_json FROM executions WHERE id=$1 AND tenant_id=$2",execution_id,tenant_id)
         if not row:
           raise RuntimeError('execution_not_found')
-        if row['state']!='DISPATCHED':
+        if mode == 'reclaim':
+          cps = await conn.fetch("SELECT id,step_index,parent_checkpoint_id,state_json FROM execution_checkpoints WHERE execution_id=$1 AND tenant_id=$2 ORDER BY step_index ASC", execution_id, tenant_id)
+          if not validate_checkpoint_lineage([dict(r) for r in cps]):
+            await conn.execute("UPDATE executions SET state='FAILED', status='failed', error_code='CHECKPOINT_LINEAGE_BROKEN', error_message='checkpoint lineage invalid', updated_at=now() WHERE id=$1 AND tenant_id=$2", execution_id, tenant_id)
+            await conn.execute("INSERT INTO outbox_events (id,tenant_id,aggregate_type,aggregate_id,event_type,sequence,payload_json) VALUES ($1,$2,'execution',$3,'ExecutionFailed',6,$4::jsonb)", str(uuid.uuid4()), tenant_id, execution_id, json.dumps({'executionId': execution_id, 'errorCode':'CHECKPOINT_LINEAGE_BROKEN'}))
+            return {'status':'failed','error':'CHECKPOINT_LINEAGE_BROKEN'}
+          if row['state'] == 'RECLAIMING':
+            await conn.execute("UPDATE executions SET state='RUNNING', status='running', updated_at=now() WHERE id=$1 AND tenant_id=$2 AND state='RECLAIMING'", execution_id, tenant_id)
+        if row['state'] not in ('DISPATCHED','RECLAIMING','RUNNING'):
           return {'status':'skipped','reason':'not_dispatched'}
         version=row['version']
-        upd=await conn.execute("UPDATE executions SET state='RUNNING', status='running', version=version+1, started_at=now(), updated_at=now() WHERE id=$1 AND tenant_id=$2 AND state='DISPATCHED' AND version=$3",execution_id,tenant_id,version)
-        if upd!='UPDATE 1':
-          return {'status':'cas_conflict'}
+        if row['state'] == 'DISPATCHED':
+          upd=await conn.execute("UPDATE executions SET state='RUNNING', status='running', version=version+1, started_at=now(), updated_at=now() WHERE id=$1 AND tenant_id=$2 AND state='DISPATCHED' AND version=$3",execution_id,tenant_id,version)
+          if upd!='UPDATE 1':
+            return {'status':'cas_conflict'}
         cp0=str(uuid.uuid4())
         await conn.execute("INSERT INTO execution_checkpoints (id,tenant_id,execution_id,step_index,source,parent_checkpoint_id,state_json,metadata_json,channel_versions,versions_seen,worker_id,schema_version) VALUES ($1,$2,$3,0,'input',NULL,$4::jsonb,$5::jsonb,'{}'::jsonb,'{}'::jsonb,$6,1)",cp0,tenant_id,execution_id,json.dumps({'messages':[{'role':'user','content':str(row['input_json'])}]}),json.dumps({'checkpoint_schema_version':1}),os.environ.get('HOSTNAME','runtime-worker'))
         llm_step_id = str(uuid.uuid4())

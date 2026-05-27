@@ -114,5 +114,9 @@ async def submit_execution_internal(body: dict, x_internal_secret: str | None = 
         trace_id=trace_id or execution_id,
         run_id=str(body.get('runId', '1')),
     )
+    if str(body.get('mode','normal')) == 'reclaim':
+        from ..f1_runtime import run_f1_execution
+        reclaimed = await run_f1_execution(execution_id, tenant_id, trace_id, mode='reclaim')
+        return {'accepted': True, **reclaimed, 'executionId': execution_id}
     result = await _executor.run(request)
     return {'accepted': True, 'status': result.status, 'executionId': execution_id}
