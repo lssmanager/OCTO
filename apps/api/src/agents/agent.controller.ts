@@ -20,10 +20,13 @@ import { RbacGuard } from '../auth/guards/rbac.guard';
 import { RequireScopes } from '../auth/decorators/require-scopes.decorator';
 import { HierarchyAccessGuard } from '../auth/guards/hierarchy-access.guard';
 import { HierarchyContextMeta } from '../auth/decorators/hierarchy-context.decorator';
+import type { OctoRequest } from '../auth/types/octo-request';
 
-function mustPrincipal(req: { user?: Principal }): Principal {
-  if (!req.user?.tenantId || !req.user?.sub) throw new UnauthorizedException('unauthorized');
-  return req.user;
+function mustPrincipal(req: OctoRequest & { user?: Principal }): Principal {
+  const tenantId = req.tenantId ?? req.user?.tenantId;
+  const sub = req.userId ?? req.user?.sub;
+  if (!tenantId || !sub) throw new UnauthorizedException('unauthorized');
+  return { tenantId, sub };
 }
 
 function parseLimit(limit?: string): number {
@@ -39,46 +42,46 @@ export class AgentController {
   constructor(private readonly service: AgentService) {}
 
   @Post()
-  @RequireScopes('agent:create')
+  @RequireScopes('agents:write')
   @HierarchyContextMeta({ agencyIdPath: 'metadata.agencyId', workspaceIdPath: 'metadata.workspaceId' })
-  create(@Body() body: CreateAgentDto, @Req() req: { user?: Principal }) {
+  create(@Body() body: CreateAgentDto, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.create(p.tenantId, p.sub, body);
   }
 
   @Get()
-  @RequireScopes('agent:read')
-  list(@Req() req: { user?: Principal }, @Query('limit') limit?: string) {
+  @RequireScopes('agents:read')
+  list(@Req() req: OctoRequest & { user?: Principal }, @Query('limit') limit?: string) {
     const p = mustPrincipal(req);
     return this.service.list(p.tenantId, parseLimit(limit));
   }
 
   @Get(':id')
-  @RequireScopes('agent:read')
-  get(@Param('id') id: string, @Req() req: { user?: Principal }) {
+  @RequireScopes('agents:read')
+  get(@Param('id') id: string, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.get(p.tenantId, id);
   }
 
   @Patch(':id')
-  @RequireScopes('agent:update')
-  patch(@Param('id') id: string, @Body() body: PatchAgentDto, @Req() req: { user?: Principal }) {
+  @RequireScopes('agents:write')
+  patch(@Param('id') id: string, @Body() body: PatchAgentDto, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.patch(p.tenantId, id, body, p.sub);
   }
 
   @Delete(':id')
-  @RequireScopes('agent:delete')
-  delete(@Param('id') id: string, @Req() req: { user?: Principal }) {
+  @RequireScopes('agents:write')
+  delete(@Param('id') id: string, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.delete(p.tenantId, id, p.sub);
   }
 
   @Get(':id/versions')
-  @RequireScopes('agent:read')
+  @RequireScopes('agents:read')
   versions(
     @Param('id') id: string,
-    @Req() req: { user?: Principal },
+    @Req() req: OctoRequest & { user?: Principal },
     @Query('limit') limit?: string
   ) {
     const p = mustPrincipal(req);
