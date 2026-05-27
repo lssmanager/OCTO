@@ -9,13 +9,11 @@ Architectural rules (ABSOLUTE PRINCIPLES 12, 13):
   - This module NEVER writes to Postgres directly
 """
 from .checkpoint import CheckpointStore
-from .engine import ExecutionEngine
 from .idempotency import IdempotencyStore
 from .result_store import ExecutionResultStore
 from .retry import DEFAULT_EXECUTION_POLICY, DEFAULT_TOOL_POLICY, DlqReason, DlqRouter, RetryPolicy
 
 __all__ = [
-    "ExecutionEngine",
     "IdempotencyStore",
     "RetryPolicy",
     "DlqReason",
