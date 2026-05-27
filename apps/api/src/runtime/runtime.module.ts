@@ -18,14 +18,14 @@ import { RuntimeService } from './runtime.service';
       queues: async () => {
         const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
         const qd = createQueue(QUEUES.EXECUTION_DISPATCH, { redisUrl });
-        const qr = createQueue('execution.reclaim', { redisUrl });
+        const qr = createQueue(QUEUES.EXECUTION_RECLAIM, { redisUrl });
         const [dispatchWaiting, dispatchActive, reclaimWaiting, reclaimActive] = await Promise.all([
           qd.getWaitingCount(), qd.getActiveCount(), qr.getWaitingCount(), qr.getActiveCount(),
         ]);
         await qd.close(); await qr.close();
         return { checkedAt: new Date().toISOString(), queues: [
           { name: QUEUES.EXECUTION_DISPATCH, waiting: dispatchWaiting, active: dispatchActive },
-          { name: 'execution.reclaim', waiting: reclaimWaiting, active: reclaimActive },
+          { name: QUEUES.EXECUTION_RECLAIM, waiting: reclaimWaiting, active: reclaimActive },
         ] };
       },
       workers: async (_tenantId: string) => ({
@@ -43,7 +43,7 @@ import { RuntimeService } from './runtime.service';
         return { id: ex.id, state: ex.state, stale };
       },
       enqueueReclaim: async (tenantId: string, executionId: string) => {
-        const q = createQueue('execution.reclaim', { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
+        const q = createQueue(QUEUES.EXECUTION_RECLAIM, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
         await q.add('reclaim', { tenantId, executionId, mode: 'reclaim' }, { jobId: `manual-reclaim:${executionId}` });
         await q.close();
       },

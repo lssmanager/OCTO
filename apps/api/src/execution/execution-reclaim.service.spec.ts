@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { QUEUES } from '@octo/queue';
 import { ExecutionReclaimService, type StaleExecutionRow } from './execution-reclaim.service';
 
 const baseExecution: StaleExecutionRow = {
@@ -63,7 +64,7 @@ describe('ExecutionReclaimService', () => {
     const { service, queue } = makeService();
     await service.reclaimExecution({ ...baseExecution, reclaimCount: 1 });
     expect(queue.add).toHaveBeenCalledWith(
-      'execution.reclaim',
+      QUEUES.EXECUTION_RECLAIM,
       expect.objectContaining({ reclaimCount: 2 }),
       expect.objectContaining({ jobId: 'reclaim:exec-1:2', priority: 1 })
     );

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { QUEUES } from '@octo/queue';
 import { ExecutionDispatcherService } from './execution-dispatcher.service';
 
 const dto = { agentId: 'agent-1', input: { hello: 'world' } };
@@ -11,6 +12,6 @@ describe('ExecutionDispatcherService', () => {
 
     const created = await svc.dispatch(dto, 'tenant-1', 'user-1');
     expect(created.id).toBe('exec-1');
-    expect(queue.add).toHaveBeenCalledWith('execution.dispatch', { executionId: 'exec-1', tenantId: 'tenant-1' }, { jobId: 'exec-1', priority: 5 });
+    expect(queue.add).toHaveBeenCalledWith(QUEUES.EXECUTION_DISPATCH, { executionId: 'exec-1', tenantId: 'tenant-1' }, { jobId: 'exec-1', priority: 5 });
   });
 });

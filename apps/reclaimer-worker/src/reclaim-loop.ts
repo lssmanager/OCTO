@@ -9,7 +9,7 @@
 
 import { and, eq, lt, sql } from 'drizzle-orm';
 import { executions, getDb } from '@octo/database';
-import { createQueue } from '@octo/queue';
+import { createQueue, QUEUES } from '@octo/queue';
 import { casReclaim } from './cas-reclaim';
 import { reclaimedCounter, alreadyTakenCounter, reclaimErrorCounter } from './metrics';
 
@@ -25,7 +25,7 @@ export async function startReclaimLoop(
   redisUrl: string,
   config: LoopConfig
 ): Promise<void> {
-  const executionQueue = createQueue('execution', { redisUrl });
+  const reclaimQueue = createQueue(QUEUES.EXECUTION_RECLAIM, { redisUrl });
 
   const tick = async () => {
     try {
@@ -51,9 +51,9 @@ export async function startReclaimLoop(
           if (outcome === 'reclaimed') {
             reclaimedCounter.add(1, { executionId: zombie.id });
 
-            await executionQueue.add(
-              'execute',
-              { executionId: zombie.id, task: zombie.task, mode: 'reclaim' },
+            await reclaimQueue.add(
+              'reclaim',
+              { executionId: zombie.id, tenantId: (zombie.task as { tenantId?: string })?.tenantId, reason: 'lease_expired', attempt: (zombie.attempt ?? 0) + 1, detectedAt: new Date().toISOString() },
               {
                 jobId: `reclaim:${zombie.id}:${Date.now()}`,
                 attempts: 3,

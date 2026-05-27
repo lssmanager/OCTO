@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { and, desc, eq } from 'drizzle-orm';
 import { db, executionDlq, executions } from '@octo/database';
-import { createQueue } from '@octo/queue';
+import { createQueue, QUEUES } from '@octo/queue';
 import { JwtAuthModule } from '../auth/jwt-auth.module';
 import { HealthModule } from '../health/health.module';
 import { OpsController } from './ops.controller';
@@ -23,10 +23,10 @@ import { OpsV1Service } from './ops-v1.service';
           return { jobs, total: jobs.length, page, pageSize };
         },
         requeue: async (tenantId, _actorId, jobId, _b) => {
-          const q = createQueue('execution.reclaim', { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
+          const q = createQueue(QUEUES.EXECUTION_RECLAIM, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
           await q.add('requeue', { tenantId, executionId: jobId, mode: 'reclaim' }, { jobId: `requeue:${jobId}` });
           await q.close();
-          return { jobId, executionId: jobId, requeued: true, targetQueue: 'execution.reclaim' };
+          return { jobId, executionId: jobId, requeued: true, targetQueue: QUEUES.EXECUTION_RECLAIM };
         },
         discard: async () => undefined,
         metrics: async (tenantId) => {
