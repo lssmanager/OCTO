@@ -13,6 +13,9 @@ export class OpsV1Controller {
   @Post('dlq/:jobId/requeue') @RequireScopes('ops:write') requeue(@Req() req: any, @Param('jobId') jobId: string, @Body() b: any) { return this.svc.requeue(req.tenantId, req.userId, jobId, b); }
   @Delete('dlq/:jobId/discard') @RequireScopes('ops:write') discard(@Req() req: any, @Param('jobId') jobId: string, @Body() b: any) { return this.svc.discard(req.tenantId, req.userId, jobId, b); }
   @Get('metrics/summary') @RequireScopes('ops:read') metrics(@Req() req: any) { return this.svc.metrics(req.tenantId); }
+  @Get('f1/status') @RequireScopes('ops:read') f1Status(@Req() req: any, @Query('windowMinutes') windowMinutes?: string) {
+    return this.svc.f1Status(req.tenantId, windowMinutes ? Number(windowMinutes) : undefined);
+  }
   @Get('executions/stale') @RequireScopes('ops:read') stale(@Req() req: any) { return this.svc.stale(req.tenantId); }
 }
 

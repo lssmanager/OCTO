@@ -1,33 +1,19 @@
-"""Execution contracts — espejo de @octo/contracts TypeScript interfaces.
+"""Canonical runtime execution schemas.
 
-Convenciones (F0-002, F0-008):
-  - TypeScript `AgentNode`        → Python `AgentDefinition`  (CrewAI role/goal pattern)
-  - TypeScript `ExecutionRequest` → Python `ExecutionRequest` (Control Plane → Execution Plane)
-  - TypeScript `ExecutionResult`  → Python `ExecutionResult`  (Execution Plane → Control Plane)
-  - camelCase JSON I/O via alias_generator (OctoModel base)
-  - Estos modelos NO son auto-generados. Se mantienen en sync por convención.
-    Un test JSON Schema round-trip se añadirá en F1 para detectar drift.
-
-SOURCE OF TRUTH: packages/contracts/src/execution.ts
-  Cualquier cambio en ExecutionStatus en TS DEBE reflejarse aquí.
-  Ver: VALID_TRANSITIONS en execution.ts para la máquina de estados completa.
-
-REGLA ABSOLUTA (Principio #1):
-  ExecutionRequest NO contiene lógica de orquestación ni topología de agentes.
-  Solo el payload necesario para ejecutar UNA tarea de UN agente.
+These models are the single Python contract used by runtime HTTP routers and
+services for `POST /api/v1/execute`.
 """
 from __future__ import annotations
 
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 from pydantic.alias_generators import to_camel
+from pydantic.main import BaseModel
 
 
 class OctoModel(BaseModel):
-    """Base model: camelCase JSON I/O, strict validation, no extra fields."""
-
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
@@ -37,155 +23,60 @@ class OctoModel(BaseModel):
 
 
 class ExecutionStatus(StrEnum):
-    """Mirror exacto de ExecutionStatus en packages/contracts/src/execution.ts.
-
-    SYNC RULE: Este enum DEBE tener los mismos valores que el TS const.
-    Último sync: FSM alignment (dispatched, retry_scheduled, reclaimable added).
-
-    TS values (source of truth):
-      pending | queued | dispatched | running | waiting_tool | waiting_human
-      retrying | retry_scheduled | suspended | reclaimable
-      completed | failed | cancelled
-    """
-
-    # Pre-execution
     PENDING = "pending"
     QUEUED = "queued"
     DISPATCHED = "dispatched"
-    # Active
     RUNNING = "running"
-    # Blocked (alive but waiting on external signal)
     WAITING_TOOL = "waiting_tool"
     WAITING_HUMAN = "waiting_human"
     RETRYING = "retrying"
     RETRY_SCHEDULED = "retry_scheduled"
     SUSPENDED = "suspended"
     RECLAIMABLE = "reclaimable"
-    # Terminal
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
 
 
-TERMINAL_STATUSES: frozenset[ExecutionStatus] = frozenset({
-    ExecutionStatus.COMPLETED,
-    ExecutionStatus.FAILED,
-    ExecutionStatus.CANCELLED,
-})
-
-ACTIVE_STATUSES: frozenset[ExecutionStatus] = frozenset({
-    ExecutionStatus.RUNNING,
-    ExecutionStatus.RETRYING,
-})
-
-BLOCKED_STATUSES: frozenset[ExecutionStatus] = frozenset({
-    ExecutionStatus.WAITING_TOOL,
-    ExecutionStatus.WAITING_HUMAN,
-    ExecutionStatus.SUSPENDED,
-})
+class LLMConfigSchema(OctoModel):
+    primary: str
+    fallback: list[str] = Field(default_factory=list)
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1)
+    policy_ref: str | None = None
+    provider: str | None = None
 
 
-def is_terminal(status: ExecutionStatus) -> bool:
-    return status in TERMINAL_STATUSES
-
-
-def is_active(status: ExecutionStatus) -> bool:
-    return status in ACTIVE_STATUSES
-
-
-def is_blocked(status: ExecutionStatus) -> bool:
-    return status in BLOCKED_STATUSES
-
-
-class AgentDefinition(OctoModel):
-    """Espejo de AgentNode de @octo/contracts.
-
-    Patrón CrewAI (F0-008): cada agente tiene role, goal, backstory, tools.
-    El runtime recibe esta definición y materializa el agente en F2.
-    En F0: solo se valida y se loguea.
-    """
-
-    id: str = Field(description="UUID del AgentNode en el Control Plane")
-    name: str
-    role: str = Field(description="CrewAI: qué hace este agente")
-    goal: str = Field(description="CrewAI: objetivo principal del agente")
-    backstory: str | None = Field(
-        default=None,
-        description="CrewAI: contexto que moldea el comportamiento",
-    )
-    model: str = Field(
-        default="gpt-4o-mini",
-        description="LiteLLM model string (ej: gpt-4o-mini, anthropic/claude-3-haiku)",
-    )
-    tools: list[str] = Field(
-        default_factory=list,
-        description="Tool IDs a activar (resueltos en F3)",
-    )
-    max_iterations: int = Field(
-        default=10,
-        ge=1,
-        le=100,
-        description="GovernancePolicy: límite de iteraciones del agent loop",
-    )
-    token_budget: int = Field(
-        default=50_000,
-        ge=1_000,
-        description="Paperclip budget (F0-010): tokens máximos por ejecución",
-    )
+class ExecutionLimitsSchema(OctoModel):
+    max_usd_per_run: float | None = Field(default=None, ge=0)
+    max_tokens_per_run: int | None = Field(default=None, ge=1)
+    max_tool_rounds_per_run: int | None = Field(default=None, ge=1)
+    max_delegation_depth: int | None = Field(default=None, ge=0)
+    max_concurrent_runs: int | None = Field(default=None, ge=1)
+    run_timeout_secs: int | None = Field(default=300, ge=30)
 
 
 class ExecutionRequest(OctoModel):
-    """Contrato entre Control Plane y Execution Plane.
-
-    Este es el único punto de entrada al runtime worker.
-    El Control Plane construye este payload; el worker solo lo consume.
-
-    trace_id OBLIGATORIO: se propaga a todos los logs y spans OTEL (Principio #9).
-    """
-
-    execution_id: str = Field(description="UUIDv7 asignado por el Control Plane")
-    trace_id: str = Field(
-        description="OTEL trace_id — OBLIGATORIO para observabilidad distribuida"
-    )
-    run_id: str = Field(description="ID de la run para agrupar executions relacionadas")
-    agent: AgentDefinition
-    task: dict[str, Any] = Field(
-        description="TaskDefinition: input, type, context y metadata"
-    )
-    governance: dict[str, Any] = Field(
-        description="GovernancePolicy del agente (Paperclip F0-010): presupuestos y límites"
-    )
-    checkpoint: dict[str, Any] | None = Field(
-        default=None,
-        description="LangGraph checkpoint para pause/resume (F2). None en ejecuciones nuevas.",
-    )
-
-
-class TokenUsage(OctoModel):
-    """Token usage stats reportados al Control Plane."""
-
-    prompt_tokens: int = Field(default=0, ge=0)
-    completion_tokens: int = Field(default=0, ge=0)
-    total_tokens: int = Field(default=0, ge=0)
+    execution_id: str
+    tenant_id: str | None = None
+    agent_id: str
+    workspace_id: str
+    task: str = Field(min_length=1, max_length=32_000)
+    context: dict[str, Any] = Field(default_factory=dict)
+    llm: LLMConfigSchema
+    limits: ExecutionLimitsSchema = Field(default_factory=ExecutionLimitsSchema)
+    tools: list[str] = Field(default_factory=list)
+    streaming: bool = False
+    trace_id: str
+    run_id: str
 
 
 class ExecutionResult(OctoModel):
-    """Respuesta devuelta al Control Plane tras la ejecución.
-
-    En F0: stub con status=completed y result={result: stub}.
-    En F2: resultado real del LangGraph StateGraph.
-    """
-
     execution_id: str
     status: ExecutionStatus
-    result: dict[str, Any] | None = Field(
-        default=None,
-        description="Resultado de la ejecución. F0: stub. F2: output del agent loop.",
-    )
+    output: str | None = None
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    usage: dict[str, int] = Field(default_factory=dict)
     error: str | None = None
-    token_usage: TokenUsage | None = None
     duration_ms: int = Field(ge=0)
-    checkpoint: dict[str, Any] | None = Field(
-        default=None,
-        description="Estado LangGraph para pause/resume. Seteado solo si status=suspended.",
-    )
+    checkpoint: dict[str, Any] | None = None

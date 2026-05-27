@@ -163,6 +163,36 @@ pnpm dev
 
 ---
 
+
+## OCTO F1 Architecture Status
+
+Current F1 behavior (as implemented in this repository):
+
+- Control plane owns agent/execution APIs, auth/policy and dispatch decisions.
+- Runtime worker owns model/tool execution and **currently persists runtime progress directly to PostgreSQL** for durable execution and recovery.
+- Scheduler worker owns due/scheduled dispatch orchestration.
+- Reclaimer worker owns stuck/zombie detection and replay/retry decisions.
+
+### Control Plane vs Execution Plane (F1)
+
+| Responsibility | Control Plane | Execution Plane / Runtime |
+|---|---:|---:|
+| Agent CRUD/versioning | Yes | No |
+| AuthN/AuthZ/API policy | Yes | No |
+| Execution creation + dispatch | Yes | No |
+| Model/tool loop execution | No | Yes |
+| Runtime progress/checkpoint persistence | Shared durable store | Yes (current F1 writer) |
+| Reclaim decisions | No | Reclaimer worker |
+
+### F1 complete vs F1 closed
+
+- **F1 complete**: durable execution kernel is functionally implemented and executable end-to-end on canonical F1 path.
+- **F1 closed**: F1 complete **plus** operational consistency (queues, ops metrics, deployment paths, tests, and documentation all aligned).
+
+For the full current-vs-future narrative, see `docs/architecture/F1-architecture-status.md`.
+
+---
+
 ## Architecture Decision Records
 
 All architectural decisions are documented in [`docs/adr/`](./docs/adr/).

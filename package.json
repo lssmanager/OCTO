@@ -18,7 +18,7 @@
     "db:studio": "pnpm --filter @octo/database db:studio",
     "contracts:build": "pnpm --filter @octo/contracts build && node scripts/generate-json-schema.mjs",
     "contracts:python": "python3 scripts/generate_pydantic_models.py",
-    "contracts:check": "git diff --exit-code -- packages/contracts/generated apps/runtime-worker/app/contracts/generated",
+    "contracts:check": "pnpm contracts:build && pnpm contracts:python && git diff --exit-code -- packages/contracts/generated apps/runtime-worker/app/contracts/generated",
     "contracts:validate": "pnpm contracts:build && pnpm contracts:python && pnpm exec tsx scripts/validate-contract-roundtrip.ts && pnpm contracts:check",
     "observability:check-rules": "promtool check rules infra/prometheus/rules/octo-f1.yml",
     "observability:test-rules": "promtool test rules infra/prometheus/rules/octo-f1-test.yml",
@@ -33,7 +33,9 @@
     "docker:build:migrate": "docker build -f docker/migrate.Dockerfile -t octo/migrate:sha-local --build-arg VERSION=local --build-arg REVISION=local --build-arg CREATED=local .",
     "docker:build:f1": "pnpm docker:build:api && pnpm docker:build:runtime-worker && pnpm docker:build:scheduler-worker && pnpm docker:build:migrate",
     "docker:verify-hardening": "bash scripts/verify-docker-hardening.sh",
-    "f1:verify": "bash scripts/f1-verify.sh"
+    "f1:verify": "bash scripts/f1-verify.sh",
+    "contracts:generate": "pnpm contracts:build && pnpm contracts:python",
+    "test:outbox": "turbo run test --filter=@octo/events --filter=@octo/api -- outbox"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.59.4",
