@@ -25,3 +25,36 @@ describe('ExecutionStepSchema', () => {
   it('rejects invalid datetime', () => expect(() => ExecutionStepSchema.parse({ ...base, startedAt: 'bad-date' })).toThrow());
   it('accepts nullable output/error fields', () => expect(() => ExecutionStepSchema.parse({ ...base, outputJson: null, errorCode: null, errorMessage: null, endedAt: null })).not.toThrow());
 });
+
+describe('ExecutionStatus contract', () => {
+  it('exports only canonical lowercase execution states', async () => {
+    const { ExecutionStatusValues } = await import('../src/execution');
+    expect(ExecutionStatusValues).toEqual([
+      'pending',
+      'queued',
+      'dispatched',
+      'running',
+      'waiting_tool',
+      'waiting_human',
+      'retrying',
+      'retry_scheduled',
+      'suspended',
+      'reclaimable',
+      'completed',
+      'failed',
+      'cancelled',
+    ]);
+    expect(ExecutionStatusValues.every((state) => state === state.toLowerCase())).toBe(true);
+  });
+
+  it('keeps canonical F1 transitions and terminal states', async () => {
+    const { canTransition, TERMINAL_STATUSES } = await import('../src/execution');
+    expect(canTransition('queued', 'dispatched')).toBe(true);
+    expect(canTransition('dispatched', 'running')).toBe(true);
+    expect(canTransition('running', 'completed')).toBe(true);
+    expect(canTransition('running', 'failed')).toBe(true);
+    expect(canTransition('running', 'cancelled')).toBe(true);
+    expect(canTransition('queued', 'running')).toBe(false);
+    expect([...TERMINAL_STATUSES]).toEqual(['completed', 'failed', 'cancelled']);
+  });
+});

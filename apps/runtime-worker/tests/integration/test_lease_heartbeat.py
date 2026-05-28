@@ -19,7 +19,7 @@ async def _pool():
 
 async def _seed_execution(conn, execution_id: str, tenant_id: str, state: str, owner: str | None) -> None:
     await conn.execute(
-        "INSERT INTO executions (id,tenant_id,agent_id,agent_version_id,state,version,attempt_count,reclaim_count,lease_owner,lease_expires_at,budget_snapshot_json,context_snapshot_json,created_by,created_at,updated_at) VALUES ($1,$2,'agent-1','agent-v1',$3,0,0,0,$4,now() - interval '5 seconds','{}'::jsonb,'{}'::jsonb,'test',now(),now()) ON CONFLICT (id) DO NOTHING",
+        "INSERT INTO executions (id,tenant_id,agent_id,agent_version_id,status,state,version,attempt_count,reclaim_count,lease_owner,lease_expires_at,budget_snapshot_json,context_snapshot_json,created_by,created_at,updated_at) VALUES ($1,$2,'agent-1','agent-v1',$3::execution_status,$3,0,0,0,$4,now() - interval '5 seconds','{}'::jsonb,'{}'::jsonb,'test',now(),now()) ON CONFLICT (id) DO NOTHING",
         execution_id,
         tenant_id,
         state,
@@ -31,7 +31,7 @@ async def _run() -> None:
     pool = await _pool()
     try:
         async with pool.acquire() as conn:
-            await _seed_execution(conn, "hb-1", "tenant-a", "RUNNING", "worker-a")
+            await _seed_execution(conn, "hb-1", "tenant-a", "running", "worker-a")
             before = await conn.fetchval("SELECT lease_expires_at FROM executions WHERE id='hb-1' AND tenant_id='tenant-a'")
         hb = HeartbeatEmitter(pool, "hb-1", "tenant-a", "worker-a")
         await hb.renew_once()
@@ -40,13 +40,13 @@ async def _run() -> None:
         assert after > before
 
         async with pool.acquire() as conn:
-            await _seed_execution(conn, "hb-2", "tenant-a", "RUNNING", "worker-b")
+            await _seed_execution(conn, "hb-2", "tenant-a", "running", "worker-b")
         hb_wrong = HeartbeatEmitter(pool, "hb-2", "tenant-a", "worker-a")
         with pytest.raises(LeaseRevokedError):
             await hb_wrong.renew_once()
 
         async with pool.acquire() as conn:
-            await _seed_execution(conn, "hb-3", "tenant-a", "DISPATCHED", "worker-a")
+            await _seed_execution(conn, "hb-3", "tenant-a", "dispatched", "worker-a")
         hb_non_running = HeartbeatEmitter(pool, "hb-3", "tenant-a", "worker-a")
         with pytest.raises(LeaseRevokedError):
             await hb_non_running.renew_once()

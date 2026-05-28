@@ -55,3 +55,67 @@ def test_execution_context_is_terminal() -> None:
 def test_execution_context_cancellation_requested() -> None:
     assert _context("running", cancellation_requested_at=datetime.now(UTC)).cancellation_requested is True
     assert _context("running", cancellation_requested_at=None).cancellation_requested is False
+
+
+class _FakeTransaction:
+    async def __aenter__(self):
+        return None
+
+    async def __aexit__(self, *_args):
+        return False
+
+
+class _FakeConn:
+    def __init__(self) -> None:
+        self.fetchrow_queries: list[str] = []
+        self.execute_queries: list[str] = []
+
+    def transaction(self):
+        return _FakeTransaction()
+
+    async def fetchrow(self, query: str, *_args):
+        self.fetchrow_queries.append(query)
+        if "SELECT lease_owner" in query:
+            return {"lease_owner": None}
+        if "UPDATE executions" in query:
+            return {"version": 1}
+        if "MAX(step_index)" in query:
+            return {"next_step_index": 0}
+        return None
+
+    async def execute(self, query: str, *_args):
+        self.execute_queries.append(query)
+        return None
+
+
+class _FakeAcquire:
+    def __init__(self, conn: _FakeConn) -> None:
+        self.conn = conn
+
+    async def __aenter__(self):
+        return self.conn
+
+    async def __aexit__(self, *_args):
+        return False
+
+
+class _FakePool:
+    def __init__(self, conn: _FakeConn) -> None:
+        self.conn = conn
+
+    def acquire(self):
+        return _FakeAcquire(self.conn)
+
+
+@pytest.mark.asyncio
+async def test_transition_cas_uses_status_not_state() -> None:
+    conn = _FakeConn()
+    fsm = ExecutionFSM(_FakePool(conn))
+
+    result = await fsm.transition("e1", "t1", "queued", "dispatched", 0)
+
+    assert result.success is True
+    update_query = next(query for query in conn.fetchrow_queries if "UPDATE executions" in query)
+    assert "SET status = $1" in update_query
+    assert "AND status = $5" in update_query
+    assert "AND state" not in update_query

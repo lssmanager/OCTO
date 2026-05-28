@@ -8,3 +8,4 @@ from .ExecutionSchema import *
 from .ExecutionStepSchema import *
 from .OutboxEventSchema import *
 from .ToolInvocationSchema import *
+from .execution_fsm_contract import *
