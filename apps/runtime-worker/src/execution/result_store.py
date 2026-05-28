@@ -3,7 +3,7 @@
 Stores completed ExecutionResponse objects keyed by execution_id.
 Used by:
   - IdempotencyStore: serve cached result for duplicate requests
-  - ExecutionEngine: retrieve result during status polling (F1+)
+  - Status polling readers: retrieve cached non-authoritative response snapshots
 
 Key:  result:<execution_id>
 TTL:  configurable (default 24h)
