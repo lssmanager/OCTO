@@ -141,7 +141,7 @@ describe('ExecutionStateService', () => {
         expect.unreachable('Expected InvalidTransitionError');
       } catch (err) {
         const msg = (err as Error).message;
-        expect(msg).toContain('Invalid transition pending -> running');
+        expect(msg).toContain('pending → running');
         expect(msg).toContain(EXEC_ID);
         expect(msg).toContain('queued');
       }

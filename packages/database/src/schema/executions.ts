@@ -47,6 +47,7 @@ export const executions = pgTable(
     agentVersionId: text('agent_version_id')
       .notNull()
       .references(() => agentVersions.id),
+    // Legacy alias kept in sync with status during F1 migration; status is canonical.
     state: text('state').notNull(),
     version: integer('version').notNull().default(0),
     inputJson: jsonb('input_json').notNull().default({}),
@@ -98,12 +99,12 @@ export const executions = pgTable(
     heartbeatIdx: index('idx_executions_heartbeat').on(t.status, t.heartbeatAt),
     f1TenantStateCreatedIdx: index('idx_executions_tenant_state_created').on(
       t.tenantId,
-      t.state,
+      t.status,
       t.createdAt.desc()
     ),
     f1LeaseStaleIdx: index('idx_executions_lease_stale')
-      .on(t.state, t.leaseExpiresAt)
-      .where(sql`state IN ('RUNNING', 'RECLAIMING', 'DISPATCHED')`),
+      .on(t.status, t.leaseExpiresAt)
+      .where(sql`status IN ('running', 'reclaimable', 'dispatched')`),
     idempotencyIdx: uniqueIndex('executions_idempotency_key_uidx')
       .on(t.tenantId, t.idempotencyKey)
       .where(sql`idempotency_key IS NOT NULL`),

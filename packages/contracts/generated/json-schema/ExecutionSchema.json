@@ -19,17 +19,19 @@
         "state": {
           "type": "string",
           "enum": [
-            "QUEUED",
-            "DISPATCHED",
-            "RUNNING",
-            "PAUSED",
-            "RETRY_SCHEDULED",
-            "RECLAIMING",
-            "TIMED_OUT",
-            "SUCCEEDED",
-            "FAILED",
-            "CANCELLED",
-            "DLQ"
+            "pending",
+            "queued",
+            "dispatched",
+            "running",
+            "waiting_tool",
+            "waiting_human",
+            "retrying",
+            "retry_scheduled",
+            "suspended",
+            "reclaimable",
+            "completed",
+            "failed",
+            "cancelled"
           ]
         },
         "version": {

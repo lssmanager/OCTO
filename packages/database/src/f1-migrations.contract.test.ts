@@ -23,6 +23,9 @@ describe('F1 database migrations contract', () => {
     expect(sql).toContain('idx_executions_tenant_state_created');
     expect(sql).toContain('idx_executions_lease_stale');
     expect(sql).toContain("WHERE state IN ('RUNNING', 'RECLAIMING', 'DISPATCHED')");
+    const canonicalSql = readMigration('202605280001_canonical_execution_status.sql');
+    expect(canonicalSql).toContain('UPDATE "executions" SET "state" = "status"::text');
+    expect(canonicalSql).toContain("WHERE status IN ('running', 'reclaimable', 'dispatched')");
     expect(sql).toContain('idx_checkpoints_execution_step_index');
     expect(sql).toContain('idx_checkpoints_execution_step_unique');
   });

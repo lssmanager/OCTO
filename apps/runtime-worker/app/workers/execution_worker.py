@@ -28,8 +28,8 @@ async def handle_execute(job_data: dict[str, object], ctx: dict[str, object]) ->
     result = await fsm.transition(
         execution_id=execution_id,
         tenant_id=tenant_id,
-        expected_state="DISPATCHED",
-        next_state="RUNNING",
+        expected_state="dispatched",
+        next_state="running",
         expected_version=execution.version,
         lease_owner=worker_id,
         metadata={"attemptNumber": attempt_number},

@@ -10,9 +10,9 @@ class FakeConn:
         self.outbox_written = False
 
     async def fetchrow(self, query, *args):
-        if query.startswith('SELECT id, state, version FROM executions'):
+        if query.startswith('SELECT id, status AS state, version FROM executions'):
             return self.row
-        if query.startswith("UPDATE executions SET state='DLQ'"):
+        if query.startswith("UPDATE executions SET status='failed', state='failed'"):
             return {'version': self.row['version'] + 1} if self.cas_success else None
         return None
 
@@ -44,7 +44,7 @@ class FakeMetrics:
 
 @pytest.mark.asyncio
 async def test_route_to_dlq_updates_and_outbox() -> None:
-    conn = FakeConn({'id': 'e1', 'state': 'RUNNING', 'version': 1})
+    conn = FakeConn({'id': 'e1', 'state': 'running', 'version': 1})
     metrics = FakeMetrics()
     router = DLQRouter(FakePool(conn), metrics=metrics)
     await router.route_to_dlq('e1','t1','E','msg',{},'poison')
@@ -54,7 +54,7 @@ async def test_route_to_dlq_updates_and_outbox() -> None:
 
 @pytest.mark.asyncio
 async def test_route_to_dlq_terminal_no_mutation() -> None:
-    conn = FakeConn({'id': 'e1', 'state': 'FAILED', 'version': 1})
+    conn = FakeConn({'id': 'e1', 'state': 'failed', 'version': 1})
     router = DLQRouter(FakePool(conn))
     await router.route_to_dlq('e1','t1','E','msg',{},'poison')
     assert not conn.outbox_written
@@ -62,7 +62,7 @@ async def test_route_to_dlq_terminal_no_mutation() -> None:
 
 @pytest.mark.asyncio
 async def test_route_to_dlq_cas_conflict_noop() -> None:
-    conn = FakeConn({'id': 'e1', 'state': 'RUNNING', 'version': 1}, cas_success=False)
+    conn = FakeConn({'id': 'e1', 'state': 'running', 'version': 1}, cas_success=False)
     router = DLQRouter(FakePool(conn))
     await router.route_to_dlq('e1','t1','E','msg',{},'poison')
     assert not conn.outbox_written

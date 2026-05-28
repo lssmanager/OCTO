@@ -106,3 +106,33 @@ F1 may still carry non-blocking debt (for example tuning, ergonomics, and future
 ## Future target (F2+)
 
 F2+ should focus on scale and resilience improvements (higher throughput, richer projections, and broader automation), without re-introducing parallel legacy runtime or contract paths.
+
+## Canonical execution FSM state (F1)
+
+F1 has one canonical execution state model:
+
+- Source of truth: `packages/contracts/src/execution.ts` (`ExecutionStatus`, `ExecutionStatusValues`, `VALID_TRANSITIONS`, `TERMINAL_STATUSES`).
+- Canonical DB field: `executions.status` (`execution_status` enum).
+- Compatibility field: `executions.state` remains only as a temporary legacy alias during F1 migration and must be kept lowercase/synchronized when touched.
+
+Runtime and control-plane code must not treat `executions.state` as the business-authoritative FSM field. CAS guards, lease/stale queries, reclaim scans, cancel/resume flows, and operational summaries use `executions.status`.
+
+Canonical F1 execution statuses are lowercase only:
+
+```text
+pending
+queued
+dispatched
+running
+waiting_tool
+waiting_human
+retrying
+retry_scheduled
+suspended
+reclaimable
+completed
+failed
+cancelled
+```
+
+Python runtime does not own a divergent FSM. Its generated contract artifact is produced from the TypeScript contract (`packages/contracts/generated/execution-fsm.json` -> `apps/runtime-worker/app/contracts/generated/execution_fsm_contract.py`), and `apps/runtime-worker/app/fsm/types.py` imports that generated artifact for transitions and terminal states. `pnpm contracts:validate` regenerates and diffs these artifacts so TS/Python drift fails validation.

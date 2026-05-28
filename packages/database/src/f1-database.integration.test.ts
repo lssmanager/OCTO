@@ -92,7 +92,7 @@ it('enforces compare-and-swap updates on executions.version', async () => {
       tenantId: 'tenant-a',
       agentId: 'f1-test-agent-a',
       agentVersionId: 'f1-test-agent-version-cas',
-      state: 'QUEUED',
+      state: 'queued',
     });
 
     const [first, second] = await sql.begin(async (tx) => {
@@ -123,7 +123,7 @@ it('enforces compare-and-swap updates on executions.version', async () => {
       tenantId: 'tenant-a',
       agentId: 'f1-test-agent-a',
       agentVersionId: 'f1-test-agent-version-lease',
-      state: 'RUNNING',
+      state: 'running',
       lease: 'past',
     });
     await insertExecution(sql, {
@@ -131,7 +131,7 @@ it('enforces compare-and-swap updates on executions.version', async () => {
       tenantId: 'tenant-a',
       agentId: 'f1-test-agent-a',
       agentVersionId: 'f1-test-agent-version-lease',
-      state: 'DISPATCHED',
+      state: 'dispatched',
       lease: 'future',
     });
     await insertExecution(sql, {
@@ -139,7 +139,7 @@ it('enforces compare-and-swap updates on executions.version', async () => {
       tenantId: 'tenant-a',
       agentId: 'f1-test-agent-a',
       agentVersionId: 'f1-test-agent-version-lease',
-      state: 'RECLAIMING',
+      state: 'reclaimable',
       lease: 'past',
     });
     await insertExecution(sql, {
@@ -147,7 +147,7 @@ it('enforces compare-and-swap updates on executions.version', async () => {
       tenantId: 'tenant-a',
       agentId: 'f1-test-agent-a',
       agentVersionId: 'f1-test-agent-version-lease',
-      state: 'SUCCEEDED',
+      state: 'completed',
       lease: 'past',
     });
 
@@ -156,7 +156,7 @@ it('enforces compare-and-swap updates on executions.version', async () => {
       return tx<{ id: string }[]>`
         SELECT "id"
         FROM "executions"
-        WHERE "state" IN ('RUNNING', 'RECLAIMING', 'DISPATCHED')
+        WHERE "status" IN ('running', 'reclaimable', 'dispatched')
           AND "lease_expires_at" < now()
         ORDER BY "id"
       `;
@@ -176,14 +176,14 @@ it('enforces compare-and-swap updates on executions.version', async () => {
       tenantId: 'tenant-a',
       agentId: 'f1-test-agent-a',
       agentVersionId: 'f1-test-agent-version-tool-a',
-      state: 'RUNNING',
+      state: 'running',
     });
     await insertExecution(sql, {
       id: 'f1-test-execution-tool-b',
       tenantId: 'tenant-b',
       agentId: 'f1-test-agent-b',
       agentVersionId: 'f1-test-agent-version-tool-b',
-      state: 'RUNNING',
+      state: 'running',
     });
     await insertStep(sql, 'f1-test-step-tool-a', 'tenant-a', 'f1-test-execution-tool-a', 0);
     await insertStep(sql, 'f1-test-step-tool-b', 'tenant-b', 'f1-test-execution-tool-b', 0);
@@ -255,14 +255,14 @@ it('enforces compare-and-swap updates on executions.version', async () => {
       tenantId: 'tenant-a',
       agentId: 'f1-test-agent-a',
       agentVersionId: 'f1-test-agent-version-rls-a',
-      state: 'QUEUED',
+      state: 'queued',
     });
     await insertExecution(sql, {
       id: 'f1-test-execution-rls-b',
       tenantId: 'tenant-b',
       agentId: 'f1-test-agent-b',
       agentVersionId: 'f1-test-agent-version-rls-b',
-      state: 'QUEUED',
+      state: 'queued',
     });
 
     const tenantA = await selectExecutionIdsForTenant(sql, 'tenant-a');
@@ -295,10 +295,10 @@ it('enforces compare-and-swap updates on executions.version', async () => {
         await tx`SELECT set_config('app.current_tenant', 'tenant-a', true)`;
         await tx`
           INSERT INTO "executions" (
-            "id", "tenant_id", "agent_id", "agent_version_id", "state", "input_json",
+            "id", "tenant_id", "agent_id", "agent_version_id", "state", "status", "input_json",
             "budget_snapshot_json", "context_snapshot_json", "created_by", "task", "governance", "trace_id", "run_id"
           ) VALUES (
-            'f1-test-execution-cross-insert', 'tenant-b', 'f1-test-agent-a', 'f1-test-agent-version-cross-insert', 'QUEUED', '{}'::jsonb,
+            'f1-test-execution-cross-insert', 'tenant-b', 'f1-test-agent-a', 'f1-test-agent-version-cross-insert', 'queued', 'queued', '{}'::jsonb,
             '{}'::jsonb, '{}'::jsonb, 'test-user', '{}'::jsonb, '{}'::jsonb, 'trace-x', 'run-x'
           )
         `;
@@ -398,11 +398,11 @@ async function insertExecution(
     await tx`SELECT set_config('app.current_tenant', ${row.tenantId}, true)`;
     await tx`
       INSERT INTO "executions" (
-        "id", "tenant_id", "agent_id", "agent_version_id", "state", "input_json",
+        "id", "tenant_id", "agent_id", "agent_version_id", "state", "status", "input_json",
         "budget_snapshot_json", "context_snapshot_json", "created_by", "task", "governance", "trace_id", "run_id"
       )
       VALUES (
-        ${row.id}, ${row.tenantId}, ${row.agentId}, ${row.agentVersionId}, ${row.state}, '{}'::jsonb,
+        ${row.id}, ${row.tenantId}, ${row.agentId}, ${row.agentVersionId}, ${row.state}, ${row.state}::execution_status, '{}'::jsonb,
         '{}'::jsonb, '{}'::jsonb, 'test-user', '{}'::jsonb, '{}'::jsonb, ${row.id}, ${row.id}
       )
     `;
@@ -426,7 +426,7 @@ async function insertStep(
     await tx`SELECT set_config('app.current_tenant', ${tenantId}, true)`;
     return tx`
       INSERT INTO "execution_steps" ("id", "tenant_id", "execution_id", "step_index", "step_type", "status")
-      VALUES (${id}, ${tenantId}, ${executionId}, ${stepIndex}, 'tool_dispatch', 'RUNNING')
+      VALUES (${id}, ${tenantId}, ${executionId}, ${stepIndex}, 'tool_dispatch', 'running')
     `;
   });
 }
@@ -445,7 +445,7 @@ async function insertToolInvocation(
       INSERT INTO "tool_invocations" (
         "id", "tenant_id", "execution_id", "step_id", "tool_name", "tool_kind", "status", "args_json", "idempotency_key"
       )
-      VALUES (${id}, ${tenantId}, ${executionId}, ${stepId}, 'test.tool', 'builtin', 'RUNNING', '{}'::jsonb, ${idempotencyKey})
+      VALUES (${id}, ${tenantId}, ${executionId}, ${stepId}, 'test.tool', 'builtin', 'running', '{}'::jsonb, ${idempotencyKey})
     `;
   });
 }

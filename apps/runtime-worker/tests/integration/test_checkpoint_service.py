@@ -21,7 +21,7 @@ async def _pool():
 
 async def _seed_execution(conn, execution_id: str, tenant_id: str) -> None:
     await conn.execute(
-        "INSERT INTO executions (id,tenant_id,agent_id,agent_version_id,state,version,attempt_count,reclaim_count,budget_snapshot_json,context_snapshot_json,created_by,created_at,updated_at) VALUES ($1,$2,'agent-1','agent-v1','RUNNING',0,0,0,'{}'::jsonb,'{}'::jsonb,'test',now(),now()) ON CONFLICT (id) DO NOTHING",
+        "INSERT INTO executions (id,tenant_id,agent_id,agent_version_id,state,version,attempt_count,reclaim_count,budget_snapshot_json,context_snapshot_json,created_by,created_at,updated_at) VALUES ($1,$2,'agent-1','agent-v1','running',0,0,0,'{}'::jsonb,'{}'::jsonb,'test',now(),now()) ON CONFLICT (id) DO NOTHING",
         execution_id,
         tenant_id,
     )

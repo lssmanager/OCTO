@@ -1,18 +1,12 @@
 import { z } from 'zod';
+import { ExecutionStatusValues } from '../execution';
 
-export const ExecutionStateSchema = z.enum([
-  'QUEUED',
-  'DISPATCHED',
-  'RUNNING',
-  'PAUSED',
-  'RETRY_SCHEDULED',
-  'RECLAIMING',
-  'TIMED_OUT',
-  'SUCCEEDED',
-  'FAILED',
-  'CANCELLED',
-  'DLQ',
-]);
+export const ExecutionStateSchema = z.enum(
+  ExecutionStatusValues as [
+    (typeof ExecutionStatusValues)[number],
+    ...(typeof ExecutionStatusValues)[number][],
+  ]
+);
 
 export const ExecutionSchema = z.object({
   id: z.string(),

@@ -2,35 +2,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-TERMINAL_STATES = {
-    "TIMED_OUT",
-    "SUCCEEDED",
-    "FAILED",
-    "CANCELLED",
-    "DLQ",
-}
+from app.contracts.generated.execution_fsm_contract import (
+    EXECUTION_TERMINAL_STATES,
+    EXECUTION_VALID_TRANSITIONS,
+)
 
-VALID_TRANSITIONS = {
-    "QUEUED": {"DISPATCHED", "CANCELLED"},
-    "DISPATCHED": {"RUNNING", "FAILED", "CANCELLED"},
-    "RUNNING": {
-        "PAUSED",
-        "RETRY_SCHEDULED",
-        "RECLAIMING",
-        "TIMED_OUT",
-        "SUCCEEDED",
-        "FAILED",
-        "CANCELLED",
-    },
-    "PAUSED": {"RUNNING", "CANCELLED", "FAILED"},
-    "RETRY_SCHEDULED": {"DISPATCHED", "FAILED"},
-    "RECLAIMING": {"RUNNING", "FAILED"},
-    "TIMED_OUT": set(),
-    "SUCCEEDED": set(),
-    "FAILED": set(),
-    "CANCELLED": set(),
-    "DLQ": set(),
-}
+TERMINAL_STATES = set(EXECUTION_TERMINAL_STATES)
+VALID_TRANSITIONS = {state: set(targets) for state, targets in EXECUTION_VALID_TRANSITIONS.items()}
 
 
 @dataclass(frozen=True)

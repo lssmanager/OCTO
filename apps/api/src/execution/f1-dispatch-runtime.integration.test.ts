@@ -33,12 +33,12 @@ describeIfInfra('F1 dispatch->runtime integration', () => {
     expect(waiting).toBeGreaterThanOrEqual(1);
 
     const queued = await repo.getExecutionSummary(created.id, tenantA);
-    expect(queued?.state).toBe('QUEUED');
+    expect(queued?.state).toBe('queued');
 
     await processExecutionDispatchJob({ executionId: created.id, tenantId: tenantA }, { workerId: 'test-worker', leaseSeconds: 90, invokeRuntime: async (p) => { await runtime(p.executionId, p.tenantId); } });
 
     const done = await repo.getExecutionSummary(created.id, tenantA);
-    expect(done?.state).toBe('SUCCEEDED');
+    expect(done?.state).toBe('completed');
     expect(done?.outputJson).toBeTruthy();
 
     const cps = await withTenantTx(tenantA, (tx) => tx.select().from(executionCheckpoints).where(and(eq(executionCheckpoints.executionId, created.id), eq(executionCheckpoints.tenantId, tenantA))).orderBy(asc(executionCheckpoints.stepIndex)));

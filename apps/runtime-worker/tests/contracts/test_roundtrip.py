@@ -11,7 +11,7 @@ from app.contracts.generated.OutboxEventSchema import OutboxEventSchema
 
 def test_execution_valid():
     m = ExecutionSchema.model_validate({
-        "id": "e1", "tenantId": "t1", "agentId": "a1", "agentVersionId": "av1", "state": "RUNNING",
+        "id": "e1", "tenantId": "t1", "agentId": "a1", "agentVersionId": "av1", "state": "running",
         "version": 1, "inputJson": {}, "attemptCount": 0, "reclaimCount": 0,
         "createdBy": "u1", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
     })
