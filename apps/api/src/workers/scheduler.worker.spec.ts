@@ -10,6 +10,8 @@ describe('SchedulerWorker', () => {
     const result = await worker.handleExecutionDispatch({ data: { executionId: 'exec-1', tenantId: 'tenant-1' } });
     expect(result).toBe('dispatched');
     expect(queue.add).toHaveBeenCalledWith(QUEUES.EXECUTION_DISPATCH, expect.objectContaining({ executionId: 'exec-1', tenantId: 'tenant-1', reason: 'scheduled', attempt: 1 }), { jobId: 'exec-1:1' });
+    expect(queue.add.mock.calls[0][0]).not.toBe('execution');
+    expect(queue.add.mock.calls[0][0]).not.toBe('runtime.execute');
   });
 
   it('CAS conflict is no-op', async () => {

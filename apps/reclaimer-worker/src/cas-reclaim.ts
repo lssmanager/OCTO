@@ -2,7 +2,7 @@
  * apps/reclaimer-worker/src/cas-reclaim.ts
  * Issue #34 + #37 — CAS reclaim with correlated OTEL span
  *
- * Emits an 'execution.reclaim' OTEL span linked to the original
+ * Emits an 'execution.reclaim.cas' OTEL span linked to the original
  * execution trace via the traceparent stored in the job payload.
  * This makes reclaim spans appear as children in the full trace waterfall.
  *
@@ -31,7 +31,7 @@ export async function casReclaim(
   const tracer = trace.getTracer('octo.reclaimer', '0.1.0');
 
   return tracer.startActiveSpan(
-    'execution.reclaim',
+    'execution.reclaim.cas',
     {
       kind: SpanKind.INTERNAL,
       attributes: {

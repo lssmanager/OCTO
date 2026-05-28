@@ -88,12 +88,14 @@ A **command** is an instruction to perform work.
 
 ```text
 execution.dispatch
+tool.async.result
+ops.dlq.reprocess
+
+Reserved/non-active in current F1 topology:
 execution.retry
 execution.reclaim
 execution.cancel
 execution.resume
-tool.async.result
-ops.dlq.reprocess
 ```
 
 A **domain/runtime event** is a fact that already happened after a durable transition.
@@ -160,11 +162,11 @@ BullMQ is not used for event fan-out, audit projection or UI timeline streaming.
 
 | Queue | Target worker | Priority | Job ID | Purpose |
 |---|---|---:|---|---|
-| `execution.dispatch` | `scheduler-worker` | high | `execution_id` | Move `QUEUED` execution into dispatch flow |
-| `execution.retry` | `scheduler-worker` | normal | `execution_id:retry:<attempt>` | Delayed retry after recoverable error |
-| `execution.reclaim` | `scheduler-worker` | high | `execution_id:reclaim:<lease_version>` | Reclaim stale execution after lease expiry |
-| `execution.cancel` | `runtime-worker` | critical | `execution_id:cancel:<command_id>` | Cooperative cancellation request |
-| `execution.resume` | `scheduler-worker` | high | `execution_id:resume:<approval_id>` | Resume paused execution |
+| `execution.dispatch` | `runtime-worker` | high | `execution_id` | Move ready execution into runtime flow |
+| `execution.retry` | reserved/non-active | normal | `execution_id:retry:<attempt>` | Future delayed retry split; current F1 replays through `execution.dispatch` |
+| `execution.reclaim` | reserved/non-active | high | `execution_id:reclaim:<lease_version>` | Future scanner/processor split; current F1 re-enqueues reclaim replay through `execution.dispatch` |
+| `execution.cancel` | reserved/non-active | critical | `execution_id:cancel:<command_id>` | Future explicit cancellation queue |
+| `execution.resume` | reserved/non-active | high | `execution_id:resume:<approval_id>` | Future explicit resume queue |
 | `tool.async.result` | `runtime-worker` | normal | `tool_invocation_id` | Continue run after async tool callback |
 | `ops.dlq.reprocess` | `ops/manual` | low | `dlq_id` | Manual replay/reprocess from DLQ |
 
@@ -194,10 +196,6 @@ export const queueOptions: QueueOptions = {
 ```typescript
 export type OctoCommandType =
   | 'execution.dispatch'
-  | 'execution.retry'
-  | 'execution.reclaim'
-  | 'execution.cancel'
-  | 'execution.resume'
   | 'tool.async.result'
   | 'ops.dlq.reprocess';
 
@@ -581,10 +579,7 @@ packages/events/
 // packages/queue/src/queue-names.ts
 export const OCTO_QUEUES = {
   executionDispatch: 'execution.dispatch',
-  executionRetry: 'execution.retry',
-  executionReclaim: 'execution.reclaim',
-  executionCancel: 'execution.cancel',
-  executionResume: 'execution.resume',
+  // Reserved/non-active F1 names live in RESERVED_QUEUES, not active QUEUES.
   toolAsyncResult: 'tool.async.result',
   opsDlqReprocess: 'ops.dlq.reprocess',
 } as const;

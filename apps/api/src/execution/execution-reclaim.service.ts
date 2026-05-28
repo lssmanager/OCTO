@@ -3,7 +3,7 @@ import { QUEUES } from '@octo/queue';
 import type { ExecutionCommandQueue } from './ports/execution-command-queue';
 import type { ExecutionReclaimRepo } from './ports/execution-reclaim.repo';
 
-const RECLAIM_QUEUE = QUEUES.EXECUTION_DISPATCH;
+const REPLAY_DISPATCH_QUEUE = QUEUES.EXECUTION_DISPATCH;
 const STALE_STATES = ['running', 'dispatched'] as const;
 const TERMINAL_STATES = ['completed', 'failed', 'cancelled'] as const;
 
@@ -62,7 +62,7 @@ export class ExecutionReclaimService {
 
     const nextReclaimCount = execution.reclaimCount + 1;
     await this.queue.add(
-      RECLAIM_QUEUE,
+      REPLAY_DISPATCH_QUEUE,
       {
         executionId: execution.id,
         tenantId: execution.tenantId,
@@ -77,12 +77,13 @@ export class ExecutionReclaimService {
       }
     );
 
-    this.logger.log('execution_reclaim_enqueued', {
-      event: 'execution_reclaim_enqueued',
+    this.logger.log('execution_reclaim_replay_enqueued', {
+      event: 'execution_reclaim_replay_enqueued',
       execution_id: execution.id,
       tenant_id: execution.tenantId,
       reclaim_count: nextReclaimCount,
       state: execution.state,
+      queue: REPLAY_DISPATCH_QUEUE,
     });
 
     return 'reclaimed';

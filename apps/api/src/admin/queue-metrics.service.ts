@@ -15,7 +15,7 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
-import { createRedisConnection, MONITORED_QUEUES, type QueueName } from '@octo/queue';
+import { createRedisConnection, MONITORED_QUEUES, type LegacyQueueName } from '@octo/queue';
 
 export interface QueueMetricsSnapshot {
   queue: string;
@@ -31,7 +31,7 @@ export interface QueueMetricsSnapshot {
 @Injectable()
 export class QueueMetricsService implements OnModuleDestroy {
   private readonly connection: Redis;
-  private readonly queues: Map<QueueName, Queue>;
+  private readonly queues: Map<LegacyQueueName, Queue>;
 
   constructor() {
     // PATCH 9: single REDIS_URL — same source of truth as all workers.

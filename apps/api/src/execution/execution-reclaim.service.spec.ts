@@ -68,6 +68,33 @@ describe('ExecutionReclaimService', () => {
       expect.objectContaining({ reclaimCount: 2 }),
       expect.objectContaining({ jobId: 'reclaim:exec-1:2', priority: 1 })
     );
+    expect(queue.add.mock.calls[0][0]).not.toBe('execution');
+    expect(queue.add.mock.calls[0][0]).not.toBe('execution.reclaim');
+    expect(queue.add.mock.calls[0][0]).not.toBe('runtime.execute');
+  });
+
+
+  it('reclaims an expired running execution and re-enqueues replay on execution.dispatch only', async () => {
+    const { service, repo, queue } = makeService({ stale: [{ ...baseExecution, version: 7 }] });
+    await service.scanStaleLeases();
+
+    expect(repo.findStaleLeases).toHaveBeenCalled();
+    expect(repo.casReclaiming).toHaveBeenCalledWith({ ...baseExecution, version: 7 });
+    expect(queue.add).toHaveBeenCalledTimes(1);
+    expect(queue.add).toHaveBeenCalledWith(
+      QUEUES.EXECUTION_DISPATCH,
+      expect.objectContaining({
+        executionId: 'exec-1',
+        tenantId: 'tenant-1',
+        reason: 'reclaim_replay',
+        attempt: 1,
+        reclaimCount: 1,
+      }),
+      expect.objectContaining({ jobId: 'reclaim:exec-1:1', priority: 1 })
+    );
+    expect(queue.add.mock.calls[0][0]).not.toBe('execution');
+    expect(queue.add.mock.calls[0][0]).not.toBe('execution.reclaim');
+    expect(queue.add.mock.calls[0][0]).not.toBe('runtime.execute');
   });
 
   it('max reclaims routes to DLQ', async () => {

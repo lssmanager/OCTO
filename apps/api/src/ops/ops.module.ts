@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { and, desc, eq } from 'drizzle-orm';
 import { db, executionDlq, executions } from '@octo/database';
-import { createQueue, QUEUES } from '@octo/queue';
+import { createQueue, QUEUES, RESERVED_QUEUES } from '@octo/queue';
 import { JwtAuthModule } from '../auth/jwt-auth.module';
 import { HealthModule } from '../health/health.module';
 import { OpsController } from './ops.controller';
@@ -24,7 +24,7 @@ import { OpsV1Service } from './ops-v1.service';
         },
         requeue: async (tenantId, _actorId, jobId, _b) => {
           const q = createQueue(QUEUES.EXECUTION_DISPATCH, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
-          await q.add('dispatch', { tenantId, executionId: jobId, reason: 'manual_replay', attempt: 1, enqueuedAt: new Date().toISOString() }, { jobId: `requeue:${jobId}` });
+          await q.add(QUEUES.EXECUTION_DISPATCH, { tenantId, executionId: jobId, reason: 'manual_replay', attempt: 1, enqueuedAt: new Date().toISOString() }, { jobId: `requeue:${jobId}` });
           await q.close();
           return { jobId, executionId: jobId, requeued: true, targetQueue: QUEUES.EXECUTION_DISPATCH };
         },
@@ -98,7 +98,7 @@ import { OpsV1Service } from './ops-v1.service';
             },
             queues: {
               executionDispatch: { name: QUEUES.EXECUTION_DISPATCH, ...queueStatus },
-              executionReclaim: { name: QUEUES.EXECUTION_RECLAIM, status: 'unknown', backlog: null, active: null, reason: 'not_active_in_f1_current_topology' },
+              executionReclaim: { name: RESERVED_QUEUES.EXECUTION_RECLAIM, status: 'unknown', backlog: null, active: null, reason: 'not_active_in_f1_current_topology' },
             },
             executions: {
               active: cnt('running'),

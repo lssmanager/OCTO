@@ -44,7 +44,7 @@ export type { WithTraceparent } from './traceparent';
 
 // Queue names + DLQ names
 export { QUEUE_NAMES } from './queue-names';
-export type { QueueName } from './queue-names';
+export type { QueueName as LegacyQueueName } from './queue-names';
 export { DLQ_NAMES } from './dlq-names';
 
 // MONITORED_QUEUES — re-exported from queue-names (local source of truth)
@@ -64,5 +64,5 @@ export {
 // Write-before-ack pattern
 export { writeBeforeAck } from './write-before-ack';
 
-export { QUEUES, QUEUE_DEFAULTS } from './queues';
-export type { QueueKey } from './queues';
+export { QUEUES, RESERVED_QUEUES, QUEUE_DEFAULTS } from './queues';
+export type { QueueKey, QueueName, ReservedQueueKey, ReservedQueueName } from './queues';

@@ -11,7 +11,7 @@ HTTP Request (API)
        └─ span: octo:execution publish  [queue, SpanKind.PRODUCER]
             │  job.data.traceparent = "00-<trace-id>-<span-id>-01"
             └─ span: octo:execution process  [embedding/runtime-worker, SpanKind.CONSUMER]
-                 └─ span: runtime.execute    [python runtime-worker, SpanKind.INTERNAL]
+                 └─ span: runtime.execution    [python runtime-worker, SpanKind.INTERNAL]
 ```
 
 ## TypeScript (Producer side)
@@ -61,7 +61,7 @@ def get_parent_context(job_data: dict):
 # In worker processor:
 parent_ctx = get_parent_context(job_data)
 tracer = trace.get_tracer('octo-runtime-worker')
-with tracer.start_as_current_span('runtime.execute', context=parent_ctx) as span:
+with tracer.start_as_current_span('runtime.execution', context=parent_ctx) as span:
     span.set_attribute('octo.execution.id', job_data['executionId'])
     span.set_attribute('octo.agent.id', job_data['agentId'])
     # ... execute
@@ -72,7 +72,7 @@ with tracer.start_as_current_span('runtime.execute', context=parent_ctx) as span
 1. Open Grafana → Explore → Tempo datasource
 2. Search by `trace_id` (from `execution.traceId` in the DB)
 3. You should see a waterfall: `POST /executions` → `octo:execution publish`
-   → `octo:execution process` → `runtime.execute`
+   → `octo:execution process` → `runtime.execution`
 4. All spans share the same `trace_id` — this confirms end-to-end propagation works
 
 ## contracts.py — Python contract validation

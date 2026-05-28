@@ -32,8 +32,8 @@ export async function startReclaimLoop(
       const zombies = await db
         .select({
           id: executions.id,
+          tenantId: executions.tenantId,
           attempt: executions.attempt,
-          task: executions.task,
           // Select trace fields stored in the task payload for context restoration
           traceId: executions.traceId,
         })
@@ -49,22 +49,32 @@ export async function startReclaimLoop(
           });
 
           if (outcome === 'reclaimed') {
+            const nextAttempt = (zombie.attempt ?? 0) + 1;
+
             reclaimedCounter.add(1, { executionId: zombie.id });
 
             await dispatchQueue.add(
               QUEUES.EXECUTION_DISPATCH,
-              { executionId: zombie.id, tenantId: (zombie.task as { tenantId?: string })?.tenantId, reason: 'reclaim_replay', attempt: (zombie.attempt ?? 0) + 1, enqueuedAt: new Date().toISOString() },
               {
-                jobId: `reclaim:${zombie.id}:${(zombie.attempt ?? 0) + 1}`,
+                executionId: zombie.id,
+                tenantId: zombie.tenantId,
+                reason: 'reclaim_replay',
+                attempt: nextAttempt,
+                enqueuedAt: new Date().toISOString(),
+              },
+              {
+                jobId: `reclaim:${zombie.id}:${nextAttempt}`,
                 attempts: 3,
+                priority: 1,
               }
             );
 
             console.log(
               JSON.stringify({
-                msg: 'execution_reclaimed',
+                msg: 'execution_reclaim_replay_enqueued',
+                queue: QUEUES.EXECUTION_DISPATCH,
                 executionId: zombie.id,
-                reclaimCount: (zombie.attempt ?? 0) + 1,
+                reclaimCount: nextAttempt,
               })
             );
           } else if (outcome === 'already_taken') {

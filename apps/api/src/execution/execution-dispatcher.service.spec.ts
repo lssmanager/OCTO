@@ -13,6 +13,9 @@ describe('ExecutionDispatcherService', () => {
     const created = await svc.dispatch(dto, 'tenant-1', 'user-1');
     expect(created.id).toBe('exec-1');
     expect(queue.add).toHaveBeenCalledWith(QUEUES.EXECUTION_DISPATCH, expect.objectContaining({ executionId: 'exec-1', tenantId: 'tenant-1', reason: 'api_request', attempt: 1 }), { jobId: 'exec-1', priority: 5 });
+    expect(queue.add.mock.calls[0][0]).not.toBe('execution');
+    expect(queue.add.mock.calls[0][0]).not.toBe('execution.reclaim');
+    expect(queue.add.mock.calls[0][0]).not.toBe('runtime.execute');
   });
 
   it('enqueue payload includes enqueuedAt timestamp', async () => {

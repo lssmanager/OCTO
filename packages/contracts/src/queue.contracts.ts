@@ -1,28 +1,21 @@
 // packages/contracts/src/queue.contracts.ts
-// F0: Canonical queue name contracts — single source of truth for queue identifiers.
+// F0/F1 queue name contracts.
 //
-// All BullMQ consumers/producers MUST import queue names from this module or
-// from @octo/queue (which re-exports these names).
-// Hardcoded queue strings outside this file are blocked by the eslint
-// boundaries rule (element-types: leaf → infra boundary).
-//
-// ADR: F0-003 (Queue Architecture), F0-004 (Durable Execution)
+// F1 runtime execution must use QUEUES.EXECUTION_DISPATCH from @octo/queue.
+// The legacy QUEUE_NAMES.EXECUTION value is not the F1 runtime queue and must
+// not be used by execution producers or consumers.
 
 /**
- * Canonical queue name constants for every OCTO message queue.
+ * Legacy queue name constants for OCTO message queues.
  *
  * Naming convention: octo-<domain>
  * NOTE: BullMQ 5.x prohibits colons (:) in queue names — they are reserved
  * as Redis key separators used internally by BullMQ. Always use dashes.
- *
- * Architecture rule:
- *   Queue names defined here are the ONLY valid BullMQ queue names in the system.
- *   Any code that creates a Queue or Worker MUST reference one of these constants.
  */
 export const QUEUE_NAMES = {
   /** F0: Infrastructure validation queue — used by health checks. */
   HEALTH: 'octo-health',
-  /** F1: Agent execution jobs — main orchestration queue. */
+  /** Legacy/non-F1 execution queue. F1 uses QUEUES.EXECUTION_DISPATCH. */
   EXECUTION: 'octo-execution',
   /** F4: Hierarchical delegation between agents. */
   DELEGATION: 'octo-delegation',
@@ -39,8 +32,7 @@ export const QUEUE_NAMES = {
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
 /**
- * Dead-letter queue name mapping.
- * Every operational queue has a corresponding DLQ for poison-pill handling.
+ * Dead-letter queue name mapping for legacy queues.
  */
 export const DLQ_NAMES: Record<string, string> = {
   [QUEUE_NAMES.EXECUTION]: QUEUE_NAMES.DLQ_EXECUTION,
@@ -48,11 +40,13 @@ export const DLQ_NAMES: Record<string, string> = {
 } as const;
 
 /**
- * Ordered list of operational queues monitored by the dashboard.
- * Excludes HEALTH (infra validation only, not an operational queue).
+ * Ordered list of legacy operational queues monitored by the dashboard.
+ *
+ * Excludes HEALTH (infra validation only) and QUEUE_NAMES.EXECUTION because
+ * F1 execution.dispatch metrics are reported through @octo/queue QUEUES, not
+ * this legacy list.
  */
 export const MONITORED_QUEUES: QueueName[] = [
-  QUEUE_NAMES.EXECUTION,
   QUEUE_NAMES.DELEGATION,
   QUEUE_NAMES.TOOL,
   QUEUE_NAMES.MEMORY,

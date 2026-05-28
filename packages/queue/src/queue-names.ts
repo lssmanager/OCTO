@@ -1,22 +1,17 @@
 /**
- * Canonical queue names for the OCTO system.
- * All queue consumers must import from here — never hardcode strings.
+ * Legacy queue names.
  *
- * Naming convention: octo-<domain>
- * BullMQ 5.x prohibits colons (:) in queue names — they are reserved
- * as Redis key separators used internally by BullMQ.
+ * F1 runtime execution must use QUEUES from ./queues:
  *
- * F0: health (validation that BullMQ works)
- * F1+: execution, delegation, tool, memory (activated in future phases)
+ *   QUEUES.EXECUTION_DISPATCH = "execution.dispatch"
  *
- * PATCH 3: Added MONITORED_QUEUES — the ordered list of queues exposed
- * in BullBoard and QueueMetricsService. Derived from QUEUE_NAMES so
- * there is a single source of truth for every queue string in the system.
+ * QUEUE_NAMES.EXECUTION / "octo-execution" is not the F1 runtime queue and
+ * must not be used by execution producers or consumers.
  */
 export const QUEUE_NAMES = {
   /** F0: Validates BullMQ connectivity. Used in health checks. */
   HEALTH: 'octo-health',
-  /** F1: Agent execution jobs — main orchestration queue. */
+  /** Legacy/non-F1 execution queue. F1 uses QUEUES.EXECUTION_DISPATCH. */
   EXECUTION: 'octo-execution',
   /** F4: Hierarchical delegation between agents. */
   DELEGATION: 'octo-delegation',
@@ -33,14 +28,12 @@ export const QUEUE_NAMES = {
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
 /**
- * Ordered list of all operational queues monitored by BullBoard and
- * QueueMetricsService. Derived from QUEUE_NAMES — never edited manually.
+ * Operational queues exposed in legacy BullBoard views.
  *
- * Excludes HEALTH (infra validation only, not an operational queue).
- * Add new domain queues here as they are activated in F1+.
+ * F1 execution.dispatch metrics are reported by RuntimeModule through QUEUES,
+ * not through this legacy list.
  */
 export const MONITORED_QUEUES: QueueName[] = [
-  QUEUE_NAMES.EXECUTION,
   QUEUE_NAMES.DELEGATION,
   QUEUE_NAMES.TOOL,
   QUEUE_NAMES.MEMORY,

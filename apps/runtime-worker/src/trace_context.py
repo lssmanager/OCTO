@@ -17,7 +17,7 @@ USAGE:
 
   async def process_job(job_data: dict):
       ctx = resume_trace_from_job(job_data)
-      with tracer.start_as_current_span("runtime.execute", context=ctx) as span:
+      with tracer.start_as_current_span("runtime.execution", context=ctx) as span:
           span.set_attribute("execution.id", job_data["executionId"])
           ...
 """

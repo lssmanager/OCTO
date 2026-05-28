@@ -216,7 +216,7 @@ scheduler-worker
   -> validate lineage (RI-5)
   -> validate channel_versions monotonic (RI-4)
   -> CAS LOADING_CHECKPOINT -> REPLAYING
-  -> enqueue runtime.execute_replay
+  -> enqueue execution.dispatch (reason=replay)
 
 runtime-worker (replay mode)
   -> for each step from step_index = 0:

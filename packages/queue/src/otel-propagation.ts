@@ -24,7 +24,7 @@
  *   POST /api/executions          [HTTP]     traceId: abc123
  *     └─ octo:execution publish   [PRODUCER] traceId: abc123  ← same
  *          └─ octo:execution process [CONSUMER] traceId: abc123 ← same
- *               └─ execution.reclaim [INTERNAL] traceId: abc123 ← same
+ *               └─ execution.reclaim.cas [INTERNAL] traceId: abc123 ← same
  *
  * CARRIER FORMAT in job payload:
  *   {

@@ -6,33 +6,59 @@ Accepted
 
 ## Contexto
 
-F1 requiere una topología explícita de colas para separar dispatch de reclaim/recovery y evitar ambigüedad operativa entre componentes.
+F1 requiere una topología explícita de colas para dispatch, reclaim y replay.
+La ausencia de una convención única produce colas fantasma, métricas falsas,
+reprocesos ambiguos y debugging difícil.
 
 ## Decisión
 
-Cola oficial operativa:
+F1 tiene una sola cola activa para ejecuciones listas para runtime:
 
-| Cola | Productores | Consumidores | Semántica |
-|---|---|---|---|
-| `execution.dispatch` | `api`, `scheduler-worker`, `reclaimer-worker` (retry/replay) | `runtime-worker` pipeline de ejecución | ejecución lista para runtime |
+| Cola | Estado | Productores | Consumidores | Semántica |
+|---|---|---|---|---|
+| `execution.dispatch` | activa | `api`, `scheduler-worker`, `reclaimer-worker` | `runtime-worker` | ejecución lista para runtime |
 
-`execution.reclaim` queda reservada para una futura separación scanner/processor, pero **no es necesaria en F1 actual**.
+Las siguientes colas no son activas en F1:
 
-`execution` (genérica) no es cola oficial F1.
+| Cola | Estado | Motivo |
+|---|---|---|
+| `execution.reclaim` | reservada/no activa | F1 no separa scanner y processor de reclaim; reclaimer reencola en `execution.dispatch`. |
+| `runtime.execute` | legacy/no activa | El runtime consume `execution.dispatch`. |
+| `execution` | inválida para F1 | Nombre genérico ambiguo. |
+| `octo-execution` | legacy/no F1 | No representa la topología F1 granular. |
 
 ## Ownership
 
-- `api`: produce dispatch inicial/manual replay; no consume colas.
-- `scheduler-worker`: produce dispatch para ejecuciones vencidas/programadas; no ejecuta runtime.
-- `runtime-worker`: ejecuta runtime F1 desde dispatch pipeline.
-- `reclaimer-worker`: owner de detección de stuck/zombies, decide reclaim/replay y publica `execution.dispatch`.
+| Componente | Produce | Consume | Responsabilidad |
+|---|---|---|---|
+| `api` | `execution.dispatch` | none | crea ejecución y publica dispatch inicial/manual replay |
+| `scheduler-worker` | `execution.dispatch` | scheduler input | detecta ejecuciones programadas/vencidas y publica dispatch |
+| `runtime-worker` | none | `execution.dispatch` | ejecuta runtime F1 durable |
+| `reclaimer-worker` | `execution.dispatch` | scanner interno DB | detecta zombies, hace CAS reclaim y reencola replay |
 
 ## Reclaim/replay
 
-El reclaim no ejecuta agentes directamente. El loop de reclaim detecta y, cuando corresponde replay/retry, publica un nuevo dispatch en `execution.dispatch` con `reason=reclaim_replay`.
+El reclaim no ejecuta agentes directamente.
 
-## Consecuencias
+```txt
+RUNNING + lease expirado
+  -> reclaimer-worker detecta zombie
+  -> casReclaim actualiza estado/attempt
+  -> reclaimer-worker encola execution.dispatch con reason=reclaim_replay
+  -> runtime-worker consume execution.dispatch
+  -> runtime F1 reanuda desde checkpoint durable
+```
 
-- Productores/consumidores deben usar constantes centralizadas (`@octo/queue` `QUEUES.*`).
-- No se permiten strings hardcodeados de nombres de cola en código productivo.
-- Los tests deben fallar si reaparece `execution` como cola activa ambigua.
+## Métricas
+
+Las métricas de colas deben reportar únicamente colas reales consultadas en BullMQ.
+
+`execution.reclaim` puede aparecer solo como `not_active`, sin consultar otra cola
+y sin reutilizar estadísticas de `execution.dispatch`.
+
+## Reglas
+
+* Código productivo debe importar `QUEUES.EXECUTION_DISPATCH`.
+* No se permiten strings hardcodeados para colas activas.
+* No se permite usar `execution`, `runtime.execute` ni `execution.reclaim` como cola productiva F1.
+* Tests deben fallar si reaparece una cola genérica o una métrica con nombre falso.
