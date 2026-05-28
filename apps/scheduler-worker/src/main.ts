@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { createWorker, QUEUES, createRedisConnection, createQueue } from '@octo/queue';
 import { db } from '@octo/database';
 import { processExecutionDispatchJob, type DispatchPayload } from './dispatch-handler';
+import { startHeartbeat, stopHeartbeat } from './heartbeat';
 const workerId = process.env['SCHEDULER_WORKER_ID'] ?? `scheduler-${process.pid}`;
 const leaseSeconds = Number(process.env['EXECUTION_LEASE_SECONDS'] ?? '90');
 const runtimeUrl = process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000/api/v1/execute/internal';
@@ -15,6 +16,7 @@ async function start() {
   await redis.ping();
   await db.execute(sql`select 1`);
   ready = true;
+  startHeartbeat(db, workerId);
 
   const worker = createWorker<DispatchPayload>(QUEUES.EXECUTION_DISPATCH, async (job) => {
     await processExecutionDispatchJob(job.data, {
@@ -47,7 +49,7 @@ async function start() {
   });
   server.listen(3003);
 
-  const shutdown = async () => { ready = false; await worker.close(); await redis.quit(); server.close(); process.exit(0); };
+  const shutdown = async () => { ready = false; stopHeartbeat(); await worker.close(); await redis.quit(); server.close(); process.exit(0); };
   process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
 }
 

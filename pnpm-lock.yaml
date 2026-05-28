@@ -340,6 +340,9 @@ importers:
       '@octo/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@octo/runtime-state':
+        specifier: workspace:*
+        version: link:../../packages/runtime-state
       '@opentelemetry/api':
         specifier: 1.9.0
         version: 1.9.0
@@ -654,6 +657,9 @@ importers:
       '@octo/database':
         specifier: workspace:*
         version: link:../database
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@opentelemetry/api@1.9.0)(gel@2.2.0)(postgres@3.4.5)
     devDependencies:
       '@types/node':
         specifier: 22.0.0

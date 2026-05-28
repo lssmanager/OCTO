@@ -14,3 +14,4 @@ export * from './approvals';
 export * from './tool-invocations';
 export * from './outbox-events';
 export * from './outbox-publish-dlq';
+export * from './worker-heartbeats';

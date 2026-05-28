@@ -9,6 +9,13 @@ export const QUEUES = {
   OPS_DLQ_REPROCESS: 'ops.dlq.reprocess',
 } as const;
 
+export const RESERVED_QUEUES = {
+  EXECUTION_RECLAIM: QUEUES.EXECUTION_RECLAIM,
+} as const;
+
+export type ReservedQueueKey = keyof typeof RESERVED_QUEUES;
+export type ReservedQueueName = (typeof RESERVED_QUEUES)[ReservedQueueKey];
+
 export type QueueKey = keyof typeof QUEUES;
 export type QueueName = (typeof QUEUES)[QueueKey];
 

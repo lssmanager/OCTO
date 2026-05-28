@@ -22,3 +22,5 @@ export {
 } from './transitions';
 export type { ExecutionStatus } from './transitions';
 export type { TransitionOpts, StateServiceDeps } from './execution-state.service';
+export { upsertWorkerHeartbeat } from './worker-heartbeat';
+export type { WorkerHeartbeatInput, WorkerHeartbeatStatus, WorkerType } from './worker-heartbeat';

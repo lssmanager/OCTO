@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { createQueue, createRedisConnection, QUEUE_NAMES, type HealthJobData } from '@octo/queue';
+import { createQueue, createRedisConnection, QUEUE_NAMES, QUEUES, type HealthJobData } from '@octo/queue';
 import postgres from 'postgres';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -28,6 +28,7 @@ interface RedisCheck {
 
 interface QueueCheck {
   status: 'ok' | 'error';
+  name?: string;
   waitingCount?: number;
   activeCount?: number;
   failedCount?: number;
@@ -94,7 +95,7 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
   async runChecks(): Promise<HealthStatus['checks']> {
     const [redisCheck, queueCheck, postgresCheck, litellmCheck] = await Promise.all([
       this.checkRedis(),
-      this.checkQueue(),
+      this.checkExecutionDispatchQueue(),
       this.checkPostgres(),
       this.checkLiteLLM(),
     ]);
@@ -154,18 +155,23 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async checkQueue(): Promise<QueueCheck> {
+  private async checkExecutionDispatchQueue(): Promise<QueueCheck> {
+    const queue = createQueue(QUEUES.EXECUTION_DISPATCH, {
+      redisUrl: this.redisUrl,
+    });
+
     try {
       const [waiting, active, failed] = await withTimeout(
         Promise.all([
-          this.healthQueue.getWaitingCount(),
-          this.healthQueue.getActiveCount(),
-          this.healthQueue.getFailedCount(),
+          queue.getWaitingCount(),
+          queue.getActiveCount(),
+          queue.getFailedCount(),
         ]),
         CHECK_TIMEOUT_MS
       );
       return {
         status: 'ok',
+        name: QUEUES.EXECUTION_DISPATCH,
         waitingCount: waiting,
         activeCount: active,
         failedCount: failed,
@@ -173,8 +179,11 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
     } catch (err) {
       return {
         status: 'error',
+        name: QUEUES.EXECUTION_DISPATCH,
         error: err instanceof Error ? err.message : String(err),
       };
+    } finally {
+      await queue.close().catch(() => undefined);
     }
   }
 

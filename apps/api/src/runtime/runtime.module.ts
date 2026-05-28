@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { and, eq, inArray } from 'drizzle-orm';
-import { db, executions } from '@octo/database';
+import { and, desc, eq, inArray } from 'drizzle-orm';
+import { db, executions, workerHeartbeats } from '@octo/database';
 import { createQueue, QUEUES } from '@octo/queue';
 import { JwtAuthModule } from '../auth/jwt-auth.module';
 import { HealthModule } from '../health/health.module';
@@ -17,29 +17,51 @@ import { RuntimeService } from './runtime.service';
       health: async () => healthService.check(),
       queues: async () => {
         const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
-        const qd = createQueue(QUEUES.EXECUTION_DISPATCH, { redisUrl });
-        const qr = createQueue(QUEUES.EXECUTION_DISPATCH, { redisUrl });
-        const [dispatchWaiting, dispatchActive, reclaimWaiting, reclaimActive] = await Promise.all([
-          qd.getWaitingCount(), qd.getActiveCount(), qr.getWaitingCount(), qr.getActiveCount(),
-        ]);
-        await qd.close(); await qr.close();
-        return { checkedAt: new Date().toISOString(), queues: [
-          { name: QUEUES.EXECUTION_DISPATCH, waiting: dispatchWaiting, active: dispatchActive },
-          { name: QUEUES.EXECUTION_RECLAIM, waiting: reclaimWaiting, active: reclaimActive },
-        ] };
+        const queue = createQueue(QUEUES.EXECUTION_DISPATCH, { redisUrl });
+        try {
+          const [dispatchWaiting, dispatchActive, dispatchFailed] = await Promise.all([
+            queue.getWaitingCount(), queue.getActiveCount(), queue.getFailedCount(),
+          ]);
+          return { checkedAt: new Date().toISOString(), queues: [
+            { name: QUEUES.EXECUTION_DISPATCH, status: 'ok', waiting: dispatchWaiting, active: dispatchActive, failed: dispatchFailed },
+            { name: QUEUES.EXECUTION_RECLAIM, status: 'not_active', waiting: 0, active: 0, reason: 'reserved_for_future_split_no_f1_consumer' },
+          ] };
+        } finally {
+          await queue.close().catch(() => undefined);
+        }
       },
-      workers: async (tenantId: string) => {
-        const latest = await db.select({ updatedAt: executions.updatedAt, leaseOwner: executions.leaseOwner }).from(executions).where(eq(executions.tenantId, tenantId)).orderBy(executions.updatedAt).limit(200);
-        const hb = latest.filter((r) => r.leaseOwner).map((r) => r.updatedAt).filter(Boolean).sort((a, b) => +new Date(b as any) - +new Date(a as any))[0] ?? null;
+      workers: async (_tenantId: string) => {
+        const rows = await db
+          .select({
+            workerType: workerHeartbeats.workerType,
+            instanceId: workerHeartbeats.instanceId,
+            status: workerHeartbeats.status,
+            lastHeartbeatAt: workerHeartbeats.lastHeartbeatAt,
+            error: workerHeartbeats.error,
+          })
+          .from(workerHeartbeats)
+          .orderBy(desc(workerHeartbeats.lastHeartbeatAt))
+          .limit(100);
         const staleSecs = Number(process.env['OPS_WORKER_HEARTBEAT_STALE_SECONDS'] ?? '90');
-        const runtimeOk = hb ? (Date.now() - new Date(hb as any).getTime()) <= staleSecs * 1000 : false;
+        const byType = new Map<string, { workerType: 'runtime-worker' | 'scheduler-worker' | 'reclaimer-worker'; instanceId: string; status: string; lastHeartbeatAt: Date; error: string | null }>();
+        for (const row of rows as { workerType: 'runtime-worker' | 'scheduler-worker' | 'reclaimer-worker'; instanceId: string; status: string; lastHeartbeatAt: Date; error: string | null }[]) {
+          if (!byType.has(row.workerType)) byType.set(row.workerType, row);
+        }
+        const project = (workerType: 'runtime-worker' | 'scheduler-worker' | 'reclaimer-worker') => {
+          const row = byType.get(workerType);
+          if (!row) return { name: workerType, status: 'unknown', reason: 'no_heartbeat_source' };
+          const stale = Date.now() - row.lastHeartbeatAt.getTime() > staleSecs * 1000;
+          return {
+            name: workerType,
+            status: stale ? 'degraded' : row.status === 'error' ? 'error' : 'ok',
+            lastHeartbeatAt: row.lastHeartbeatAt,
+            instanceId: row.instanceId,
+            reason: stale ? 'heartbeat_stale' : row.error ?? undefined,
+          };
+        };
         return {
           checkedAt: new Date().toISOString(),
-          workers: [
-            { name: 'runtime-worker', status: runtimeOk ? 'ok' : 'unknown', lastHeartbeatAt: hb, reason: runtimeOk ? undefined : 'heartbeat_unavailable_or_stale' },
-            { name: 'scheduler-worker', status: 'unknown', reason: 'no_heartbeat_source' },
-            { name: 'reclaimer-worker', status: 'unknown', reason: 'no_heartbeat_source' },
-          ],
+          workers: [project('runtime-worker'), project('scheduler-worker'), project('reclaimer-worker')],
         };
       },
       getExecution: async (tenantId: string, executionId: string) => {
