@@ -10,17 +10,19 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
 
 
 class State(StrEnum):
-    queued = 'QUEUED'
-    dispatched = 'DISPATCHED'
-    running = 'RUNNING'
-    paused = 'PAUSED'
-    retry_scheduled = 'RETRY_SCHEDULED'
-    reclaiming = 'RECLAIMING'
-    timed_out = 'TIMED_OUT'
-    succeeded = 'SUCCEEDED'
-    failed = 'FAILED'
-    cancelled = 'CANCELLED'
-    dlq = 'DLQ'
+    pending = 'pending'
+    queued = 'queued'
+    dispatched = 'dispatched'
+    running = 'running'
+    waiting_tool = 'waiting_tool'
+    waiting_human = 'waiting_human'
+    retrying = 'retrying'
+    retry_scheduled = 'retry_scheduled'
+    suspended = 'suspended'
+    reclaimable = 'reclaimable'
+    completed = 'completed'
+    failed = 'failed'
+    cancelled = 'cancelled'
 
 
 class ExecutionSchema(BaseModel):

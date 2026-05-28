@@ -45,8 +45,8 @@ import { RuntimeService } from './runtime.service';
       getExecution: async (tenantId: string, executionId: string) => {
         const row = await db.select().from(executions).where(and(eq(executions.tenantId, tenantId), eq(executions.id, executionId))).limit(1);
         const ex = row[0]; if (!ex) return null;
-        const stale = !!ex.leaseExpiresAt && ex.leaseExpiresAt.getTime() < Date.now() && ['RUNNING','DISPATCHED','RECLAIMING'].includes(ex.state);
-        return { id: ex.id, state: ex.state, stale };
+        const stale = !!ex.leaseExpiresAt && ex.leaseExpiresAt.getTime() < Date.now() && ['running','dispatched','reclaimable'].includes(ex.status);
+        return { id: ex.id, state: ex.status, stale };
       },
       enqueueReclaim: async (tenantId: string, executionId: string) => {
         const q = createQueue(QUEUES.EXECUTION_DISPATCH, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
@@ -54,10 +54,10 @@ import { RuntimeService } from './runtime.service';
         await q.close();
       },
       cancelAll: async (tenantId: string, states: string[]) => {
-        const rows = await db.select({ id: executions.id, state: executions.state }).from(executions).where(and(eq(executions.tenantId, tenantId), inArray(executions.state, states as any)));
+        const rows = await db.select({ id: executions.id, state: executions.status }).from(executions).where(and(eq(executions.tenantId, tenantId), inArray(executions.status, states as any)));
         const ids = rows.map((r) => r.id);
         if (ids.length === 0) return { requestedCount: 0, skippedTerminalCount: 0 };
-        await db.update(executions).set({ state: 'CANCELLED', status: 'cancelled', updatedAt: new Date() }).where(and(eq(executions.tenantId, tenantId), inArray(executions.id, ids)));
+        await db.update(executions).set({ state: 'cancelled', status: 'cancelled', updatedAt: new Date() }).where(and(eq(executions.tenantId, tenantId), inArray(executions.id, ids)));
         return { requestedCount: ids.length, skippedTerminalCount: 0 };
       },
     }),

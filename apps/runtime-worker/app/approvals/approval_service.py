@@ -11,7 +11,7 @@ class ApprovalService:
         approval_id = str(uuid4())
         async with self.pool.acquire() as conn:
             async with conn.transaction():
-                await conn.execute("UPDATE executions SET state='PAUSED', updated_at=now() WHERE id=$1 AND tenant_id=$2", execution_id, tenant_id)
+                await conn.execute("UPDATE executions SET status='waiting_human', state='waiting_human', updated_at=now() WHERE id=$1 AND tenant_id=$2", execution_id, tenant_id)
                 await conn.execute(
                     "INSERT INTO approvals (id,tenant_id,execution_id,approval_type,status,payload_json,created_at) VALUES ($1,$2,$3,'budget_override','PENDING',$4::jsonb,now())",
                     approval_id, tenant_id, execution_id,

@@ -30,8 +30,8 @@ import { OpsV1Service } from './ops-v1.service';
         },
         discard: async () => undefined,
         metrics: async (tenantId) => {
-          const rows = await db.select({ state: executions.state }).from(executions).where(eq(executions.tenantId, tenantId));
-          return { windowSeconds: 300, reclaimRate: 0, successRate: 0, dlqRate: 0, p50LatencyMs: null, p95LatencyMs: null, activeExecutions: rows.filter(r=>r.state==='RUNNING').length, queuedExecutions: rows.filter(r=>r.state==='QUEUED').length, failedExecutions: rows.filter(r=>r.state==='FAILED').length, checkedAt: new Date().toISOString() };
+          const rows = await db.select({ state: executions.status }).from(executions).where(eq(executions.tenantId, tenantId));
+          return { windowSeconds: 300, reclaimRate: 0, successRate: 0, dlqRate: 0, p50LatencyMs: null, p95LatencyMs: null, activeExecutions: rows.filter(r=>r.state==='running').length, queuedExecutions: rows.filter(r=>r.state==='queued').length, failedExecutions: rows.filter(r=>r.state==='failed').length, checkedAt: new Date().toISOString() };
         },
 
         f1Status: async (tenantId: string, windowMinutes: number) => {
@@ -49,7 +49,7 @@ import { OpsV1Service } from './ops-v1.service';
           }
 
           const rows = await db.select({
-            state: executions.state,
+            state: executions.status,
             createdAt: executions.createdAt,
             startedAt: executions.startedAt,
             completedAt: executions.completedAt,
@@ -59,11 +59,11 @@ import { OpsV1Service } from './ops-v1.service';
 
           const inWindow = rows.filter((r) => (r.updatedAt ?? r.createdAt) >= since);
           const cnt = (s: string) => rows.filter((r) => r.state === s).length;
-          const terminal = cnt('SUCCEEDED') + cnt('FAILED') + cnt('CANCELLED') + cnt('DLQ');
-          const succeeded = cnt('SUCCEEDED');
-          const failed = cnt('FAILED');
-          const dlq = cnt('DLQ');
-          const reclaimed = rows.filter((r) => r.state === 'RECLAIMING' || r.state === 'RETRYING').length;
+          const terminal = cnt('completed') + cnt('failed') + cnt('cancelled') + 0;
+          const succeeded = cnt('completed');
+          const failed = cnt('failed');
+          const dlq = 0;
+          const reclaimed = rows.filter((r) => r.state === 'reclaimable' || r.state === 'retrying').length;
 
           const dispatchToStart = rows
             .filter((r) => r.createdAt && r.startedAt)
@@ -101,8 +101,8 @@ import { OpsV1Service } from './ops-v1.service';
               executionReclaim: { name: QUEUES.EXECUTION_RECLAIM, status: 'unknown', backlog: null, active: null, reason: 'not_active_in_f1_current_topology' },
             },
             executions: {
-              active: cnt('RUNNING'),
-              queued: cnt('QUEUED'),
+              active: cnt('running'),
+              queued: cnt('queued'),
               succeeded,
               failed,
               dlq,
@@ -125,11 +125,11 @@ import { OpsV1Service } from './ops-v1.service';
         },
 
         stale: async (tenantId) => {
-          const rows = await db.select().from(executions).where(and(eq(executions.tenantId, tenantId), eq(executions.state, 'RUNNING'))).limit(100);
+          const rows = await db.select().from(executions).where(and(eq(executions.tenantId, tenantId), eq(executions.status, 'running'))).limit(100);
           return { executions: rows, checkedAt: new Date().toISOString() };
         },
         reset: async (tenantId, _actorId, executionId, _b) => {
-          const updated = await db.update(executions).set({ state: 'QUEUED', status: 'queued', updatedAt: new Date() }).where(and(eq(executions.tenantId, tenantId), eq(executions.id, executionId))).returning({ id: executions.id, state: executions.state });
+          const updated = await db.update(executions).set({ state: 'queued', status: 'queued', updatedAt: new Date() }).where(and(eq(executions.tenantId, tenantId), eq(executions.id, executionId))).returning({ id: executions.id, state: executions.status });
           const row = updated[0];
           return row ? { executionId: row.id, state: row.state, reset: true } : null;
         },

@@ -4,7 +4,7 @@ import { ExecutionSchema, ExecutionStepSchema } from '../src/zod';
 describe('ExecutionSchema', () => {
   const base = {
     id: 'exec_1', tenantId: 'tenant_1', agentId: 'agent_1', agentVersionId: 'ver_1',
-    state: 'RUNNING', version: 1, inputJson: { a: 1 }, attemptCount: 0, reclaimCount: 0,
+    state: 'running', version: 1, inputJson: { a: 1 }, attemptCount: 0, reclaimCount: 0,
     createdBy: 'user_1', createdAt: '2026-05-23T10:00:00Z', updatedAt: '2026-05-23T10:00:01Z',
   };
   it('accepts valid execution', () => expect(() => ExecutionSchema.parse(base)).not.toThrow());

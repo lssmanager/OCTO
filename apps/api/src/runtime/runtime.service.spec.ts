@@ -21,7 +21,7 @@ describe('RuntimeService', () => {
       health: async () => ({}),
       queues: async () => ({}),
       workers: async () => ({}),
-      getExecution: async () => ({ id: 'e1', state: 'RUNNING', stale: false }),
+      getExecution: async () => ({ id: 'e1', state: 'running', stale: false }),
       enqueueReclaim: async () => undefined,
       cancelAll: async () => ({ requestedCount: 0, skippedTerminalCount: 0 }),
     });

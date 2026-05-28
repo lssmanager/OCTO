@@ -33,7 +33,7 @@ class ExecutionFSM:
           tenant_id,
           agent_id,
           agent_version_id,
-          state,
+          status AS state,
           version,
           attempt_count,
           reclaim_count,
@@ -85,19 +85,19 @@ class ExecutionFSM:
     ) -> CASResult:
         self._validate_transition(expected_state, next_state)
         step_type_value = step_type or "checkpoint"
-        step_status_value = "SUCCEEDED"
+        step_status_value = "completed"
         step_payload = metadata or {}
 
         async with self._db_pool.acquire() as conn:
             async with conn.transaction():
                 current = await conn.fetchrow(
-                    "SELECT lease_owner FROM executions WHERE id=$1 AND tenant_id=$2 AND state=$3",
+                    "SELECT lease_owner FROM executions WHERE id=$1 AND tenant_id=$2 AND status=$3",
                     execution_id,
                     tenant_id,
                     expected_state,
                 )
 
-                if expected_state == "RUNNING" and next_state != "RECLAIMING" and current is not None:
+                if expected_state == "running" and next_state != "reclaimable" and current is not None:
                     current_owner = current["lease_owner"]
                     if current_owner is not None and lease_owner is not None and current_owner != lease_owner:
                         return CASResult(
@@ -109,23 +109,23 @@ class ExecutionFSM:
                             execution_id=execution_id,
                         )
 
-                lease_expires_at_expr = "NULL"
-                lease_expires_at_arg = None
-                if lease_owner is not None:
-                    lease_expires_at_expr = "$5::timestamptz"
-                    lease_expires_at_arg = "now()"  # replaced below with SQL expression in query
-
+                lease_expires_at_sql = (
+                    "now() + ($7::int * interval '1 second')"
+                    if lease_owner is not None
+                    else "lease_expires_at"
+                )
                 update_query = f"""
                 UPDATE executions
-                SET state = $1,
+                SET status = $1,
+                    state = $1,
                     version = version + 1,
                     updated_at = now(),
                     lease_owner = $4,
-                    lease_expires_at = {'now() + ($8::int * interval \'1 second\')' if lease_owner is not None else 'lease_expires_at'}
+                    lease_expires_at = {lease_expires_at_sql}
                 WHERE id = $2
                   AND tenant_id = $3
-                  AND state = $6
-                  AND version = $7
+                  AND status = $5
+                  AND version = $6
                 RETURNING version
                 """
                 updated = await conn.fetchrow(
@@ -134,7 +134,6 @@ class ExecutionFSM:
                     execution_id,
                     tenant_id,
                     lease_owner,
-                    lease_expires_at_arg,
                     expected_state,
                     expected_version,
                     lease_duration_seconds,

@@ -3,7 +3,7 @@ class LeaseError(Exception):
 
 
 class LeaseRevokedError(LeaseError):
-    """Raised when the worker no longer owns an active RUNNING lease."""
+    """Raised when the worker no longer owns an active running lease."""
 
 
 class LeaseRenewalError(LeaseError):

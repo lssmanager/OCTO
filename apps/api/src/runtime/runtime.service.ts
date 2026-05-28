@@ -28,7 +28,7 @@ export class RuntimeService {
   async cancelAll(tenantId: string, dto: { tenantId: string; reason: string; confirm: string; states?: string[] }, roles: string[]) {
     if (!roles.includes('tenant_admin')) throw new ForbiddenException('CANCEL_ALL_FORBIDDEN');
     if (dto.tenantId !== tenantId || dto.confirm !== 'CANCEL_ALL_ACTIVE_EXECUTIONS') throw new ForbiddenException('CANCEL_ALL_FORBIDDEN');
-    const states = dto.states ?? ['QUEUED', 'DISPATCHED', 'RUNNING', 'PAUSED', 'RETRY_SCHEDULED', 'RECLAIMING'];
+    const states = dto.states ?? ['queued', 'dispatched', 'running', 'waiting_human', 'retry_scheduled', 'reclaimable'];
     const res = await this.deps.cancelAll(tenantId, states);
     return { tenantId, ...res, reason: dto.reason };
   }

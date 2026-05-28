@@ -5,7 +5,7 @@ import { ExecutionReclaimService, type StaleExecutionRow } from './execution-rec
 const baseExecution: StaleExecutionRow = {
   id: 'exec-1',
   tenantId: 'tenant-1',
-  state: 'RUNNING',
+  state: 'running',
   version: 1,
   reclaimCount: 0,
   leaseOwner: 'worker-1',
@@ -23,14 +23,14 @@ function makeService(overrides?: Partial<{ stale: StaleExecutionRow[]; casReclai
 }
 
 describe('ExecutionReclaimService', () => {
-  it('scanStaleLeases detects stale RUNNING', async () => {
-    const { service, repo } = makeService({ stale: [{ ...baseExecution, state: 'RUNNING' }] });
+  it('scanStaleLeases detects stale running', async () => {
+    const { service, repo } = makeService({ stale: [{ ...baseExecution, state: 'running' }] });
     await service.scanStaleLeases();
     expect(repo.findStaleLeases).toHaveBeenCalled();
   });
 
-  it('scanStaleLeases detects stale DISPATCHED', async () => {
-    const { service, repo } = makeService({ stale: [{ ...baseExecution, state: 'DISPATCHED' }] });
+  it('scanStaleLeases detects stale dispatched', async () => {
+    const { service, repo } = makeService({ stale: [{ ...baseExecution, state: 'dispatched' }] });
     await service.scanStaleLeases();
     expect(repo.findStaleLeases).toHaveBeenCalled();
   });
@@ -42,12 +42,12 @@ describe('ExecutionReclaimService', () => {
   });
 
   it('scanStaleLeases ignores terminal states', async () => {
-    const { service, queue } = makeService({ stale: [{ ...baseExecution, state: 'SUCCEEDED' }] });
+    const { service, queue } = makeService({ stale: [{ ...baseExecution, state: 'completed' }] });
     await service.scanStaleLeases();
     expect(queue.add).not.toHaveBeenCalled();
   });
 
-  it('reclaimExecution performs CAS to RECLAIMING', async () => {
+  it('reclaimExecution performs CAS to reclaimable', async () => {
     const { service, repo } = makeService();
     await service.reclaimExecution(baseExecution);
     expect(repo.casReclaiming).toHaveBeenCalled();
@@ -80,7 +80,7 @@ describe('ExecutionReclaimService', () => {
 
   it('DLQ routing does not mutate terminal execution', async () => {
     const { service, repo } = makeService();
-    const result = await service.routeToDLQ({ ...baseExecution, state: 'FAILED' });
+    const result = await service.routeToDLQ({ ...baseExecution, state: 'failed' });
     expect(result).toBe('noop');
     expect(repo.casRouteToDlq).not.toHaveBeenCalled();
   });

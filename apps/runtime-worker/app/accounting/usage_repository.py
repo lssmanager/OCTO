@@ -44,8 +44,8 @@ class ExecutionUsageRepository:
                     accounting.tenant_id,
                     accounting.step_index,
                     "LLM_CALL",
-                    "RUNNING",
-                    "RUNNING",
+                    "running",
+                    "running",
                     metadata_json,
                 )
                 await conn.execute(

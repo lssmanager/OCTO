@@ -39,7 +39,7 @@ class HeartbeatEmitter:
         query = (
             "UPDATE executions "
             "SET lease_expires_at = $1, updated_at = now() "
-            "WHERE id = $2 AND tenant_id = $3 AND lease_owner = $4 AND state = 'RUNNING' "
+            "WHERE id = $2 AND tenant_id = $3 AND lease_owner = $4 AND status = 'running' "
             "RETURNING id"
         )
         try:

@@ -29,14 +29,14 @@ class DLQRouter:
     ) -> None:
         async with self.db_pool.acquire() as conn:
             async with conn.transaction():
-                row = await conn.fetchrow('SELECT id, state, version FROM executions WHERE id=$1 AND tenant_id=$2', execution_id, tenant_id)
+                row = await conn.fetchrow('SELECT id, status AS state, version FROM executions WHERE id=$1 AND tenant_id=$2', execution_id, tenant_id)
                 if row is None:
                     return
                 if row['state'] in TERMINAL_STATES:
                     self.logger.warning('execution_routed_to_dlq_skipped_terminal', extra={'tenant_id': tenant_id, 'execution_id': execution_id, 'state': row['state']})
                     return
                 updated = await conn.fetchrow(
-                    "UPDATE executions SET state='DLQ', error_code=$1, error_message=$2, version=version+1, lease_owner=NULL, lease_expires_at=NULL, updated_at=now() WHERE id=$3 AND tenant_id=$4 AND version=$5 RETURNING version",
+                    "UPDATE executions SET status='failed', state='failed', error_code=$1, error_message=$2, version=version+1, lease_owner=NULL, lease_expires_at=NULL, updated_at=now() WHERE id=$3 AND tenant_id=$4 AND version=$5 RETURNING version",
                     error_code,
                     error_message,
                     execution_id,

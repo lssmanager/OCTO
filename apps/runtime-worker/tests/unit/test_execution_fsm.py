@@ -37,21 +37,21 @@ def test_valid_transitions() -> None:
 
 def test_invalid_transition_raises() -> None:
     with pytest.raises(InvalidTransitionError):
-        ExecutionFSM._validate_transition("QUEUED", "RUNNING")
+        ExecutionFSM._validate_transition("queued", "running")
 
 
 def test_terminal_state_no_exit() -> None:
     for terminal in TERMINAL_STATES:
         assert VALID_TRANSITIONS[terminal] == set()
         with pytest.raises(InvalidTransitionError):
-            ExecutionFSM._validate_transition(terminal, "RUNNING")
+            ExecutionFSM._validate_transition(terminal, "running")
 
 
 def test_execution_context_is_terminal() -> None:
-    assert _context("SUCCEEDED").is_terminal is True
-    assert _context("RUNNING").is_terminal is False
+    assert _context("completed").is_terminal is True
+    assert _context("running").is_terminal is False
 
 
 def test_execution_context_cancellation_requested() -> None:
-    assert _context("RUNNING", cancellation_requested_at=datetime.now(UTC)).cancellation_requested is True
-    assert _context("RUNNING", cancellation_requested_at=None).cancellation_requested is False
+    assert _context("running", cancellation_requested_at=datetime.now(UTC)).cancellation_requested is True
+    assert _context("running", cancellation_requested_at=None).cancellation_requested is False

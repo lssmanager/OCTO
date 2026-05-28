@@ -3,33 +3,34 @@ from datetime import datetime
 from typing import Any
 
 TERMINAL_STATES = {
-    "TIMED_OUT",
-    "SUCCEEDED",
-    "FAILED",
-    "CANCELLED",
-    "DLQ",
+    "completed",
+    "failed",
+    "cancelled",
 }
 
 VALID_TRANSITIONS = {
-    "QUEUED": {"DISPATCHED", "CANCELLED"},
-    "DISPATCHED": {"RUNNING", "FAILED", "CANCELLED"},
-    "RUNNING": {
-        "PAUSED",
-        "RETRY_SCHEDULED",
-        "RECLAIMING",
-        "TIMED_OUT",
-        "SUCCEEDED",
-        "FAILED",
-        "CANCELLED",
+    "pending": {"queued", "cancelled"},
+    "queued": {"dispatched", "cancelled", "failed"},
+    "dispatched": {"running", "failed", "cancelled"},
+    "running": {
+        "waiting_tool",
+        "waiting_human",
+        "retrying",
+        "reclaimable",
+        "suspended",
+        "completed",
+        "failed",
+        "cancelled",
     },
-    "PAUSED": {"RUNNING", "CANCELLED", "FAILED"},
-    "RETRY_SCHEDULED": {"DISPATCHED", "FAILED"},
-    "RECLAIMING": {"RUNNING", "FAILED"},
-    "TIMED_OUT": set(),
-    "SUCCEEDED": set(),
-    "FAILED": set(),
-    "CANCELLED": set(),
-    "DLQ": set(),
+    "waiting_tool": {"running", "retrying", "failed", "cancelled", "suspended"},
+    "waiting_human": {"running", "cancelled", "suspended"},
+    "retrying": {"retry_scheduled", "failed", "cancelled"},
+    "retry_scheduled": {"queued", "failed", "cancelled"},
+    "reclaimable": {"retrying", "failed", "cancelled"},
+    "suspended": {"queued", "cancelled"},
+    "completed": set(),
+    "failed": set(),
+    "cancelled": set(),
 }
 
 
