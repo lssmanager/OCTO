@@ -64,5 +64,5 @@ export {
 // Write-before-ack pattern
 export { writeBeforeAck } from './write-before-ack';
 
-export { QUEUES, QUEUE_DEFAULTS } from './queues';
+export { QUEUES, RESERVED_QUEUES, QUEUE_DEFAULTS } from './queues';
 export type { QueueKey } from './queues';

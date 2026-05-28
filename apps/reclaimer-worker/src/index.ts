@@ -16,6 +16,7 @@
 import { getDb } from '@octo/database';
 import { startReclaimLoop, stopReclaimLoop } from './reclaim-loop';
 import { initMetrics } from './metrics';
+import { startHeartbeat, stopHeartbeat } from './heartbeat';
 
 const DATABASE_URL = process.env['DATABASE_URL'];
 const REDIS_URL = process.env['REDIS_URL'];
@@ -38,6 +39,7 @@ async function main() {
 
   const db = getDb();
   initMetrics();
+  startHeartbeat(db);
 
   await startReclaimLoop(db, REDIS_URL!, {
     intervalMs: RECLAIM_INTERVAL_MS,
@@ -50,6 +52,7 @@ async function main() {
 // Graceful shutdown
 const shutdown = async (signal: string) => {
   console.log(JSON.stringify({ msg: 'reclaimer_shutdown', signal }));
+  stopHeartbeat();
   await stopReclaimLoop();
   process.exit(0);
 };

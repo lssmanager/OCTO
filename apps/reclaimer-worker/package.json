@@ -15,7 +15,8 @@
     "@octo/queue": "workspace:*",
     "@octo/observability": "workspace:*",
     "@opentelemetry/api": "1.9.0",
-    "drizzle-orm": "0.45.2"
+    "drizzle-orm": "0.45.2",
+    "@octo/runtime-state": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.0.0",

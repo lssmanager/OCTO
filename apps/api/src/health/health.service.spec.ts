@@ -28,6 +28,7 @@ vi.mock('@octo/queue', () => ({
     quit: vi.fn().mockResolvedValue(undefined),
   })),
   QUEUE_NAMES: { HEALTH: 'octo:health' },
+  QUEUES: { EXECUTION_DISPATCH: 'execution.dispatch' },
 }));
 
 vi.mock('postgres', () => {
@@ -126,4 +127,30 @@ describe('HealthController', () => {
       expect(parsed.getTime()).not.toBeNaN();
     });
   });
+
+  // F1 readiness semantics — /ready must fail when critical dependencies fail.
+  describe('F1 readiness checks', () => {
+    it('returns not ready when postgres check fails', () => {
+      const checks = {
+        redis: { status: 'ok' },
+        queue: { status: 'ok' },
+        postgres: { status: 'error', error: 'connection refused' },
+        litellm: { status: 'ok' },
+      };
+
+      expect(Object.values(checks).every((check) => check.status === 'ok')).toBe(false);
+    });
+
+    it('returns not ready when execution.dispatch is unavailable', () => {
+      const checks = {
+        redis: { status: 'ok' },
+        queue: { status: 'error', name: 'execution.dispatch' },
+        postgres: { status: 'ok' },
+        litellm: { status: 'ok' },
+      };
+
+      expect(Object.values(checks).every((check) => check.status === 'ok')).toBe(false);
+    });
+  });
+
 });

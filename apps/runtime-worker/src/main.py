@@ -42,6 +42,7 @@ from fastapi.responses import JSONResponse
 from .config import Settings
 from .routers import execute, health, models
 from .telemetry import configure_telemetry, instrument_app, shutdown_telemetry
+from .worker_heartbeat import start_worker_heartbeat, stop_worker_heartbeat
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 # Instantiated once at module level; pydantic raises ValidationError
@@ -114,6 +115,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
         otel_enabled=settings.otel_enabled,
     )
 
+    start_worker_heartbeat()
+
     # ── Yield: application is running ─────────────────────────────────────
     yield
 
@@ -143,6 +146,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
             timeout_secs=SHUTDOWN_TIMEOUT_SECS,
             msg="Graceful shutdown timed out — forcing exit",
         )
+
+    await stop_worker_heartbeat()
 
     # Flush and close OTel TracerProvider so no spans are lost.
     shutdown_telemetry(settings)
