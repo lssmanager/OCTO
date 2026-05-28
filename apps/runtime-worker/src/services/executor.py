@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import structlog
 
@@ -13,37 +14,56 @@ log = structlog.get_logger(__name__)
 class ExecutionService:
     """Canonical F1 runtime adapter.
 
-    Both `/execute` and `/execute/internal` must route through this service
-    so runtime behavior is single-path and durable.
+    All runtime execution requests must pass through this service and delegate
+    to run_f1_execution. This prevents legacy engines or alternate routers from
+    creating a second execution path.
     """
 
     async def run(self, request: ExecutionRequest) -> ExecutionResult:
-        if not request.tenant_id:
+        start = time.monotonic()
+
+        try:
+            result: dict[str, Any] = await run_f1_execution(
+                execution_id=request.execution_id,
+                tenant_id=request.tenant_id,
+                trace_id=request.trace_id,
+            )
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            log.exception(
+                "execution.f1_runtime_failed",
+                execution_id=request.execution_id,
+                tenant_id=request.tenant_id,
+                trace_id=request.trace_id,
+            )
             return ExecutionResult(
                 execution_id=request.execution_id,
                 status=ExecutionStatus.FAILED,
                 output=None,
-                error="tenant_id is required for durable runtime execution",
+                tool_calls=[],
                 usage={},
-                duration_ms=0,
+                error=str(exc),
+                duration_ms=duration_ms,
+                checkpoint=None,
             )
 
-        start = time.monotonic()
-        result = await run_f1_execution(
-            execution_id=request.execution_id,
-            tenant_id=request.tenant_id,
-            trace_id=request.trace_id,
-        )
         duration_ms = int((time.monotonic() - start) * 1000)
+        raw_status = str(result.get("status", "")).lower()
+        status = (
+            ExecutionStatus.COMPLETED
+            if raw_status in {"succeeded", "completed"}
+            else ExecutionStatus.FAILED
+        )
 
-        status = ExecutionStatus.COMPLETED if result.get("status") == "succeeded" else ExecutionStatus.FAILED
         return ExecutionResult(
             execution_id=request.execution_id,
             status=status,
-            output=str(result.get("output", "runtime-response")) if status == ExecutionStatus.COMPLETED else None,
+            output=str(result.get("output", "")) if status == ExecutionStatus.COMPLETED else None,
+            tool_calls=list(result.get("tool_calls", [])),
+            usage=dict(result.get("usage", {})),
             error=None if status == ExecutionStatus.COMPLETED else str(result),
-            usage={},
             duration_ms=duration_ms,
+            checkpoint=result.get("checkpoint"),
         )
 
     async def close(self) -> None:

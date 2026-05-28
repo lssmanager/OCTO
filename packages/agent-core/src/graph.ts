@@ -57,7 +57,7 @@ export interface ExecutionGraphPolicy {
 /**
  * ExecutionGraphCheckpoint — serialisable state blob for pause/resume.
  * Persisted to Redis by CheckpointStore (Principle 13).
- * Loaded by ExecutionEngine before dispatch to resume from last step.
+ * Loaded by the runtime dispatcher before dispatch to resume from the last step.
  */
 export interface ExecutionGraphCheckpoint {
   graphId: string;

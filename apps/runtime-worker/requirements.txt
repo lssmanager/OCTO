@@ -20,6 +20,9 @@ httpx==0.28.1
 # ── Redis ──────────────────────────────────────────────────────────
 redis==5.2.1
 
+# ── PostgreSQL durable runtime state ─────────────────────────────────
+asyncpg==0.30.0
+
 # ── OpenTelemetry (F0-015 observability) ──────────────────────────
 # Core SDK: https://pypi.org/project/opentelemetry-api/#history
 # Instrumentation packages version = sdk_minor * 2 - 1 (b0)
@@ -29,6 +32,9 @@ opentelemetry-sdk==1.30.0
 opentelemetry-exporter-otlp-proto-http==1.30.0
 opentelemetry-instrumentation-fastapi==0.51b0
 opentelemetry-instrumentation-httpx==0.51b0
+
+# ── JSON schema validation ───────────────────────────────────────────
+jsonschema==4.23.0
 
 # ── LiteLLM proxy client (F2: real LLM calls) ─────────────────────
 # litellm==1.55.0  # Uncomment in F2 when wiring real execution

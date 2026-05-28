@@ -1,16 +1,22 @@
 """Canonical runtime execution schemas.
 
-These models are the single Python contract used by runtime HTTP routers and
-services for `POST /api/v1/execute`.
+These models are the single Python runtime contract used by:
+
+- POST /api/v1/execute
+- ExecutionService
+- f1_runtime result adaptation
+
+Cross-language TS/Python drift is intentionally handled by issue #145.
+Until that is closed, this file must not be treated as proof that contract
+sync is solved.
 """
 from __future__ import annotations
 
 from enum import StrEnum
 from typing import Any
 
-from pydantic import ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-from pydantic.main import BaseModel
 
 
 class OctoModel(BaseModel):
@@ -58,7 +64,7 @@ class ExecutionLimitsSchema(OctoModel):
 
 class ExecutionRequest(OctoModel):
     execution_id: str
-    tenant_id: str | None = None
+    tenant_id: str
     agent_id: str
     workspace_id: str
     task: str = Field(min_length=1, max_length=32_000)

@@ -8,7 +8,7 @@ Checkpoint structure:
   Value: JSON { step, state, saved_at, execution_id }
   TTL:   7 days (configurable)
 
-Usage pattern in ExecutionEngine:
+Usage pattern for non-authoritative support checkpoints:
   # Before starting
   cp = await checkpoint_store.load(execution_id)
   start_step = cp["step"] if cp else 0
