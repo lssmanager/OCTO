@@ -47,7 +47,7 @@ class DLQRouter:
                     self.logger.warning('reclaim_cas_conflict', extra={'tenant_id': tenant_id, 'execution_id': execution_id})
                     return
                 await conn.execute(
-                    'INSERT INTO outbox_events (id,tenant_id,aggregate_type,aggregate_id,event_type,sequence,payload_json) VALUES (gen_random_uuid()::text,$1,$2,$3,$4,1,$5::jsonb)',
+                    'INSERT INTO outbox_events (id,tenant_id,aggregate_type,aggregate_id,event_type,sequence,payload_json) VALUES (gen_random_uuid()::text,$1,$2,$3,$4,(SELECT COALESCE(MAX(sequence),0)+1 FROM outbox_events WHERE tenant_id=$1 AND aggregate_type=$2 AND aggregate_id=$3),$5::jsonb)',
                     tenant_id,
                     'execution',
                     execution_id,

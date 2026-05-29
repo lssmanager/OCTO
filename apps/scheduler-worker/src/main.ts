@@ -3,10 +3,11 @@ import { createServer } from 'node:http';
 import { createWorker, QUEUES, createRedisConnection, createQueue } from '@octo/queue';
 import { db } from '@octo/database';
 import { processExecutionDispatchJob, type DispatchPayload } from './dispatch-handler';
+import { invokeRuntimeHttp } from './runtime-client';
 import { startHeartbeat, stopHeartbeat } from './heartbeat';
 const workerId = process.env['SCHEDULER_WORKER_ID'] ?? `scheduler-${process.pid}`;
 const leaseSeconds = Number(process.env['EXECUTION_LEASE_SECONDS'] ?? '90');
-const runtimeUrl = process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000/api/v1/execute/internal';
+const runtimeUrl = process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000/api/v1/execute';
 const runtimeSecret = process.env['API_INTERNAL_SECRET'] ?? 'dev-secret';
 
 let ready = false;
@@ -23,7 +24,7 @@ async function start() {
       workerId,
       leaseSeconds,
       invokeRuntime: async (payload) => {
-        await fetch(runtimeUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-internal-secret': runtimeSecret }, body: JSON.stringify(payload) });
+        await invokeRuntimeHttp(runtimeUrl, runtimeSecret, payload);
       },
     });
   }, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379', concurrency: Number(process.env['WORKER_CONCURRENCY'] ?? '5') });

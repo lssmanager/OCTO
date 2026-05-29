@@ -200,6 +200,39 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+
+  outbox-publisher-worker:
+    build:
+      context: .
+      dockerfile: docker/outbox-publisher-worker.Dockerfile
+    container_name: octo-outbox-publisher-worker
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      OUTBOX_STREAM_KEY: ${OUTBOX_STREAM_KEY:-octo.events}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-100}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-500}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-10}
+      OUTBOX_PUBLISHER_PORT: ${OUTBOX_PUBLISHER_PORT:-3010}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - octonet
+    ports:
+      - '${OUTBOX_PUBLISHER_PORT:-3010}:3010'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3010/health/ready']
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
   scheduler-worker:
     build:
       context: .
@@ -209,7 +242,7 @@ services:
       REDIS_URL: ${REDIS_URL}
       DATABASE_URL: ${DATABASE_URL}
       API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
-      RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute/internal}
+      RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute}
       EXECUTION_LEASE_SECONDS: ${EXECUTION_LEASE_SECONDS:-90}
       WORKER_CONCURRENCY: ${SCHEDULER_WORKER_CONCURRENCY:-5}
     depends_on:

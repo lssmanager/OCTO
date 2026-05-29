@@ -9,3 +9,6 @@
 export * from './client';
 export * from './schema';
 export * from './queries';
+export * from './outbox';
+
+export * from './outbox-publisher-db';

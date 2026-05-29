@@ -21,7 +21,7 @@ export interface IBudgetPolicy {
   id: string;
   name: string;
   /** Hierarchy level this policy applies to */
-  level: 'agency' | 'department' | 'workspace' | 'agent';
+  level: 'agency' | 'department' | 'workspace' | 'agent' | 'subagent';
   ownerId: string;
   limits: {
     scope: BudgetScope;
@@ -138,7 +138,7 @@ export interface IModelPolicy {
   maxCostPerCallUsd?: number;
   /** Required capabilities — model must satisfy all */
   requiredCapabilities?: Partial<ModelCapabilityMatrix>;
-  level: 'agency' | 'department' | 'workspace' | 'agent';
+  level: 'agency' | 'department' | 'workspace' | 'agent' | 'subagent';
   ownerId: string;
   enabled: boolean;
 }
@@ -162,7 +162,7 @@ export interface IGovernancePolicy {
   id: string;
   name: string;
   description?: string;
-  level: 'agency' | 'department' | 'workspace' | 'agent';
+  level: 'agency' | 'department' | 'workspace' | 'agent' | 'subagent';
   ownerId: string;
   rules: GovernanceRule[];
   enabled: boolean;

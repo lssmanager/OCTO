@@ -28,7 +28,19 @@ export interface OutboxPublisherDb {
   recordFailure: (id: string, error: string) => Promise<number>;
   moveToDlq: (row: OutboxRow, error: string, attempts: number) => Promise<void>;
   pendingCount: () => Promise<number>;
+  oldestUnpublishedAgeMs?: () => Promise<number>;
+  dlqTotal?: () => Promise<number>;
 }
+
+export class RedisStreamOutboxPublisher {
+  constructor(private readonly redis: OutboxPublisherRedis, private readonly stream = OUTBOX_STREAM_KEY) {}
+
+  async publish(event: EventEnvelope): Promise<string> {
+    const fields = eventEnvelopeToRedisFields(event);
+    return this.redis.xadd(this.stream, '*', ...fields);
+  }
+}
+
 
 export interface OutboxPublisherRedis {
   xadd: (stream: string, id: '*', ...fields: string[]) => Promise<string>;
@@ -40,10 +52,13 @@ export interface OutboxPublisherMetrics {
   observeBatchSize: (size: number) => void;
   incPublishFailed: () => void;
   incDlqTotal: () => void;
+  setOldestUnpublishedAgeMs?: (value: number) => void;
+  setDlqTotal?: (value: number) => void;
 }
 
 export function outboxRowToEnvelope(row: OutboxRow): EventEnvelope {
   const meta = (row.payloadJson._meta ?? {}) as Record<string, unknown>;
+  const occurredAt = String(meta.occurredAt ?? row.occurredAt ?? row.createdAt?.toISOString() ?? new Date().toISOString());
   return EventEnvelopeSchema.parse({
     eventId: row.id,
     eventType: row.eventType,
@@ -51,11 +66,22 @@ export function outboxRowToEnvelope(row: OutboxRow): EventEnvelope {
     aggregateType: row.aggregateType,
     aggregateId: row.aggregateId,
     sequence: row.sequence,
-    traceId: String(meta.traceId ?? ''),
-    spanId: String(meta.spanId ?? ''),
-    occurredAt: String(meta.occurredAt ?? row.occurredAt ?? new Date().toISOString()),
+    traceId: String(meta.traceId ?? 'unknown-trace'),
+    spanId: String(meta.spanId ?? 'unknown-span'),
+    occurredAt,
     schemaVersion: String(meta.schemaVersion ?? '1.0'),
-    payload: row.payloadJson,
+    payload: {
+      ...row.payloadJson,
+      _meta: {
+        ...meta,
+        traceId: String(meta.traceId ?? 'unknown-trace'),
+        spanId: String(meta.spanId ?? 'unknown-span'),
+        occurredAt,
+        schemaVersion: String(meta.schemaVersion ?? '1.0'),
+        source: String(meta.source ?? meta.service ?? 'unknown-service'),
+        service: String(meta.service ?? meta.source ?? 'unknown-service'),
+      },
+    },
   });
 }
 
@@ -75,6 +101,12 @@ export async function publishOutboxBatch(deps: {
   const rows = await deps.db.fetchUnpublished(limit);
   deps.metrics.observeBatchSize(rows.length);
   deps.metrics.setPendingTotal(await deps.db.pendingCount());
+  if (deps.db.oldestUnpublishedAgeMs && deps.metrics.setOldestUnpublishedAgeMs) {
+    deps.metrics.setOldestUnpublishedAgeMs(await deps.db.oldestUnpublishedAgeMs());
+  }
+  if (deps.db.dlqTotal && deps.metrics.setDlqTotal) {
+    deps.metrics.setDlqTotal(await deps.db.dlqTotal());
+  }
 
   let published = 0;
   let failed = 0;
@@ -86,7 +118,7 @@ export async function publishOutboxBatch(deps: {
       const fields = eventEnvelopeToRedisFields(envelope);
       await deps.redis.xadd(deps.stream ?? OUTBOX_STREAM_KEY, '*', ...fields);
       await deps.db.markPublished(row.id);
-      deps.metrics.observePublishLatencyMs(Date.now() - start);
+      deps.metrics.observePublishLatencyMs(row.createdAt ? Date.now() - row.createdAt.getTime() : Date.now() - start);
       published += 1;
     } catch (error) {
       failed += 1;
@@ -100,4 +132,37 @@ export async function publishOutboxBatch(deps: {
   }
 
   return { published, failed, lockAcquired: true };
+}
+
+export interface OutboxEventBus {
+  publish: (event: EventEnvelope) => Promise<void>;
+}
+
+export function buildOutboxPublisherWithBus(deps: {
+  db: OutboxPublisherDb;
+  bus: OutboxEventBus;
+  metrics: OutboxPublisherMetrics;
+}) {
+  return {
+    async publishOnce() {
+      const redisLike: OutboxPublisherRedis = {
+        xadd: async (_stream: string, _id: '*', ...fields: string[]) => {
+          const { redisFieldsToEventEnvelope } = await import('./redis-stream-parser');
+          const kv: Record<string, string> = {};
+          for (let i = 0; i < fields.length; i += 2) {
+            kv[String(fields[i])] = String(fields[i + 1] ?? '');
+          }
+          await deps.bus.publish(EventEnvelopeSchema.parse(redisFieldsToEventEnvelope(kv)));
+          return '1-0';
+        },
+      };
+      return publishOutboxBatch({ db: deps.db, redis: redisLike, metrics: deps.metrics });
+    },
+  };
+}
+
+export function createOutboxRedisTransport(redis: OutboxPublisherRedis): OutboxPublisherRedis {
+  return {
+    xadd: (stream, id, ...fields) => redis.xadd(stream, id, ...fields),
+  };
 }

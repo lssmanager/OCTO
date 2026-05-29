@@ -8,7 +8,7 @@ import { PostgresExecutionRepo } from './postgres-execution.repo';
 import { processExecutionDispatchJob } from '../../../scheduler-worker/src/dispatch-handler';
 
 const runtime = async (executionId: string, tenantId: string) => {
-  execFileSync('python', ['-c', `import asyncio; from src.f1_runtime import run_f1_execution; asyncio.run(run_f1_execution("${executionId}","${tenantId}","trace-test"))`], { cwd: '../../runtime-worker', env: process.env, stdio: 'inherit' });
+  execFileSync('python', ['-c', `import asyncio; from src.f1_runtime import run_f1_execution; asyncio.run(run_f1_execution("${executionId}","${tenantId}","trace-test"))`], { cwd: '../../runtime-worker', env: { ...process.env, OCTO_TEST_LLM_FAKE: 'true' }, stdio: 'inherit' });
 };
 
 const hasInfra = Boolean(process.env.DATABASE_URL && process.env.REDIS_URL);
@@ -33,11 +33,14 @@ describeIfInfra('F1 dispatch->runtime integration', () => {
     expect(waiting).toBeGreaterThanOrEqual(1);
 
     const queued = await repo.getExecutionSummary(created.id, tenantA);
+    expect(queued?.status).toBe('queued');
     expect(queued?.state).toBe('queued');
+    expect((queued?.contextSnapshotJson as any)?.hierarchySnapshot?.chain).toBeDefined();
 
-    await processExecutionDispatchJob({ executionId: created.id, tenantId: tenantA }, { workerId: 'test-worker', leaseSeconds: 90, invokeRuntime: async (p) => { await runtime(p.executionId, p.tenantId); } });
+    await processExecutionDispatchJob({ executionId: created.id, tenantId: tenantA }, { workerId: 'test-worker', leaseSeconds: 90, invokeRuntime: async (p) => { expect(p.agentId).toBe(agentId); await runtime(p.executionId, p.tenantId); } });
 
     const done = await repo.getExecutionSummary(created.id, tenantA);
+    expect(done?.status).toBe('completed');
     expect(done?.state).toBe('completed');
     expect(done?.outputJson).toBeTruthy();
 

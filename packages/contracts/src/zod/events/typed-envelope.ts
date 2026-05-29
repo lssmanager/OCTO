@@ -7,9 +7,9 @@ export const EventAggregateTypeSchema = z.enum(['Execution', 'ToolInvocation', '
 export type F1AggregateType = z.infer<typeof EventAggregateTypeSchema>;
 
 const EVENT_AGGREGATE: Record<F1EventType, F1AggregateType> = {
-  ExecutionQueued: 'Execution', ExecutionDispatched: 'Execution', ExecutionStarted: 'Execution', ExecutionStepCompleted: 'Execution', ExecutionPaused: 'Execution', ExecutionResumed: 'Execution', ExecutionReclaiming: 'Execution', ExecutionReclaimed: 'Execution', ExecutionRetryScheduled: 'Execution', ExecutionSucceeded: 'Execution', ExecutionFailed: 'Execution', ExecutionCancelled: 'Execution', ExecutionTimedOut: 'Execution', ExecutionDLQ: 'Execution',
+  ExecutionQueued: 'Execution', ExecutionDispatched: 'Execution', ExecutionStarted: 'Execution', ExecutionCheckpointed: 'Execution', ExecutionStepCompleted: 'Execution', ExecutionPaused: 'Execution', ExecutionResumed: 'Execution', ExecutionReclaiming: 'Execution', ExecutionReclaimed: 'Execution', ExecutionRetryScheduled: 'Execution', ExecutionSucceeded: 'Execution', ExecutionFailed: 'Execution', ExecutionCancelled: 'Execution', ExecutionCancellationRequested: 'Execution', ExecutionResumeRequested: 'Execution', ExecutionRoutedToDLQ: 'Execution', ExecutionTimedOut: 'Execution', ExecutionDLQ: 'Execution',
   ToolInvocationStarted: 'ToolInvocation', ToolInvocationSucceeded: 'ToolInvocation', ToolInvocationFailed: 'ToolInvocation', ToolInvocationTimedOut: 'ToolInvocation', ToolApprovalRequested: 'ToolInvocation',
-  LLMCallStarted: 'Execution', LLMCallCompleted: 'Execution', LLMCallFailed: 'Execution', LLMBudgetExceeded: 'Execution',
+  LLMCallStarted: 'Execution', LLMCallCompleted: 'Execution', LLMCallFailed: 'Execution', LLMBudgetExceeded: 'Execution', LLMUsageRecorded: 'Execution',
   ApprovalRequested: 'Approval', ApprovalGranted: 'Approval', ApprovalDenied: 'Approval', ApprovalExpired: 'Approval',
 };
 
