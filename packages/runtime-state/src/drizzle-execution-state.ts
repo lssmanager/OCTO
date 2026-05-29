@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { executionEvents, executions } from '@octo/database';
+import type { TenantTransaction } from '@octo/database';
 
 import { ExecutionStateService } from './execution-state.service';
 
@@ -18,7 +19,7 @@ export function createDrizzleExecutionStateService(context: DrizzleExecutionStat
     updateExecutionStatus: async (tx, executionId, from, to) => {
       const rowPatch = context.rowPatch ?? {};
       const updatedAt = rowPatch.updatedAt instanceof Date ? rowPatch.updatedAt : new Date();
-      const updated = await (tx as any)
+      const updated = await (tx as TenantTransaction)
         .update(executions)
         .set({
           ...rowPatch,
@@ -39,7 +40,7 @@ export function createDrizzleExecutionStateService(context: DrizzleExecutionStat
       return updated.length > 0;
     },
     appendExecutionEvent: async (tx, executionId, eventType, payload) => {
-      await (tx as any).insert(executionEvents).values({
+      await (tx as TenantTransaction).insert(executionEvents).values({
         executionId,
         tenantId: context.tenantId,
         traceId: context.traceId,
