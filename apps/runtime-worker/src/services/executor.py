@@ -12,12 +12,7 @@ log = structlog.get_logger(__name__)
 
 
 class ExecutionService:
-    """Canonical F1 runtime adapter.
-
-    All runtime execution requests must pass through this service and delegate
-    to run_f1_execution. This prevents legacy engines or alternate routers from
-    creating a second execution path.
-    """
+    """Canonical F1 runtime adapter."""
 
     async def run(self, request: ExecutionRequest) -> ExecutionResult:
         start = time.monotonic()
@@ -27,6 +22,7 @@ class ExecutionService:
                 execution_id=request.execution_id,
                 tenant_id=request.tenant_id,
                 trace_id=request.trace_id,
+                mode=request.mode,
             )
         except Exception as exc:
             duration_ms = int((time.monotonic() - start) * 1000)
