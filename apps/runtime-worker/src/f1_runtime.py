@@ -73,6 +73,28 @@ async def _insert_outbox(
     )
 
 
+def _messages_from_state(state_json: dict[str, Any] | None, fallback_input: dict[str, Any]) -> list[dict[str, Any]]:
+    if isinstance(state_json, dict):
+        messages = state_json.get("messages")
+        if isinstance(messages, list) and messages:
+            return messages
+    return [{"role": "user", "content": str(fallback_input)}]
+
+
+def _apply_checkpoint_writes_to_messages(
+    base_messages: list[dict[str, Any]], writes: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    messages = list(base_messages)
+    for write in sorted(writes, key=lambda row: int(row.get("write_index") or 0)):
+        if write.get("channel") != "messages" or write.get("type") != "tool_result":
+            continue
+        value = write.get("value_json")
+        if not isinstance(value, dict):
+            continue
+        messages.append({"role": "tool", "content": _json(value)})
+    return messages
+
+
 async def _mark_failed(
     conn: asyncpg.Connection,
     *,
@@ -148,10 +170,15 @@ async def _claim_and_start(
             raise RuntimeError("execution_not_found")
 
         status = str(row["status"])
+        last_checkpoint_id: str | None = None
+        base_messages = [{"role": "user", "content": str(row["input_json"] or {})}]
+        checkpoint_step_index = 0
+        checkpoint_source = "input"
+
         if mode == "reclaim":
             cps = await conn.fetch(
                 """
-                SELECT id, step_index, parent_checkpoint_id, state_json
+                SELECT id, step_index, parent_checkpoint_id, state_json, source
                 FROM execution_checkpoints
                 WHERE execution_id=$1 AND tenant_id=$2
                 ORDER BY step_index ASC
@@ -159,34 +186,60 @@ async def _claim_and_start(
                 execution_id,
                 tenant_id,
             )
-            if not validate_checkpoint_lineage([dict(r) for r in cps]):
-                if status not in {"completed", "failed", "cancelled"}:
-                    validate_transition(status, "failed")
-                    await conn.execute(
-                        """
-                        UPDATE executions
-                        SET status='failed', state='failed', version=version+1,
-                            error_code='CHECKPOINT_LINEAGE_BROKEN',
-                            error_message='checkpoint lineage invalid',
-                            updated_at=now(), completed_at=now()
-                        WHERE id=$1 AND tenant_id=$2 AND status=$3
-                        """,
-                        execution_id,
-                        tenant_id,
-                        status,
-                    )
-                    await _insert_outbox(
-                        conn,
-                        tenant_id=tenant_id,
-                        execution_id=execution_id,
-                        event_type="ExecutionFailed",
-                        payload={
-                            "executionId": execution_id,
-                            "traceId": trace_id,
-                            "errorCode": "CHECKPOINT_LINEAGE_BROKEN",
-                        },
-                    )
-                return {"status": "failed", "error": "CHECKPOINT_LINEAGE_BROKEN"}
+
+            checkpoint_rows = [dict(cp) for cp in cps]
+            if checkpoint_rows:
+                if not validate_checkpoint_lineage(checkpoint_rows):
+                    if status not in {"completed", "failed", "cancelled"}:
+                        validate_transition(status, "failed")
+                        await conn.execute(
+                            """
+                            UPDATE executions
+                            SET status='failed', state='failed', version=version+1,
+                                error_code='CHECKPOINT_LINEAGE_BROKEN',
+                                error_message='checkpoint lineage invalid',
+                                updated_at=now(), completed_at=now()
+                            WHERE id=$1 AND tenant_id=$2 AND status=$3
+                            """,
+                            execution_id,
+                            tenant_id,
+                            status,
+                        )
+                        await _insert_outbox(
+                            conn,
+                            tenant_id=tenant_id,
+                            execution_id=execution_id,
+                            event_type="ExecutionFailed",
+                            payload={
+                                "executionId": execution_id,
+                                "traceId": trace_id,
+                                "errorCode": "CHECKPOINT_LINEAGE_BROKEN",
+                            },
+                        )
+                    return {"status": "failed", "error": "CHECKPOINT_LINEAGE_BROKEN"}
+
+                latest = checkpoint_rows[-1]
+                last_checkpoint_id = str(latest["id"])
+                checkpoint_step_index = int(latest["step_index"]) + 1
+                checkpoint_source = "reclaim"
+                base_messages = _messages_from_state(
+                    latest.get("state_json") if isinstance(latest.get("state_json"), dict) else {},
+                    row["input_json"] or {},
+                )
+                writes = await conn.fetch(
+                    """
+                    SELECT write_index, channel, type, value_json
+                    FROM execution_checkpoint_writes
+                    WHERE tenant_id=$1 AND checkpoint_id=$2
+                    ORDER BY write_index ASC
+                    """,
+                    tenant_id,
+                    last_checkpoint_id,
+                )
+                base_messages = _apply_checkpoint_writes_to_messages(
+                    base_messages,
+                    [dict(write) for write in writes],
+                )
 
         if status != "dispatched":
             log.info(
@@ -195,6 +248,7 @@ async def _claim_and_start(
                 tenant_id=tenant_id,
                 status=status,
                 legacy_state=row["state"],
+                mode=mode,
             )
             return None
 
@@ -215,7 +269,7 @@ async def _claim_and_start(
         if updated is None:
             return {"status": "cas_conflict"}
 
-        cp0 = str(uuid.uuid4())
+        checkpoint_id = str(uuid.uuid4())
         input_json = row["input_json"] or {}
         context_snapshot = row["context_snapshot_json"] or {}
         await conn.execute(
@@ -223,43 +277,54 @@ async def _claim_and_start(
             INSERT INTO execution_checkpoints (
               id, tenant_id, execution_id, step_index, source, parent_checkpoint_id,
               state_json, metadata_json, channel_versions, versions_seen, worker_id, schema_version
-            ) VALUES ($1,$2,$3,0,'input',NULL,$4::jsonb,$5::jsonb,'{}'::jsonb,'{}'::jsonb,$6,1)
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,'{}'::jsonb,'{}'::jsonb,$9,1)
             """,
-            cp0,
+            checkpoint_id,
             tenant_id,
             execution_id,
-            _json({"messages": [{"role": "user", "content": str(input_json)}]}),
+            checkpoint_step_index,
+            checkpoint_source,
+            last_checkpoint_id,
+            _json({"messages": base_messages}),
             _json({"checkpoint_schema_version": 1}),
             worker_id,
         )
+
+        llm_step_index = checkpoint_step_index + 1
         llm_step_id = str(uuid.uuid4())
         await conn.execute(
             """
             INSERT INTO execution_steps (
               id, tenant_id, execution_id, step_index, step_type, status,
               state_from, state_to, input_json, output_json, started_at
-            ) VALUES ($1,$2,$3,1,'llm_call','running','dispatched','running',$4::jsonb,$5::jsonb,now())
+            ) VALUES ($1,$2,$3,$4,'llm_call','running','dispatched','running',$5::jsonb,$6::jsonb,now())
             """,
             llm_step_id,
             tenant_id,
             execution_id,
-            _json({"provider": "fake" if fake else "litellm"}),
+            llm_step_index,
+            _json({"provider": "fake" if fake else "litellm", "mode": mode}),
             _json({}),
         )
+
         await _insert_outbox(
             conn,
             tenant_id=tenant_id,
             execution_id=execution_id,
             event_type="ExecutionStarted",
-            payload={"executionId": execution_id, "traceId": trace_id},
+            payload={"executionId": execution_id, "traceId": trace_id, "mode": mode},
         )
 
         return {
             "input_json": input_json,
             "context_snapshot_json": context_snapshot,
             "agent_id": row["agent_id"],
-            "checkpoint_id": cp0,
+            "checkpoint_id": checkpoint_id,
+            "checkpoint_step_index": checkpoint_step_index,
             "llm_step_id": llm_step_id,
+            "llm_step_index": llm_step_index,
+            "messages": base_messages,
+            "mode": mode,
         }
 
 
@@ -271,7 +336,7 @@ async def _run_llm_and_tools(
     trace_id: str | None,
     started: dict[str, Any],
 ) -> tuple[str, LLMCallResult]:
-    messages = [{"role": "user", "content": str(started["input_json"])}]
+    messages = list(started.get("messages") or [{"role": "user", "content": str(started["input_json"])}])
     snapshot = started["context_snapshot_json"] or {}
     agent_id = str(started["agent_id"])
 
@@ -290,7 +355,7 @@ async def _run_llm_and_tools(
                 tenant_id=tenant_id,
                 execution_id=execution_id,
                 step_id=started["llm_step_id"],
-                step_index=idx + 2,
+                step_index=started["llm_step_index"] + idx + 1,
                 tool_call=tc,
                 trace_id=trace_id,
             )
@@ -376,11 +441,12 @@ async def _persist_success(
             INSERT INTO execution_checkpoints (
               id, tenant_id, execution_id, step_index, source, parent_checkpoint_id,
               state_json, metadata_json, channel_versions, versions_seen, worker_id, schema_version
-            ) VALUES ($1,$2,$3,2,'loop',$4,$5::jsonb,$6::jsonb,'{}'::jsonb,'{}'::jsonb,$7,1)
+            ) VALUES ($1,$2,$3,$4,'loop',$5,$6::jsonb,$7::jsonb,'{}'::jsonb,'{}'::jsonb,$8,1)
             """,
             cp1,
             tenant_id,
             execution_id,
+            started["checkpoint_step_index"] + 2,
             started["checkpoint_id"],
             _json({"messages": [{"role": "assistant", "content": output}]}),
             _json({"checkpoint_schema_version": 1}),

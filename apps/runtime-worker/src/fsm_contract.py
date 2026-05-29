@@ -1,17 +1,12 @@
-"""Execution FSM contract adapter for the F1 runtime.
-
-Uses the generated Python contract when present. The fallback mirrors the F1
-contract and exists only so runtime tests can run before `pnpm contracts:validate`
-regenerates artifacts.
-"""
+"""Execution FSM contract adapter for the F1 runtime."""
 from __future__ import annotations
 
-try:  # Prefer generated source of truth from packages/contracts.
+try:
     from app.contracts.generated.execution_fsm_contract import (  # type: ignore[import-not-found]
         EXECUTION_TERMINAL_STATES,
         EXECUTION_VALID_TRANSITIONS,
     )
-except Exception:  # pragma: no cover - only used in stripped test environments
+except Exception:
     EXECUTION_TERMINAL_STATES = ("completed", "failed", "cancelled")
     EXECUTION_VALID_TRANSITIONS = {
         "pending": ("queued", "cancelled"),
@@ -31,7 +26,7 @@ except Exception:  # pragma: no cover - only used in stripped test environments
         "waiting_human": ("running", "cancelled", "suspended"),
         "retrying": ("retry_scheduled", "failed", "cancelled"),
         "retry_scheduled": ("queued", "failed", "cancelled"),
-        "reclaimable": ("retrying", "failed", "cancelled"),
+        "reclaimable": ("dispatched", "failed", "cancelled"),
         "suspended": ("queued", "cancelled"),
         "completed": (),
         "failed": (),
@@ -51,6 +46,8 @@ def validate_transition(from_status: str, to_status: str) -> None:
     if allowed is None:
         raise InvalidExecutionTransitionError(f"unknown execution status: {from_status}")
     if from_status in TERMINAL_STATES:
-        raise InvalidExecutionTransitionError(f"terminal execution status has no outgoing transitions: {from_status}")
+        raise InvalidExecutionTransitionError(
+            f"terminal execution status has no outgoing transitions: {from_status}"
+        )
     if to_status not in allowed:
         raise InvalidExecutionTransitionError(f"invalid execution transition {from_status} -> {to_status}")

@@ -20,20 +20,9 @@
     "cancelled"
   ],
   "transitions": {
-    "pending": [
-      "queued",
-      "cancelled"
-    ],
-    "queued": [
-      "dispatched",
-      "cancelled",
-      "failed"
-    ],
-    "dispatched": [
-      "running",
-      "cancelled",
-      "failed"
-    ],
+    "pending": ["queued", "cancelled"],
+    "queued": ["dispatched", "cancelled", "failed"],
+    "dispatched": ["running", "cancelled", "failed"],
     "running": [
       "waiting_tool",
       "waiting_human",
@@ -44,37 +33,12 @@
       "failed",
       "cancelled"
     ],
-    "waiting_tool": [
-      "running",
-      "retrying",
-      "failed",
-      "cancelled",
-      "suspended"
-    ],
-    "waiting_human": [
-      "running",
-      "cancelled",
-      "suspended"
-    ],
-    "retrying": [
-      "retry_scheduled",
-      "failed",
-      "cancelled"
-    ],
-    "retry_scheduled": [
-      "queued",
-      "failed",
-      "cancelled"
-    ],
-    "reclaimable": [
-      "retrying",
-      "failed",
-      "cancelled"
-    ],
-    "suspended": [
-      "queued",
-      "cancelled"
-    ],
+    "waiting_tool": ["running", "retrying", "failed", "cancelled", "suspended"],
+    "waiting_human": ["running", "cancelled", "suspended"],
+    "retrying": ["retry_scheduled", "failed", "cancelled"],
+    "retry_scheduled": ["queued", "failed", "cancelled"],
+    "reclaimable": ["dispatched", "failed", "cancelled"],
+    "suspended": ["queued", "cancelled"],
     "completed": [],
     "failed": [],
     "cancelled": []

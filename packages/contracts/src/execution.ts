@@ -87,9 +87,7 @@ export const ExecutionStatusValues = Object.values(ExecutionStatus) as Execution
  *                                                                  │
  *                                                              QUEUED
  *
- *   RUNNING ──► RECLAIMABLE ──► RETRYING (lease expired → reclaim)
- *                                    │
- *                              RETRY_SCHEDULED (scheduler picks up)
+ *   RUNNING ──► RECLAIMABLE ──► DISPATCHED (lease expired → reclaim replay)
  *
  *   SUSPENDED can be reached from any non-terminal active state.
  *   CANCELLED can be reached from any non-terminal state.
@@ -142,7 +140,7 @@ export const VALID_TRANSITIONS: Readonly<Record<ExecutionStatus, ReadonlySet<Exe
     'cancelled',
   ]),
   reclaimable: new Set([
-    'retrying', // reclaimed — will retry
+    'dispatched', // canonical F1 reclaim replay handoff
     'failed', // max reclaims exceeded
     'cancelled',
   ]),

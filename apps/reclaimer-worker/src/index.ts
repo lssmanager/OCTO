@@ -1,22 +1,13 @@
 /**
  * apps/reclaimer-worker/src/index.ts
- * Issue #34 — Zombie execution recovery
- *
  * Entry point for the reclaimer worker process.
- * Starts the polling loop and handles graceful shutdown on SIGTERM/SIGINT.
- *
- * ENV VARS:
- *   DATABASE_URL             required
- *   REDIS_URL                required
- *   RECLAIM_INTERVAL_MS      optional (default 15000)
- *   LEASE_TIMEOUT_MS         optional (default 30000)
- *   OTEL_EXPORTER_OTLP_ENDPOINT  optional
  */
 
 import { getDb } from '@octo/database';
-import { startReclaimLoop, stopReclaimLoop } from './reclaim-loop';
-import { initMetrics } from './metrics';
+
 import { startHeartbeat, stopHeartbeat } from './heartbeat';
+import { initMetrics } from './metrics';
+import { startReclaimLoop, stopReclaimLoop } from './reclaim-loop';
 
 const DATABASE_URL = process.env['DATABASE_URL'];
 const REDIS_URL = process.env['REDIS_URL'];
@@ -26,6 +17,7 @@ if (!REDIS_URL) throw new Error('REDIS_URL is required');
 
 const RECLAIM_INTERVAL_MS = parseInt(process.env['RECLAIM_INTERVAL_MS'] ?? '15000', 10);
 const LEASE_TIMEOUT_MS = parseInt(process.env['LEASE_TIMEOUT_MS'] ?? '30000', 10);
+const MAX_RECLAIM_ATTEMPTS = parseInt(process.env['MAX_RECLAIM_ATTEMPTS'] ?? '3', 10);
 
 async function main() {
   console.log(
@@ -33,6 +25,7 @@ async function main() {
       msg: 'reclaimer_starting',
       reclaimIntervalMs: RECLAIM_INTERVAL_MS,
       leaseTimeoutMs: LEASE_TIMEOUT_MS,
+      maxReclaimAttempts: MAX_RECLAIM_ATTEMPTS,
       pid: process.pid,
     })
   );
@@ -44,12 +37,12 @@ async function main() {
   await startReclaimLoop(db, REDIS_URL!, {
     intervalMs: RECLAIM_INTERVAL_MS,
     leaseTimeoutMs: LEASE_TIMEOUT_MS,
+    maxReclaimAttempts: MAX_RECLAIM_ATTEMPTS,
   });
 
   console.log(JSON.stringify({ msg: 'reclaimer_ready' }));
 }
 
-// Graceful shutdown
 const shutdown = async (signal: string) => {
   console.log(JSON.stringify({ msg: 'reclaimer_shutdown', signal }));
   stopHeartbeat();

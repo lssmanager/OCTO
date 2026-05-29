@@ -12,6 +12,8 @@
  *   ExecutionStateService.transition() performs a compare-and-swap update.
  *   Callers must handle ConcurrentTransitionError and ACK without retry.
  */
+export { createDrizzleExecutionStateService } from './drizzle-execution-state';
+export type { DrizzleExecutionStateContext } from './drizzle-execution-state';
 export { ExecutionStateService } from './execution-state.service';
 export { ConcurrentTransitionError } from './errors';
 export {

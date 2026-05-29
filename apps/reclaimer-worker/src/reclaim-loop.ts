@@ -1,24 +1,148 @@
-/**
- * apps/reclaimer-worker/src/reclaim-loop.ts
- * Issue #34 + #37 — Polling loop with OTEL trace context forwarding
- *
- * Passes the stored OtelTraceFields from the zombie execution's original
- * job payload to casReclaim() so that reclaim spans are linked to the
- * original trace waterfall.
- */
-
-import { and, eq, lt, sql } from 'drizzle-orm';
-import { executions, getDb } from '@octo/database';
+import { and, eq, lt, or, sql } from 'drizzle-orm';
+import { executions, getDb, insertOutboxEvent, withTenantTx } from '@octo/database';
 import { createQueue, QUEUES } from '@octo/queue';
+
 import { casReclaim } from './cas-reclaim';
-import { reclaimedCounter, alreadyTakenCounter, reclaimErrorCounter } from './metrics';
+import {
+  failedTerminalCounter,
+  reclaimedCounter,
+  reclaimErrorCounter,
+  requeuedCounter,
+  skippedCounter,
+} from './metrics';
 
 interface LoopConfig {
   intervalMs: number;
   leaseTimeoutMs: number;
+  maxReclaimAttempts: number;
 }
 
+type ReclaimCandidate = {
+  id: string;
+  tenantId: string;
+  agentId: string;
+  status: string;
+  attempt: number | null;
+  reclaimCount: number | null;
+  traceId: string | null;
+};
+
+type ReclaimDispatchPayload = {
+  executionId: string;
+  tenantId: string;
+  agentId: string;
+  traceId: string;
+  reason: 'reclaim_replay';
+  mode: 'reclaim';
+  attempt: number;
+};
+
 let timer: NodeJS.Timeout | null = null;
+
+function buildReclaimDispatchPayload(candidate: ReclaimCandidate): ReclaimDispatchPayload {
+  const nextAttempt = Number(candidate.attempt ?? 0) + 1;
+  return {
+    executionId: candidate.id,
+    tenantId: candidate.tenantId,
+    agentId: candidate.agentId,
+    traceId: candidate.traceId ?? `reclaim-${candidate.id}`,
+    reason: 'reclaim_replay',
+    mode: 'reclaim',
+    attempt: nextAttempt,
+  };
+}
+
+async function failReclaimTerminally(
+  db: ReturnType<typeof getDb>,
+  candidate: ReclaimCandidate,
+  errorCode: string,
+  errorMessage: string
+): Promise<void> {
+  await withTenantTx(candidate.tenantId, async (tx) => {
+    const updated = await tx
+      .update(executions)
+      .set({
+        status: 'failed',
+        state: 'failed',
+        errorCode,
+        errorMessage,
+        error: {
+          code: errorCode,
+          message: errorMessage,
+          retryable: false,
+        },
+        completedAt: new Date(),
+        updatedAt: new Date(),
+        leaseOwner: null,
+        workerId: null,
+        leaseExpiresAt: null,
+      })
+      .where(
+        and(
+          eq(executions.id, candidate.id),
+          eq(executions.tenantId, candidate.tenantId),
+          sql`${executions.status} IN ('running', 'reclaimable')`
+        )
+      )
+      .returning({ id: executions.id });
+
+    if (!updated.length) return;
+
+    await insertOutboxEvent(tx, {
+      tenantId: candidate.tenantId,
+      aggregateType: 'execution',
+      aggregateId: candidate.id,
+      eventType: 'ExecutionFailed',
+      payloadJson: {
+        executionId: candidate.id,
+        errorCode,
+        errorMessage,
+      },
+      traceId: candidate.traceId,
+      source: 'reclaimer-worker',
+    });
+  });
+}
+
+export async function processReclaimCandidate(
+  db: ReturnType<typeof getDb>,
+  dispatchQueue: ReturnType<typeof createQueue>,
+  candidate: ReclaimCandidate,
+  maxReclaimAttempts: number
+): Promise<'requeued' | 'skipped' | 'failed_terminal'> {
+  if (Number(candidate.reclaimCount ?? 0) >= maxReclaimAttempts) {
+    await failReclaimTerminally(
+      db,
+      candidate,
+      'RECLAIM_MAX_ATTEMPTS_EXCEEDED',
+      `reclaim attempts exceeded (${maxReclaimAttempts})`
+    );
+    failedTerminalCounter.add(1, { executionId: candidate.id });
+    return 'failed_terminal';
+  }
+
+  if (candidate.status === 'running') {
+    const outcome = await casReclaim(db, candidate.id, candidate.tenantId, {
+      correlationId: candidate.traceId ?? undefined,
+    });
+
+    if (outcome !== 'reclaimed') {
+      skippedCounter.add(1, { executionId: candidate.id, outcome });
+      return 'skipped';
+    }
+
+    reclaimedCounter.add(1, { executionId: candidate.id });
+  }
+
+  const payload = buildReclaimDispatchPayload(candidate);
+  await dispatchQueue.add(QUEUES.EXECUTION_DISPATCH, payload, {
+    jobId: `reclaim:${candidate.id}:${payload.attempt}`,
+    attempts: 1,
+  });
+
+  requeuedCounter.add(1, { executionId: candidate.id, attempt: payload.attempt });
+  return 'requeued';
+}
 
 export async function startReclaimLoop(
   db: ReturnType<typeof getDb>,
@@ -32,43 +156,33 @@ export async function startReclaimLoop(
       const zombies = await db
         .select({
           id: executions.id,
+          tenantId: executions.tenantId,
+          agentId: executions.agentId,
+          status: executions.status,
           attempt: executions.attempt,
-          task: executions.task,
-          // Select trace fields stored in the task payload for context restoration
+          reclaimCount: executions.reclaimCount,
           traceId: executions.traceId,
         })
         .from(executions)
-        .where(and(eq(executions.status, 'running'), lt(executions.leaseExpiresAt, sql`NOW()`)));
+        .where(
+          or(
+            and(eq(executions.status, 'running'), lt(executions.leaseExpiresAt, sql`NOW()`)),
+            eq(executions.status, 'reclaimable')
+          )
+        );
 
       for (const zombie of zombies) {
         try {
-          // Pass trace fields so casReclaim() can emit a correlated span (#37)
-          const outcome = await casReclaim(db, zombie.id, {
-            // traceId from the execution row — used as correlation hint
-            correlationId: zombie.traceId ?? undefined,
-          });
+          const outcome = await processReclaimCandidate(db, dispatchQueue, zombie, config.maxReclaimAttempts);
 
-          if (outcome === 'reclaimed') {
-            reclaimedCounter.add(1, { executionId: zombie.id });
-
-            await dispatchQueue.add(
-              QUEUES.EXECUTION_DISPATCH,
-              { executionId: zombie.id, tenantId: (zombie.task as { tenantId?: string })?.tenantId, reason: 'reclaim_replay', attempt: (zombie.attempt ?? 0) + 1, enqueuedAt: new Date().toISOString() },
-              {
-                jobId: `reclaim:${zombie.id}:${(zombie.attempt ?? 0) + 1}`,
-                attempts: 3,
-              }
-            );
-
+          if (outcome === 'requeued') {
             console.log(
               JSON.stringify({
-                msg: 'execution_reclaimed',
+                msg: 'execution_reclaimed_requeued',
                 executionId: zombie.id,
-                reclaimCount: (zombie.attempt ?? 0) + 1,
+                tenantId: zombie.tenantId,
               })
             );
-          } else if (outcome === 'already_taken') {
-            alreadyTakenCounter.add(1, { executionId: zombie.id });
           }
         } catch (err: unknown) {
           reclaimErrorCounter.add(1, { executionId: zombie.id });

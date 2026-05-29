@@ -1,19 +1,8 @@
-"""Canonical runtime execution schemas.
-
-These models are the single Python runtime contract used by:
-
-- POST /api/v1/execute
-- ExecutionService
-- f1_runtime result adaptation
-
-Cross-language TS/Python drift is intentionally handled by issue #145.
-Until that is closed, this file must not be treated as proof that contract
-sync is solved.
-"""
+"""Canonical runtime execution schemas."""
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
@@ -75,6 +64,7 @@ class ExecutionRequest(OctoModel):
     streaming: bool = False
     trace_id: str
     run_id: str = ""
+    mode: Literal["normal", "reclaim"] = "normal"
 
 
 class ExecutionResult(OctoModel):

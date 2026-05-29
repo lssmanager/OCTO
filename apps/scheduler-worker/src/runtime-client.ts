@@ -3,12 +3,18 @@ export type RuntimeInvokePayload = {
   tenantId: string;
   agentId: string;
   traceId: string;
+  mode?: 'normal' | 'reclaim';
 };
 
 export class RuntimeInvocationError extends Error {
   constructor(
     message: string,
-    readonly details: { readonly runtimeUrl: string; readonly status?: number; readonly responseBody?: string; readonly cause?: unknown }
+    readonly details: {
+      readonly runtimeUrl: string;
+      readonly status?: number;
+      readonly responseBody?: string;
+      readonly cause?: unknown;
+    }
   ) {
     super(message);
     this.name = 'RuntimeInvocationError';
@@ -34,6 +40,7 @@ export async function invokeRuntimeHttp(
         agentId: payload.agentId,
         traceId: payload.traceId,
         runId: payload.executionId,
+        mode: payload.mode ?? 'normal',
       }),
     });
   } catch (cause) {
@@ -67,5 +74,6 @@ export async function invokeRuntimeHttp(
     tenantId: payload.tenantId,
     runtimeUrl,
     status: response.status,
+    mode: payload.mode ?? 'normal',
   });
 }
