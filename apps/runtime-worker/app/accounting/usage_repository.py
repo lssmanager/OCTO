@@ -49,7 +49,7 @@ class ExecutionUsageRepository:
                     metadata_json,
                 )
                 await conn.execute(
-                    "INSERT INTO outbox_events (id,tenant_id,aggregate_type,aggregate_id,event_type,sequence,payload_json) VALUES (gen_random_uuid()::text,$1,'Execution',$2,'LLMUsageRecorded',1,$3::jsonb)",
+                    "INSERT INTO outbox_events (id,tenant_id,aggregate_type,aggregate_id,event_type,sequence,payload_json) VALUES (gen_random_uuid()::text,$1,'Execution',$2,'LLMUsageRecorded',(SELECT COALESCE(MAX(sequence),0)+1 FROM outbox_events WHERE tenant_id=$1 AND aggregate_type='Execution' AND aggregate_id=$2),$3::jsonb)",
                     accounting.tenant_id,
                     accounting.execution_id,
                     {

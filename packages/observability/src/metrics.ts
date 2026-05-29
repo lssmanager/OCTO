@@ -1,4 +1,4 @@
-import { Counter, Histogram, Registry } from 'prom-client';
+import { Counter, Gauge, Histogram, Registry } from 'prom-client';
 
 export const metricsRegistry = new Registry();
 
@@ -82,5 +82,37 @@ export const executionDlqTotal = new Counter({
   name: 'execution_dlq_total',
   help: 'Total executions moved to DLQ',
   labelNames: ['reason'] as const,
+  registers: [metricsRegistry],
+});
+
+// ── Outbox publisher ───────────────────────────────────────────────────────
+export const outboxPendingTotal = new Gauge({
+  name: 'outbox_pending_total',
+  help: 'Pending unpublished outbox events',
+  registers: [metricsRegistry],
+});
+
+export const outboxOldestUnpublishedAgeMs = new Gauge({
+  name: 'outbox_oldest_unpublished_age_ms',
+  help: 'Age in milliseconds of the oldest unpublished outbox event',
+  registers: [metricsRegistry],
+});
+
+export const outboxPublishLatencyMs = new Histogram({
+  name: 'outbox_publish_latency_ms',
+  help: 'Outbox event publish latency from database creation to Redis Stream publish',
+  buckets: [10, 50, 100, 500, 1000, 5000, 15000, 60000, 300000],
+  registers: [metricsRegistry],
+});
+
+export const outboxPublishFailuresTotal = new Counter({
+  name: 'outbox_publish_failures_total',
+  help: 'Total failed outbox publish attempts',
+  registers: [metricsRegistry],
+});
+
+export const outboxPublishDlqTotal = new Gauge({
+  name: 'outbox_publish_dlq_total',
+  help: 'Total outbox events moved to publish DLQ',
   registers: [metricsRegistry],
 });

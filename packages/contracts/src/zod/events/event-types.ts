@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const ExecutionEventTypeSchema = z.enum([
-  'ExecutionQueued','ExecutionDispatched','ExecutionStarted','ExecutionStepCompleted','ExecutionPaused','ExecutionResumed','ExecutionReclaiming','ExecutionReclaimed','ExecutionRetryScheduled','ExecutionSucceeded','ExecutionFailed','ExecutionCancelled','ExecutionTimedOut','ExecutionDLQ',
+  'ExecutionQueued','ExecutionDispatched','ExecutionStarted','ExecutionCheckpointed','ExecutionStepCompleted','ExecutionPaused','ExecutionResumed','ExecutionReclaiming','ExecutionReclaimed','ExecutionRetryScheduled','ExecutionSucceeded','ExecutionFailed','ExecutionCancelled','ExecutionCancellationRequested','ExecutionResumeRequested','ExecutionTimedOut','ExecutionDLQ','ExecutionRoutedToDLQ',
 ]);
 
 export const ToolEventTypeSchema = z.enum([
@@ -9,7 +9,7 @@ export const ToolEventTypeSchema = z.enum([
 ]);
 
 export const LlmEventTypeSchema = z.enum([
-  'LLMCallStarted','LLMCallCompleted','LLMCallFailed','LLMBudgetExceeded',
+  'LLMCallStarted','LLMCallCompleted','LLMCallFailed','LLMBudgetExceeded','LLMUsageRecorded',
 ]);
 
 export const ApprovalEventTypeSchema = z.enum([

@@ -59,7 +59,29 @@ services:
     environment:
       REDIS_URL: ${REDIS_URL}
       DATABASE_URL: ${DATABASE_URL}
+      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
     ports: ["8000:8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+
+
+  outbox-publisher-worker:
+    image: octo/outbox-publisher-worker:sha-${GIT_SHA:-local}
+    build:
+      context: .
+      dockerfile: docker/outbox-publisher-worker.Dockerfile
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL}
+      OUTBOX_STREAM_KEY: ${OUTBOX_STREAM_KEY:-octo.events}
+    ports: ["3010:3010"]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -78,6 +100,8 @@ services:
     environment:
       REDIS_URL: ${REDIS_URL}
       DATABASE_URL: ${DATABASE_URL}
+      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
+      RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute}
     ports: ["3003:3003"]
     depends_on:
       migrate:

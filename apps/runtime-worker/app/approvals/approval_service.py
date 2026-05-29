@@ -17,5 +17,5 @@ class ApprovalService:
                     approval_id, tenant_id, execution_id,
                     {"agent_id": agent_id, "step_index": step_index, "reason": "LLM_BUDGET_EXCEEDED", "trace_id": trace_id},
                 )
-                await conn.execute("INSERT INTO outbox_events (id,tenant_id,aggregate_type,aggregate_id,event_type,sequence,payload_json) VALUES (gen_random_uuid()::text,$1,'Execution',$2,'ApprovalRequested',1,$3::jsonb)", tenant_id, execution_id, {"approval_id": approval_id})
+                await conn.execute("INSERT INTO outbox_events (id,tenant_id,aggregate_type,aggregate_id,event_type,sequence,payload_json) VALUES (gen_random_uuid()::text,$1,'Execution',$2,'ApprovalRequested',(SELECT COALESCE(MAX(sequence),0)+1 FROM outbox_events WHERE tenant_id=$1 AND aggregate_type='Execution' AND aggregate_id=$2),$3::jsonb)", tenant_id, execution_id, {"approval_id": approval_id})
         return approval_id

@@ -12,6 +12,7 @@ export const outboxEvents = pgTable(
     sequence: bigint('sequence', { mode: 'number' }).notNull(),
     payloadJson: jsonb('payload_json').notNull(),
     publishedAt: timestamp('published_at', { withTimezone: true }),
+    deadLetteredAt: timestamp('dead_lettered_at', { withTimezone: true }),
     publishAttempts: integer('publish_attempts').notNull().default(0),
     lastError: text('last_error'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -19,10 +20,10 @@ export const outboxEvents = pgTable(
   (t) => ({
     unpublishedIdx: index('idx_outbox_unpublished')
       .on(t.publishedAt, t.createdAt)
-      .where(sql`published_at IS NULL`),
+      .where(sql`published_at IS NULL AND dead_lettered_at IS NULL`),
     tenantUnpublishedIdx: index('idx_outbox_tenant_unpublished')
       .on(t.tenantId, t.createdAt)
-      .where(sql`published_at IS NULL`),
+      .where(sql`published_at IS NULL AND dead_lettered_at IS NULL`),
     tenantAggregateSequenceUniqueIdx: uniqueIndex('idx_outbox_aggregate_sequence').on(
       t.tenantId,
       t.aggregateType,

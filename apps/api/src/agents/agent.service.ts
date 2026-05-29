@@ -9,6 +9,7 @@ export type AgentRecord = {
   role: string;
   goal: string;
   parentId: string | null;
+  hierarchyNodeId: string | null;
   capabilities: unknown;
   governancePolicy: Record<string, unknown>;
   status: string;
@@ -35,6 +36,15 @@ export type CreateAgentDto = {
   capabilities?: unknown;
   governancePolicy?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  hierarchyLevel?: 'agent' | 'subagent';
+  hierarchyParentId?: string | null;
+  activationState?: 'active' | 'inactive' | 'suspended' | 'archived';
+  modelPolicy?: Record<string, unknown>;
+  toolPolicy?: Record<string, unknown>;
+  budgetPolicy?: Record<string, unknown>;
+  governance?: Record<string, unknown>;
+  coreFiles?: unknown[];
+  memoryPolicy?: Record<string, unknown>;
 };
 
 export type PatchAgentDto = Partial<CreateAgentDto & { status: string }>;

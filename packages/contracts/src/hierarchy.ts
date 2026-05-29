@@ -6,12 +6,16 @@ export interface HierarchyNode {
   slug: string;
   level: HierarchyLevel;
   parentId?: string;
-  isActive: boolean;
+  activationState: HierarchyActivationState;
+  /** Legacy boolean view kept during F2 rollout; activationState is authoritative. */
+  isActive?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export type HierarchyLevel = 'agency' | 'department' | 'workspace' | 'agent';
+export type HierarchyLevel = 'agency' | 'department' | 'workspace' | 'agent' | 'subagent';
+
+export type HierarchyActivationState = 'active' | 'inactive' | 'suspended' | 'archived';
 
 export interface PolicyBoundary {
   nodeId: string;
