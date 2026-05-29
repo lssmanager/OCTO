@@ -80,55 +80,57 @@ describeIfInfra('F1 reclaim->dispatch->runtime integration', () => {
         redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
       });
 
-      await processReclaimCandidate(
-        db,
-        queue,
-        {
-          id: created.id,
-          tenantId,
-          agentId,
-          status: 'running',
-          attempt: 0,
-          reclaimCount: 0,
-          traceId: 'trace-test',
-        },
-        3
-      );
+      try {
+        await processReclaimCandidate(
+          db,
+          queue,
+          {
+            id: created.id,
+            tenantId,
+            agentId,
+            status: 'running',
+            attempt: 0,
+            reclaimCount: 0,
+            traceId: 'trace-test',
+          },
+          3
+        );
 
-      const reclaimJob = await queue.getJob(`reclaim:${created.id}:1`);
-      expect(reclaimJob).toBeTruthy();
-      expect(reclaimJob?.data.tenantId).toBe(tenantId);
-      expect(reclaimJob?.data.mode).toBe('reclaim');
+        const reclaimJob = await queue.getJob(`reclaim:${created.id}:1`);
+        expect(reclaimJob).toBeTruthy();
+        expect(reclaimJob?.data.tenantId).toBe(tenantId);
+        expect(reclaimJob?.data.mode).toBe('reclaim');
 
-      const reclaimable = await repo.getExecutionSummary(created.id, tenantId);
-      expect(reclaimable?.status).toBe('reclaimable');
-      expect(reclaimable?.state).toBe('reclaimable');
+        const reclaimable = await repo.getExecutionSummary(created.id, tenantId);
+        expect(reclaimable?.status).toBe('reclaimable');
+        expect(reclaimable?.state).toBe('reclaimable');
 
-      await processExecutionDispatchJob(reclaimJob!.data, {
-        workerId: 'scheduler-reclaim-test',
-        leaseSeconds: 90,
-        invokeRuntime: async (payload) => {
-          expect(payload.mode).toBe('reclaim');
-          await runtime(payload.executionId, payload.tenantId);
-        },
-      });
+        await processExecutionDispatchJob(reclaimJob!.data, {
+          workerId: 'scheduler-reclaim-test',
+          leaseSeconds: 90,
+          invokeRuntime: async (payload) => {
+            expect(payload.mode).toBe('reclaim');
+            await runtime(payload.executionId, payload.tenantId);
+          },
+        });
 
-      const done = await repo.getExecutionSummary(created.id, tenantId);
-      expect(done?.status).toBe('completed');
-      expect(done?.state).toBe('completed');
+        const done = await repo.getExecutionSummary(created.id, tenantId);
+        expect(done?.status).toBe('completed');
+        expect(done?.state).toBe('completed');
 
-      const cps = await withTenantTx(tenantId, (tx) =>
-        tx
-          .select()
-          .from(executionCheckpoints)
-          .where(and(eq(executionCheckpoints.executionId, created.id), eq(executionCheckpoints.tenantId, tenantId)))
-          .orderBy(asc(executionCheckpoints.stepIndex))
-      );
-      expect(cps.length).toBeGreaterThanOrEqual(3);
-      expect(cps[1]?.source).toBe('reclaim');
-      expect(cps[1]?.parentCheckpointId).toBe(checkpointId);
-
-      await queue.close();
+        const cps = await withTenantTx(tenantId, (tx) =>
+          tx
+            .select()
+            .from(executionCheckpoints)
+            .where(and(eq(executionCheckpoints.executionId, created.id), eq(executionCheckpoints.tenantId, tenantId)))
+            .orderBy(asc(executionCheckpoints.stepIndex))
+        );
+        expect(cps.length).toBeGreaterThanOrEqual(3);
+        expect(cps[1]?.source).toBe('reclaim');
+        expect(cps[1]?.parentCheckpointId).toBe(checkpointId);
+      } finally {
+        await queue.close();
+      }
     },
     30000
   );
