@@ -63,7 +63,12 @@ export class PostgresAgentRepo {
     } else if (requestedLevel === 'subagent' && !parentId && input.parentId) {
       const parentAgent = (await tx.select().from(agents).where(and(eq(agents.tenantId, tenantId), eq(agents.id, input.parentId))).limit(1))[0];
       parentId = parentAgent?.hierarchyNodeId ?? null;
-      parentLevel = parentId ? 'agent' : null;
+      if (parentId) {
+        const parentNode = (await tx.select().from(hierarchyNodes).where(and(eq(hierarchyNodes.tenantId, tenantId), eq(hierarchyNodes.id, parentId))).limit(1))[0];
+        parentLevel = parentNode?.level ?? null;
+      } else {
+        parentLevel = null;
+      }
     }
 
     if (parentId && !parentLevel) {
@@ -73,11 +78,20 @@ export class PostgresAgentRepo {
     validateHierarchyRelation(parentLevel, requestedLevel);
 
     const hierarchyNodeId = randomUUID();
+    const baseSlug = input.slug ?? slugify(input.name ?? agentId);
+    let uniqueSlug = baseSlug;
+    let suffix = 1;
+    while (true) {
+      const existing = (await tx.select().from(hierarchyNodes).where(and(eq(hierarchyNodes.tenantId, tenantId), eq(hierarchyNodes.parentId, parentId), eq(hierarchyNodes.slug, uniqueSlug))).limit(1))[0];
+      if (!existing) break;
+      uniqueSlug = `${baseSlug}-${suffix}`;
+      suffix++;
+    }
     await tx.insert(hierarchyNodes).values({
       id: hierarchyNodeId,
       tenantId,
       level: requestedLevel,
-      slug: input.slug ?? slugify(input.name ?? agentId),
+      slug: uniqueSlug,
       name: input.name ?? agentId,
       parentId,
       activationState: input.activationState ?? 'active',

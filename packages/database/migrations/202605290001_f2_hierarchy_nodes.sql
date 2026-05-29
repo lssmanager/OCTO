@@ -24,4 +24,5 @@ CREATE INDEX "idx_hierarchy_nodes_tenant_level" ON "hierarchy_nodes" USING btree
 CREATE INDEX "idx_hierarchy_nodes_parent" ON "hierarchy_nodes" USING btree ("parent_id");--> statement-breakpoint
 CREATE INDEX "idx_hierarchy_nodes_activation_state" ON "hierarchy_nodes" USING btree ("activation_state");--> statement-breakpoint
 CREATE UNIQUE INDEX "hierarchy_nodes_tenant_parent_slug_unique" ON "hierarchy_nodes" USING btree ("tenant_id","parent_id","slug");--> statement-breakpoint
+CREATE UNIQUE INDEX "hierarchy_nodes_tenant_root_slug_unique" ON "hierarchy_nodes" USING btree ("tenant_id","slug") WHERE "parent_id" IS NULL;--> statement-breakpoint
 CREATE INDEX "agents_hierarchy_node_id_idx" ON "agents" USING btree ("hierarchy_node_id");

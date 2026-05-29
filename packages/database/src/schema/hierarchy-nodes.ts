@@ -8,6 +8,7 @@ import {
   uniqueIndex,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const hierarchyLevelEnum = pgEnum('hierarchy_level', [
   'agency',
@@ -52,6 +53,9 @@ export const hierarchyNodes = pgTable(
       t.parentId,
       t.slug
     ),
+    tenantRootSlugUnique: uniqueIndex('hierarchy_nodes_root_tenant_slug_unique')
+      .on(t.tenantId, t.slug)
+      .where(sql`${t.parentId} IS NULL`),
   })
 );
 
