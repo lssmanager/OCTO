@@ -59,6 +59,7 @@ services:
     environment:
       REDIS_URL: ${REDIS_URL}
       DATABASE_URL: ${DATABASE_URL}
+      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
     ports: ["8000:8000"]
     depends_on:
       migrate:
@@ -78,6 +79,8 @@ services:
     environment:
       REDIS_URL: ${REDIS_URL}
       DATABASE_URL: ${DATABASE_URL}
+      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
+      RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute}
     ports: ["3003:3003"]
     depends_on:
       migrate:

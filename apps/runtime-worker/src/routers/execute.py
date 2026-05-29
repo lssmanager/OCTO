@@ -6,7 +6,7 @@ import structlog
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
 from ..config import Settings
-from ..schemas import ExecutionRequest, ExecutionResult
+from ..schemas import ExecutionRequest, ExecutionResult, ExecutionStatus
 from ..services.executor import ExecutionService
 
 log = structlog.get_logger(__name__)
@@ -68,6 +68,12 @@ async def submit_execution(
         duration_ms=result.duration_ms,
     )
 
+    if result.status != ExecutionStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": result.error or "runtime_execution_failed", "execution_id": result.execution_id},
+        )
+
     return result
 
 
@@ -89,11 +95,11 @@ async def get_execution_status(
 
     conn = await asyncpg.connect(str(dsn))
     try:
-        row = await conn.fetchrow("SELECT state FROM executions WHERE id=$1", execution_id)
+        row = await conn.fetchrow("SELECT status FROM executions WHERE id=$1", execution_id)
     finally:
         await conn.close()
 
     if not row:
         raise HTTPException(status_code=404, detail="execution_not_found")
 
-    return {"execution_id": execution_id, "status": str(row["state"])}
+    return {"execution_id": execution_id, "status": str(row["status"])}

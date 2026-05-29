@@ -3,6 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { executions, executionSteps, outboxEvents, withTenantTx } from '@octo/database';
 
 export type DispatchPayload = { executionId: string; tenantId: string; agentId?: string; traceId?: string; expectedState?: string; expectedVersion?: number };
+export type RuntimePayload = { executionId: string; tenantId: string; agentId: string; traceId: string };
 
 export async function nextOutboxSequence(tx: any, tenantId: string, aggregateType: string, aggregateId: string): Promise<number> {
   const row = await tx.execute(sql`SELECT COALESCE(MAX(sequence),0)+1 AS next FROM outbox_events WHERE tenant_id=${tenantId} AND aggregate_type=${aggregateType} AND aggregate_id=${aggregateId} FOR UPDATE`);
@@ -11,7 +12,7 @@ export async function nextOutboxSequence(tx: any, tenantId: string, aggregateTyp
 
 export async function processExecutionDispatchJob(
   data: DispatchPayload,
-  deps: { workerId: string; leaseSeconds: number; invokeRuntime: (payload: { executionId: string; tenantId: string; traceId: string }) => Promise<void> }
+  deps: { workerId: string; leaseSeconds: number; invokeRuntime: (payload: RuntimePayload) => Promise<void> }
 ): Promise<'dispatched'|'skipped'> {
   if (!data.executionId || !data.tenantId) throw new Error('invalid_dispatch_payload');
   const transitioned = await withTenantTx(data.tenantId, async (tx) => {
@@ -24,9 +25,9 @@ export async function processExecutionDispatchJob(
     await tx.insert(executionSteps).values({ id: randomUUID(), tenantId: data.tenantId, executionId: data.executionId, stepIndex: 0, stepType: 'reasoning', status: 'running', stateFrom: 'queued', stateTo: 'dispatched', inputJson: { reason: 'dispatch' }, outputJson: { workerId: deps.workerId } });
     const seq = await nextOutboxSequence(tx, data.tenantId, 'execution', data.executionId);
     await tx.insert(outboxEvents).values({ id: randomUUID(), tenantId: data.tenantId, aggregateType: 'execution', aggregateId: data.executionId, eventType: 'ExecutionDispatched', sequence: seq, payloadJson: { executionId: data.executionId, workerId: deps.workerId } });
-    return true;
+    return { agentId: current.agentId as string };
   });
   if (!transitioned) return 'skipped';
-  await deps.invokeRuntime({ executionId: data.executionId, tenantId: data.tenantId, traceId: data.traceId ?? randomUUID() });
+  await deps.invokeRuntime({ executionId: data.executionId, tenantId: data.tenantId, agentId: data.agentId ?? transitioned.agentId, traceId: data.traceId ?? randomUUID() });
   return 'dispatched';
 }

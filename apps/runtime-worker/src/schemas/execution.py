@@ -45,7 +45,7 @@ class ExecutionStatus(StrEnum):
 
 
 class LLMConfigSchema(OctoModel):
-    primary: str
+    primary: str = "litellm/default"
     fallback: list[str] = Field(default_factory=list)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1)
@@ -66,15 +66,15 @@ class ExecutionRequest(OctoModel):
     execution_id: str
     tenant_id: str
     agent_id: str
-    workspace_id: str
-    task: str = Field(min_length=1, max_length=32_000)
+    workspace_id: str = "default"
+    task: str = Field(default="execute persisted task", min_length=1, max_length=32_000)
     context: dict[str, Any] = Field(default_factory=dict)
-    llm: LLMConfigSchema
+    llm: LLMConfigSchema = Field(default_factory=LLMConfigSchema)
     limits: ExecutionLimitsSchema = Field(default_factory=ExecutionLimitsSchema)
     tools: list[str] = Field(default_factory=list)
     streaming: bool = False
     trace_id: str
-    run_id: str
+    run_id: str = ""
 
 
 class ExecutionResult(OctoModel):

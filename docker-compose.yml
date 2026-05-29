@@ -209,7 +209,7 @@ services:
       REDIS_URL: ${REDIS_URL}
       DATABASE_URL: ${DATABASE_URL}
       API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
-      RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute/internal}
+      RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute}
       EXECUTION_LEASE_SECONDS: ${EXECUTION_LEASE_SECONDS:-90}
       WORKER_CONCURRENCY: ${SCHEDULER_WORKER_CONCURRENCY:-5}
     depends_on:
