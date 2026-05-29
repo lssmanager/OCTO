@@ -36,6 +36,7 @@ class FakeConn:
     row_state: str = "queued"
     agent_id: str = "agent-real"
     checkpoints: list[dict[str, Any]] = field(default_factory=list)
+    checkpoint_writes: list[dict[str, Any]] = field(default_factory=list)
     closed: bool = False
 
     def __post_init__(self) -> None:
@@ -70,6 +71,8 @@ class FakeConn:
     async def fetch(self, query: str, *args: Any) -> list[FakeRow]:
         if "FROM execution_checkpoints" in query:
             return [FakeRow(**row) for row in self.checkpoints]
+        if "FROM execution_checkpoint_writes" in query:
+            return [FakeRow(**row) for row in self.checkpoint_writes]
         return []
 
     async def execute(self, query: str, *args: Any) -> str:
@@ -141,13 +144,27 @@ def test_reclaim_mode_resumes_from_latest_checkpoint(monkeypatch: pytest.MonkeyP
                     "source": "loop",
                 },
             ],
+            checkpoint_writes=[
+                {
+                    "write_index": 0,
+                    "channel": "messages",
+                    "type": "tool_result",
+                    "value_json": {"type": "tool_result", "tool_name": "search", "status": "succeeded"},
+                }
+            ],
         )
 
         async def fake_connect(_dsn: str) -> FakeConn:
             return conn
 
         async def fake_call_llm(*, tenant_id: str, execution_id: str, agent_id: str, messages: list[dict[str, Any]], snapshot: dict[str, Any]) -> LLMCallResult:
-            assert messages == [{"role": "assistant", "content": "partial"}]
+            assert messages == [
+                {"role": "assistant", "content": "partial"},
+                {
+                    "role": "tool",
+                    "content": "{\"type\": \"tool_result\", \"tool_name\": \"search\", \"status\": \"succeeded\"}",
+                },
+            ]
             return LLMCallResult(
                 content="ok",
                 tool_calls=None,
