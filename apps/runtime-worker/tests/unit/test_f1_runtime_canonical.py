@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 import sys
 import types
@@ -35,6 +35,7 @@ class FakeConn:
     row_status: str = "dispatched"
     row_state: str = "queued"
     agent_id: str = "agent-real"
+    checkpoints: list[dict[str, Any]] = field(default_factory=list)
     closed: bool = False
 
     def __post_init__(self) -> None:
@@ -67,6 +68,8 @@ class FakeConn:
         return 1 + sum(1 for sql, _ in self.executed if "INSERT INTO outbox_events" in sql)
 
     async def fetch(self, query: str, *args: Any) -> list[FakeRow]:
+        if "FROM execution_checkpoints" in query:
+            return [FakeRow(**row) for row in self.checkpoints]
         return []
 
     async def execute(self, query: str, *args: Any) -> str:
@@ -116,6 +119,93 @@ def test_run_f1_uses_status_as_authority_and_sends_real_agent_id(monkeypatch: py
         assert conn.closed is True
 
     asyncio.run(run_case())
+
+
+def test_reclaim_mode_resumes_from_latest_checkpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def run_case() -> None:
+        conn = FakeConn(
+            row_status="dispatched",
+            checkpoints=[
+                {
+                    "id": "cp-0",
+                    "step_index": 0,
+                    "parent_checkpoint_id": None,
+                    "state_json": {"messages": [{"role": "user", "content": "hello"}]},
+                    "source": "input",
+                },
+                {
+                    "id": "cp-2",
+                    "step_index": 2,
+                    "parent_checkpoint_id": "cp-0",
+                    "state_json": {"messages": [{"role": "assistant", "content": "partial"}]},
+                    "source": "loop",
+                },
+            ],
+        )
+
+        async def fake_connect(_dsn: str) -> FakeConn:
+            return conn
+
+        async def fake_call_llm(*, tenant_id: str, execution_id: str, agent_id: str, messages: list[dict[str, Any]], snapshot: dict[str, Any]) -> LLMCallResult:
+            assert messages == [{"role": "assistant", "content": "partial"}]
+            return LLMCallResult(
+                content="ok",
+                tool_calls=None,
+                finish_reason="stop",
+                usage={"total_tokens": 1},
+                provider="fake",
+                model="fake/f1-test",
+                retry_count=0,
+                fallback_level=0,
+                accounting_error=False,
+            )
+
+        monkeypatch.setenv("DATABASE_URL", "postgres://unit")
+        monkeypatch.setattr(f1_runtime.asyncpg, "connect", fake_connect)
+        monkeypatch.setattr(f1_runtime, "call_llm", fake_call_llm)
+
+        result = await f1_runtime.run_f1_execution("exec-1", "tenant-1", "trace-1", mode="reclaim")
+
+        assert result["status"] == "succeeded"
+        checkpoint_inserts = [args for sql, args in conn.executed if "INSERT INTO execution_checkpoints" in sql]
+        assert checkpoint_inserts
+        reclaim_checkpoint_args = checkpoint_inserts[0]
+        assert reclaim_checkpoint_args[3] == 3
+        assert reclaim_checkpoint_args[4] == "reclaim"
+        assert reclaim_checkpoint_args[5] == "cp-2"
+
+    asyncio.run(run_case())
+
+
+def test_reclaim_mode_fails_terminally_when_lineage_is_broken(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def run_case() -> None:
+        conn = FakeConn(
+            row_status="dispatched",
+            checkpoints=[
+                {
+                    "id": "cp-2",
+                    "step_index": 2,
+                    "parent_checkpoint_id": "missing",
+                    "state_json": {"messages": [{"role": "assistant", "content": "partial"}]},
+                    "source": "loop",
+                }
+            ],
+        )
+
+        async def fake_connect(_dsn: str) -> FakeConn:
+            return conn
+
+        monkeypatch.setenv("DATABASE_URL", "postgres://unit")
+        monkeypatch.setattr(f1_runtime.asyncpg, "connect", fake_connect)
+
+        result = await f1_runtime.run_f1_execution("exec-1", "tenant-1", "trace-1", mode="reclaim")
+
+        assert result["status"] == "failed"
+        assert result["error"] == "CHECKPOINT_LINEAGE_BROKEN"
+        assert any("error_code='CHECKPOINT_LINEAGE_BROKEN'" in sql for sql, _ in conn.executed)
+
+    asyncio.run(run_case())
+
 
 def test_invalid_transition_is_rejected_by_contract() -> None:
     with pytest.raises(InvalidExecutionTransitionError):
