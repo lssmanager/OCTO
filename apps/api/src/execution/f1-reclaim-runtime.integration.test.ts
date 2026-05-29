@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 import { execFileSync } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { and, asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
@@ -10,6 +12,9 @@ import { processReclaimCandidate } from '../../../reclaimer-worker/src/reclaim-l
 import { processExecutionDispatchJob } from '../../../scheduler-worker/src/dispatch-handler';
 import { PostgresExecutionRepo } from './postgres-execution.repo';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const runtime = async (executionId: string, tenantId: string) => {
   execFileSync(
     'python',
@@ -17,7 +22,11 @@ const runtime = async (executionId: string, tenantId: string) => {
       '-c',
       `import asyncio; from src.f1_runtime import run_f1_execution; asyncio.run(run_f1_execution("${executionId}","${tenantId}","trace-test","reclaim"))`,
     ],
-    { cwd: '../../runtime-worker', env: { ...process.env, OCTO_TEST_LLM_FAKE: 'true' }, stdio: 'inherit' }
+    {
+      cwd: resolve(__dirname, '../../../runtime-worker'),
+      env: { ...process.env, OCTO_TEST_LLM_FAKE: 'true' },
+      stdio: 'inherit',
+    }
   );
 };
 
@@ -80,57 +89,55 @@ describeIfInfra('F1 reclaim->dispatch->runtime integration', () => {
         redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
       });
 
-      try {
-        await processReclaimCandidate(
-          db,
-          queue,
-          {
-            id: created.id,
-            tenantId,
-            agentId,
-            status: 'running',
-            attempt: 0,
-            reclaimCount: 0,
-            traceId: 'trace-test',
-          },
-          3
-        );
+      await processReclaimCandidate(
+        db,
+        queue,
+        {
+          id: created.id,
+          tenantId,
+          agentId,
+          status: 'running',
+          attempt: 0,
+          reclaimCount: 0,
+          traceId: 'trace-test',
+        },
+        3
+      );
 
-        const reclaimJob = await queue.getJob(`reclaim:${created.id}:1`);
-        expect(reclaimJob).toBeTruthy();
-        expect(reclaimJob?.data.tenantId).toBe(tenantId);
-        expect(reclaimJob?.data.mode).toBe('reclaim');
+      const reclaimJob = await queue.getJob(`reclaim:${created.id}:1`);
+      expect(reclaimJob).toBeTruthy();
+      expect(reclaimJob?.data.tenantId).toBe(tenantId);
+      expect(reclaimJob?.data.mode).toBe('reclaim');
 
-        const reclaimable = await repo.getExecutionSummary(created.id, tenantId);
-        expect(reclaimable?.status).toBe('reclaimable');
-        expect(reclaimable?.state).toBe('reclaimable');
+      const reclaimable = await repo.getExecutionSummary(created.id, tenantId);
+      expect(reclaimable?.status).toBe('reclaimable');
+      expect(reclaimable?.state).toBe('reclaimable');
 
-        await processExecutionDispatchJob(reclaimJob!.data, {
-          workerId: 'scheduler-reclaim-test',
-          leaseSeconds: 90,
-          invokeRuntime: async (payload) => {
-            expect(payload.mode).toBe('reclaim');
-            await runtime(payload.executionId, payload.tenantId);
-          },
-        });
+      await processExecutionDispatchJob(reclaimJob!.data, {
+        workerId: 'scheduler-reclaim-test',
+        leaseSeconds: 90,
+        invokeRuntime: async (payload) => {
+          expect(payload.mode).toBe('reclaim');
+          await runtime(payload.executionId, payload.tenantId);
+        },
+      });
 
-        const done = await repo.getExecutionSummary(created.id, tenantId);
-        expect(done?.status).toBe('completed');
-        expect(done?.state).toBe('completed');
+      const done = await repo.getExecutionSummary(created.id, tenantId);
+      expect(done?.status).toBe('completed');
+      expect(done?.state).toBe('completed');
 
-        const cps = await withTenantTx(tenantId, (tx) =>
-          tx
-            .select()
-            .from(executionCheckpoints)
-            .where(and(eq(executionCheckpoints.executionId, created.id), eq(executionCheckpoints.tenantId, tenantId)))
-            .orderBy(asc(executionCheckpoints.stepIndex))
-        );
-        expect(cps.length).toBeGreaterThanOrEqual(3);
-        expect(cps[1]?.source).toBe('reclaim');
-        expect(cps[1]?.parentCheckpointId).toBe(checkpointId);
-      } finally {
-        await queue.close();
-      }
+      const cps = await withTenantTx(tenantId, (tx) =>
+        tx
+          .select()
+          .from(executionCheckpoints)
+          .where(and(eq(executionCheckpoints.executionId, created.id), eq(executionCheckpoints.tenantId, tenantId)))
+          .orderBy(asc(executionCheckpoints.stepIndex))
+      );
+      expect(cps.length).toBeGreaterThanOrEqual(3);
+      expect(cps[1]?.source).toBe('reclaim');
+      expect(cps[1]?.parentCheckpointId).toBe(checkpointId);
+
+      await queue.close();
     },
     30000
   );
