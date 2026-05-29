@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, eq, sql } from 'drizzle-orm';
-import { executionEvents, executionSteps, executions, insertOutboxEvent, withTenantTx } from '@octo/database';
-import { ConcurrentTransitionError, ExecutionStateService } from '@octo/runtime-state';
+import { and, eq } from 'drizzle-orm';
+import { executionSteps, executions, insertOutboxEvent, withTenantTx } from '@octo/database';
+import { ConcurrentTransitionError, createDrizzleExecutionStateService } from '@octo/runtime-state';
 
 import { dispatchSkippedCounter, failedTerminalCounter, replayedCounter } from './dispatch-metrics';
 
@@ -64,48 +64,24 @@ export async function processExecutionDispatchJob(
     const lease = new Date(now.getTime() + deps.leaseSeconds * 1000);
     const traceId = String(current.traceId || data.traceId || randomUUID());
 
-    const stateService = new ExecutionStateService({
-      updateExecutionStatus: async (stateTx, executionId, from, to) => {
-        const updated = await (stateTx as typeof tx)
-          .update(executions)
-          .set({
-            state: to,
-            status: to,
-            leaseOwner: deps.workerId,
-            workerId: deps.workerId,
-            leaseExpiresAt: lease,
-            attempt: nextAttempt,
-            attemptCount: nextAttempt,
-            version: sql`${executions.version} + 1`,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(executions.id, executionId),
-              eq(executions.tenantId, data.tenantId),
-              eq(executions.status, from)
-            )
-          )
-          .returning({ id: executions.id });
-
-        return updated.length > 0;
+    const stateService = createDrizzleExecutionStateService({
+      tenantId: data.tenantId,
+      traceId,
+      runId: String(current.runId),
+      agentId: String(current.agentId),
+      source: 'scheduler-worker',
+      rowPatch: {
+        leaseOwner: deps.workerId,
+        workerId: deps.workerId,
+        leaseExpiresAt: lease,
+        attempt: nextAttempt,
+        attemptCount: nextAttempt,
+        updatedAt: now,
       },
-      appendExecutionEvent: async (stateTx, executionId, eventType, payload) => {
-        await (stateTx as typeof tx).insert(executionEvents).values({
-          executionId,
-          tenantId: data.tenantId,
-          traceId,
-          runId: String(current.runId),
-          agentId: String(current.agentId),
-          source: 'scheduler-worker',
-          type: eventType,
-          payload,
-          metadata: {
-            workerId: deps.workerId,
-            mode,
-            reason: dispatchReason,
-          },
-        });
+      eventMetadata: {
+        workerId: deps.workerId,
+        mode,
+        reason: dispatchReason,
       },
     });
 
