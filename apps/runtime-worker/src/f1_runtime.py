@@ -81,6 +81,20 @@ def _messages_from_state(state_json: dict[str, Any] | None, fallback_input: dict
     return [{"role": "user", "content": str(fallback_input)}]
 
 
+def _apply_checkpoint_writes_to_messages(
+    base_messages: list[dict[str, Any]], writes: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    messages = list(base_messages)
+    for write in sorted(writes, key=lambda row: int(row.get("write_index") or 0)):
+        if write.get("channel") != "messages" or write.get("type") != "tool_result":
+            continue
+        value = write.get("value_json")
+        if not isinstance(value, dict):
+            continue
+        messages.append({"role": "tool", "content": _json(value)})
+    return messages
+
+
 async def _mark_failed(
     conn: asyncpg.Connection,
     *,
@@ -211,6 +225,20 @@ async def _claim_and_start(
                 base_messages = _messages_from_state(
                     latest.get("state_json") if isinstance(latest.get("state_json"), dict) else {},
                     row["input_json"] or {},
+                )
+                writes = await conn.fetch(
+                    """
+                    SELECT write_index, channel, type, value_json
+                    FROM execution_checkpoint_writes
+                    WHERE tenant_id=$1 AND checkpoint_id=$2
+                    ORDER BY write_index ASC
+                    """,
+                    tenant_id,
+                    last_checkpoint_id,
+                )
+                base_messages = _apply_checkpoint_writes_to_messages(
+                    base_messages,
+                    [dict(write) for write in writes],
                 )
 
         if status != "dispatched":
