@@ -254,10 +254,11 @@ async def _run_llm_and_tools(
     tenant_id: str,
     trace_id: str | None,
     started: dict[str, Any],
-) -> tuple[str, LLMCallResult]:
+) -> tuple[str, LLMCallResult, list[tuple[str, str, str, str, str, int, str, str, str]]]:
     messages = [{"role": "user", "content": str(started["input_json"])}]
     snapshot = started["context_snapshot_json"] or {}
     agent_id = str(started["agent_id"])
+    checkpoint_writes_buffer: list[tuple[str, str, str, str, str, int, str, str, str]] = []
 
     llm = await call_llm(
         tenant_id=tenant_id,
@@ -278,12 +279,7 @@ async def _run_llm_and_tools(
                 tool_call=tc,
                 trace_id=trace_id,
             )
-            await conn.execute(
-                """
-                INSERT INTO execution_checkpoint_writes (
-                  id, tenant_id, checkpoint_id, task_id, task_path, write_index, channel, type, value_json
-                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
-                """,
+            checkpoint_writes_buffer.append((
                 str(uuid.uuid4()),
                 tenant_id,
                 started["checkpoint_id"],
@@ -293,7 +289,7 @@ async def _run_llm_and_tools(
                 "messages",
                 "tool_result",
                 _json(tool_res),
-            )
+            ))
             messages.append({"role": "tool", "content": _json(tool_res), "tool_call_id": tc.get("id")})
         llm2 = await call_llm(
             tenant_id=tenant_id,
@@ -302,8 +298,8 @@ async def _run_llm_and_tools(
             messages=messages,
             snapshot=snapshot,
         )
-        return llm2.content, llm2
-    return llm.content, llm
+        return llm2.content, llm2, checkpoint_writes_buffer
+    return llm.content, llm, checkpoint_writes_buffer
 
 
 async def _persist_success(
@@ -315,6 +311,7 @@ async def _persist_success(
     started: dict[str, Any],
     output: str,
     llm: LLMCallResult,
+    checkpoint_writes_buffer: list[tuple[str, str, str, str, str, int, str, str, str]],
 ) -> None:
     worker_id = os.environ.get("HOSTNAME", "runtime-worker")
     async with conn.transaction():
@@ -327,6 +324,16 @@ async def _persist_success(
             raise RuntimeError("execution_not_found")
         current_status = str(row["status"])
         validate_transition(current_status, "completed")
+
+        for write_data in checkpoint_writes_buffer:
+            await conn.execute(
+                """
+                INSERT INTO execution_checkpoint_writes (
+                  id, tenant_id, checkpoint_id, task_id, task_path, write_index, channel, type, value_json
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
+                """,
+                *write_data,
+            )
 
         await conn.execute(
             """
@@ -426,7 +433,7 @@ async def run_f1_execution(
             return started
 
         try:
-            output, llm = await _run_llm_and_tools(
+            output, llm, checkpoint_writes_buffer = await _run_llm_and_tools(
                 conn,
                 execution_id=execution_id,
                 tenant_id=tenant_id,
@@ -452,6 +459,7 @@ async def run_f1_execution(
             started=started,
             output=output,
             llm=llm,
+            checkpoint_writes_buffer=checkpoint_writes_buffer,
         )
         return {"status": "succeeded", "output": output, "usage": llm.usage}
     finally:

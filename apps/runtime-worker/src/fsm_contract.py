@@ -11,7 +11,7 @@ try:  # Prefer generated source of truth from packages/contracts.
         EXECUTION_TERMINAL_STATES,
         EXECUTION_VALID_TRANSITIONS,
     )
-except Exception:  # pragma: no cover - only used in stripped test environments
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - only used in stripped test environments
     EXECUTION_TERMINAL_STATES = ("completed", "failed", "cancelled")
     EXECUTION_VALID_TRANSITIONS = {
         "pending": ("queued", "cancelled"),

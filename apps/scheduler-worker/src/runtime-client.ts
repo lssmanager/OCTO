@@ -15,6 +15,8 @@ export class RuntimeInvocationError extends Error {
   }
 }
 
+const RUNTIME_FETCH_TIMEOUT_MS = parseInt(process.env.RUNTIME_FETCH_TIMEOUT_MS || '30000', 10);
+
 export async function invokeRuntimeHttp(
   runtimeUrl: string,
   runtimeSecret: string,
@@ -22,6 +24,7 @@ export async function invokeRuntimeHttp(
 ): Promise<void> {
   let response: Response;
   try {
+    const signal = AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS);
     response = await fetch(runtimeUrl, {
       method: 'POST',
       headers: {
@@ -35,6 +38,7 @@ export async function invokeRuntimeHttp(
         traceId: payload.traceId,
         runId: payload.executionId,
       }),
+      signal,
     });
   } catch (cause) {
     console.error('execution_runtime_invoke_network_failed', {
