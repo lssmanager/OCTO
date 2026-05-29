@@ -7,6 +7,7 @@ import {
   pgEnum,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
+import { hierarchyNodes } from './hierarchy-nodes';
 
 export const agentStatusEnum = pgEnum('agent_status', ['active', 'inactive', 'suspended', 'error']);
 
@@ -20,6 +21,7 @@ export const agents = pgTable(
     role: text('role').notNull(),
     goal: text('goal').notNull(),
     parentId: text('parent_id').references((): AnyPgColumn => agents.id),
+    hierarchyNodeId: text('hierarchy_node_id').references(() => hierarchyNodes.id),
     capabilities: jsonb('capabilities').notNull().default([]),
     governancePolicy: jsonb('governance_policy').notNull().default({}),
     status: agentStatusEnum('status').notNull().default('active'),
@@ -30,6 +32,7 @@ export const agents = pgTable(
   (t) => ({
     tenantIdx: index('idx_agents_tenant').on(t.tenantId),
     parentIdx: index('agents_parent_id_idx').on(t.parentId),
+    hierarchyNodeIdx: index('agents_hierarchy_node_id_idx').on(t.hierarchyNodeId),
     statusIdx: index('agents_status_idx').on(t.status),
   })
 );

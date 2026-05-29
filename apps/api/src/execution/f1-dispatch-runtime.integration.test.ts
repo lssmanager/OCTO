@@ -35,6 +35,7 @@ describeIfInfra('F1 dispatch->runtime integration', () => {
     const queued = await repo.getExecutionSummary(created.id, tenantA);
     expect(queued?.status).toBe('queued');
     expect(queued?.state).toBe('queued');
+    expect((queued?.contextSnapshotJson as any)?.hierarchySnapshot?.chain).toBeDefined();
 
     await processExecutionDispatchJob({ executionId: created.id, tenantId: tenantA }, { workerId: 'test-worker', leaseSeconds: 90, invokeRuntime: async (p) => { expect(p.agentId).toBe(agentId); await runtime(p.executionId, p.tenantId); } });
 

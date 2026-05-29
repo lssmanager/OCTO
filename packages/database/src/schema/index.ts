@@ -3,6 +3,7 @@
 
 export * from './agents';
 export * from './agent-versions';
+export * from './hierarchy-nodes';
 export * from './executions';
 export * from './execution-steps';
 export * from './execution-checkpoints';
