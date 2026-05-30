@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "phase": "F1",
+  "runtimeRole": "octo_runtime_worker",
+  "sourceOfTruth": "apps/runtime-worker/src/f1_runtime.py:F1_RUNTIME_DB_WRITE_TABLES",
+  "runtimeBoundary": "Runtime Worker owns model/tool execution and writes durable runtime progress directly to PostgreSQL in F1.",
+  "controlPlaneBoundary": "Control Plane owns external APIs, authn/authz, tenant policy, execution creation/dispatch, scheduling ownership and user-facing status.",
+  "f2Direction": "Move or hide direct runtime persistence behind event-sourcing, a Control Plane persistence API, or an abstract persistence adapter without changing F1 invariants.",
+  "allowedPrivileges": ["SELECT", "INSERT", "UPDATE"],
+  "forbiddenRoleAttributes": ["SUPERUSER", "BYPASSRLS", "CREATEDB", "CREATEROLE", "REPLICATION"],
+  "allowedWriteTables": [
+    "approvals",
+    "execution_checkpoint_writes",
+    "execution_checkpoints",
+    "execution_steps",
+    "executions",
+    "outbox_events",
+    "tool_invocations",
+    "worker_heartbeats"
+  ],
+  "controlPlaneOwnedTables": [
+    "agent_versions",
+    "agents",
+    "audit_log",
+    "execution_dlq",
+    "hierarchy_nodes",
+    "idempotency_keys",
+    "tenant_memberships"
+  ],
+  "runtimeProhibitedWrites": [
+    "agent_versions",
+    "agents",
+    "audit_log",
+    "execution_dlq",
+    "hierarchy_nodes",
+    "idempotency_keys",
+    "tenant_memberships"
+  ],
+  "mandatoryDocs": [
+    "docs/f1/architecture.md",
+    "docs/architecture/F1-architecture-status.md",
+    "docs/security/runtime-db-role.md"
+  ],
+  "mandatoryMigration": "packages/database/migrations/202605300002_f1_runtime_db_role.sql"
+}

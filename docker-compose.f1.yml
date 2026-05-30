@@ -58,6 +58,7 @@ services:
       dockerfile: docker/runtime-worker.Dockerfile
     environment:
       REDIS_URL: ${REDIS_URL}
+      # Required for F1 durable execution writes; use a least-privilege runtime role.
       DATABASE_URL: ${DATABASE_URL}
       API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
     ports: ["8000:8000"]
@@ -99,6 +100,7 @@ services:
       dockerfile: docker/scheduler-worker.Dockerfile
     environment:
       REDIS_URL: ${REDIS_URL}
+      # Required for scheduler dispatch/lease database updates.
       DATABASE_URL: ${DATABASE_URL}
       API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
       RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute}

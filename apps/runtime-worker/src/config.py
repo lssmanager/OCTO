@@ -41,10 +41,12 @@ class Settings(BaseSettings):
 
     # ── Database ──────────────────────────────────────────────────────────────
     # F1 current behavior: runtime-worker requires direct DB access because
-    # execution-state durability (steps/checkpoints/transitions) is persisted
-    # from runtime paths implemented in this repository.
-    # Control Plane still owns user-facing orchestration APIs, authz/policy,
-    # and execution dispatch lifecycle.
+    # execution-state durability is persisted from runtime paths implemented in
+    # this repository. Least-privilege scope is documented as the F1 write
+    # contract: executions, execution_steps, execution_checkpoints,
+    # execution_checkpoint_writes, tool_invocations, approvals, outbox_events
+    # and worker_heartbeats. Control Plane still owns user-facing orchestration
+    # APIs, authz/policy and execution dispatch lifecycle.
     database_url: str = Field(pattern=r"^postgresql://")
 
     # ── Redis (BullMQ transport) ───────────────────────────────────────────────
