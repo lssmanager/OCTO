@@ -5,13 +5,39 @@ import { createQueue, QUEUES } from '@octo/queue';
 import { AgentPolicyResolverService } from '../agents/agent-policy-resolver.service';
 import { PostgresAgentRepo } from '../agents/postgres-agent.repo';
 
+export type DispatchEnqueuePayload = {
+  executionId: string;
+  tenantId: string;
+  agentId: string;
+  traceId: string;
+  expectedState: 'queued';
+};
+
+export type DispatchEnqueuer = (payload: DispatchEnqueuePayload, jobId: string) => Promise<void>;
+
+async function enqueueExecutionDispatch(payload: DispatchEnqueuePayload, jobId: string): Promise<void> {
+  const queue = createQueue<DispatchEnqueuePayload>(QUEUES.EXECUTION_DISPATCH, {
+    redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
+  });
+
+  try {
+    await queue.add('dispatch', payload, { jobId });
+  } finally {
+    await queue.close();
+  }
+}
+
 export class PostgresExecutionRepo {
-  private readonly policyResolver = new AgentPolicyResolverService(new PostgresAgentRepo());
+  constructor(
+    private readonly dispatchEnqueuer: DispatchEnqueuer = enqueueExecutionDispatch,
+    private readonly policyResolver: AgentPolicyResolverService = new AgentPolicyResolverService(new PostgresAgentRepo())
+  ) {}
 
   async createExecution(input: any, tenantId: string, createdBy: string): Promise<{ id: string }> {
     const id = randomUUID();
     const traceId = input.traceId ?? randomUUID();
     const contextSnapshot = await this.policyResolver.resolveEffectivePolicies(tenantId, input.agentId);
+
     await withTenantTx(tenantId, async (tx) => {
       await tx.insert(executions).values({
         id,
@@ -20,6 +46,8 @@ export class PostgresExecutionRepo {
         agentVersionId: input.agentVersionId,
         status: 'queued',
         state: 'queued',
+        queueJobId: id,
+        traceId,
         createdBy,
         inputJson: input.input ?? {},
         task: input.input ?? {},
@@ -27,20 +55,62 @@ export class PostgresExecutionRepo {
         budgetSnapshotJson: contextSnapshot.budgetPolicy ?? {},
         governance: contextSnapshot.governance ?? {},
       });
-      await insertOutboxEvent(tx, { tenantId, aggregateType: 'execution', aggregateId: id, eventType: 'ExecutionQueued', payloadJson: { executionId: id }, traceId, source: 'api' });
-    });
-    const queue = createQueue<any>(QUEUES.EXECUTION_DISPATCH, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
-    try {
-      await queue.add('dispatch', { executionId: id, tenantId, agentId: input.agentId, traceId, expectedState: 'queued' }, { jobId: id });
-    } catch (error) {
-      await withTenantTx(tenantId, async (tx) => {
-        await tx.update(executions).set({ status: 'failed', state: 'failed', errorCode: 'DISPATCH_ENQUEUE_FAILED', errorMessage: error instanceof Error ? error.message : String(error), updatedAt: new Date() }).where(and(eq(executions.id, id), eq(executions.tenantId, tenantId), eq(executions.status, 'queued')));
-        await insertOutboxEvent(tx, { tenantId, aggregateType: 'execution', aggregateId: id, eventType: 'ExecutionFailed', payloadJson: { executionId: id, errorCode: 'DISPATCH_ENQUEUE_FAILED' }, traceId, source: 'api' });
+      await insertOutboxEvent(tx, {
+        tenantId,
+        aggregateType: 'execution',
+        aggregateId: id,
+        eventType: 'ExecutionQueued',
+        payloadJson: { executionId: id, queueJobId: id },
+        traceId,
+        source: 'api',
       });
-      throw error;
-    } finally {
-      await queue.close();
+    });
+
+    try {
+      await this.dispatchEnqueuer(
+        {
+          executionId: id,
+          tenantId,
+          agentId: input.agentId,
+          traceId,
+          expectedState: 'queued',
+        },
+        id
+      );
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('execution_dispatch_enqueue_deferred', {
+        executionId: id,
+        tenantId,
+        error: errorMessage,
+      });
+
+      try {
+        await withTenantTx(tenantId, async (tx) => {
+          await insertOutboxEvent(tx, {
+            tenantId,
+            aggregateType: 'execution',
+            aggregateId: id,
+            eventType: 'ExecutionDispatchDeferred',
+            payloadJson: {
+              executionId: id,
+              queueJobId: id,
+              errorCode: 'DISPATCH_ENQUEUE_DEFERRED',
+              errorMessage,
+            },
+            traceId,
+            source: 'api',
+          });
+        });
+      } catch (eventError) {
+        console.error('execution_dispatch_deferred_event_failed', {
+          executionId: id,
+          tenantId,
+          error: eventError instanceof Error ? eventError.message : String(eventError),
+        });
+      }
     }
+
     return { id };
   }
   async getExecutionSummary(executionId: string, tenantId: string) { return withTenantTx(tenantId, async (tx) => (await tx.select().from(executions).where(and(eq(executions.id, executionId), eq(executions.tenantId, tenantId))).limit(1))[0] ?? null); }
