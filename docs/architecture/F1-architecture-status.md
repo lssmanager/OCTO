@@ -1,20 +1,32 @@
 # OCTO F1 Architecture Status (Current Behavior vs Future Target)
 
-## Contradiction inventory (resolved in this update)
+## F1 boundary decision
 
-| File | Previous text/idea | Problem | Action |
-|---|---|---|---|
-| `apps/runtime-worker/src/execution/__init__.py` | "This module NEVER writes to Postgres directly" | Contradicted F1 runtime behavior (runtime code persists execution state directly). | Replaced with current-state note + explicit F2+ future-direction note. |
-| `apps/runtime-worker/src/config.py` | "runtime-worker reads DB only for health checks" | Contradicted current runtime persistence paths. | Rewrote database comment to reflect F1 direct DB writes and control-plane boundaries. |
-| `README.md` | No explicit complete/closed distinction for F1 behavior | Encouraged ambiguity about what is implemented vs operationally closed. | Added explicit "Current F1 behavior", boundaries table, and definitions for F1 complete vs F1 closed. |
-
-## Current F1 behavior
+F1 keeps a strict **Control Plane / Execution Plane responsibility boundary**, but it does **not** enforce a strict storage-write boundary yet. The accepted F1 contract is:
 
 - Control Plane (`apps/api`) owns external API surface, authn/authz, tenant policy, execution creation/dispatch and user-facing status endpoints.
-- Runtime Worker (`apps/runtime-worker`) owns model/tool execution and durable runtime progress persistence.
-- In current F1, runtime worker persists execution progress directly to PostgreSQL (for transitions, steps, checkpoints and recovery continuity).
-- Scheduler Worker (`apps/scheduler-worker`) owns scheduled dispatch and queue-driven dispatch orchestration.
-- Reclaimer Worker (`apps/reclaimer-worker`) owns stale/zombie detection and replay/retry decisions.
+- Runtime Worker (`apps/runtime-worker`) owns model/tool execution and writes durable runtime progress directly to PostgreSQL.
+- PostgreSQL remains the system of record; Redis/BullMQ is command transport and coordination, not durable truth.
+- `DATABASE_URL` is required by runtime execution paths, not just by liveness/readiness probes.
+
+This direct runtime writer is an explicit F1 debt item, not an accidental deployment detail.
+
+## Runtime Worker F1 PostgreSQL write contract
+
+Runtime Worker DB privileges for F1 should be least-privilege and scoped to the following tables.
+
+| Table | Runtime operation | Why F1 allows it |
+|---|---|---|
+| `executions` | `SELECT ... FOR UPDATE`; `UPDATE` status/state/version, worker ownership, completion/error fields, checkpoints and token usage. | The runtime must claim dispatched work atomically, advance the FSM with CAS semantics and persist terminal state even if the API is not in the hot path. |
+| `execution_steps` | `INSERT` the runtime/LLM step; `UPDATE` step output and completion timestamps. | Step history is part of durable replay/timeline state. |
+| `execution_checkpoints` | `SELECT` existing checkpoints during reclaim; `INSERT` input/reclaim/loop checkpoints. | Checkpoint lineage is the recovery boundary after worker restart or reclaim. |
+| `execution_checkpoint_writes` | `SELECT` writes during reclaim; `INSERT` tool-result channel writes. | Tool outputs must be replayable from durable checkpoint writes. |
+| `tool_invocations` | `INSERT` tool attempts; `UPDATE` validation, timeout, failure, success and approval linkage. | Tool governance/audit state is generated inside the runtime tool executor. |
+| `approvals` | `INSERT` pending tool approvals. | Human-in-the-loop pauses originate when the runtime hits a governed tool call. |
+| `outbox_events` | `SELECT` aggregate sequence; `INSERT` execution/tool lifecycle events. | Events must be committed atomically with state changes and then published by the outbox publisher. |
+| `worker_heartbeats` | `INSERT ... ON CONFLICT DO UPDATE` runtime heartbeat rows. | F1 operational status needs durable worker liveness visible to ops/status APIs. |
+
+The runtime role must not have broad schema ownership, migration privileges or `BYPASSRLS`. If differentiated database roles are introduced, the runtime role should receive only the table permissions needed above plus sequence/default privileges required by those inserts.
 
 ## Control Plane vs Execution Plane boundaries
 
@@ -56,12 +68,16 @@ Minimum criteria:
 
 ## Accepted F1 debt
 
-- Runtime currently performs direct PostgreSQL writes for durable progress.
+- Runtime performs direct PostgreSQL writes for durable progress under the explicit contract above.
 - Some ops metrics are derived from DB/queue reads rather than a dedicated metrics backend.
 - Worker heartbeat coverage is partial and may report `unknown` where source signals are not yet first-class.
 
 ## Future target (F2+ direction, not current behavior)
 
-- Event-sourced persistence-only runtime boundaries.
-- Expanded orchestration engines (e.g., advanced graph orchestration) beyond F1 kernel scope.
-- Dedicated metrics backend for richer p95/p99 and cross-service heartbeat correlation.
+F2+ should remove or hide the direct runtime writer behind one of these approaches:
+
+1. **Event-sourced execution persistence:** runtime emits append-only facts to a controlled persistence/event interface, and Control Plane projections own table-specific state updates.
+2. **Control Plane persistence API:** runtime calls an internal, idempotent API for step/checkpoint/tool/outbox commits, with the API enforcing authorization, schema evolution and least privilege.
+3. **Abstract persistence adapter:** runtime code depends on a narrow persistence interface so the F1 direct PostgreSQL adapter can be swapped without rewriting the execution loop.
+
+Any F2+ migration must preserve F1 invariants: atomic state + outbox commits, checkpoint lineage validation, CAS/FSM transitions and replayable tool writes.

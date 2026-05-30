@@ -141,7 +141,11 @@ services:
   # EXECUTION PLANE — Python Runtime Worker
   # Ejecución de tareas, razonamiento, herramientas, LLM.
   # Principio #2: isolation total — crashes aquí NO afectan la API.
-  # Principio #7: NUNCA accede a DB directamente en producción.
+  # Boundary F1: escribe progreso durable directamente en PostgreSQL
+  # (executions, execution_steps, execution_checkpoints,
+  # execution_checkpoint_writes, tool_invocations, approvals,
+  # outbox_events, worker_heartbeats). F2+ debe mover/abstraer esta
+  # persistencia detrás de event-sourcing o una API del Control Plane.
   # ────────────────────────────────────────────────────────────────
   runtime-worker:
     build:
@@ -159,7 +163,8 @@ services:
       # Inter-service auth (debe coincidir con RUNTIME_API_SECRET de la API)
       API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
       API_URL: ${API_URL:-http://api:3001/api}
-      # Database (solo para health check — writes van por la API)
+      # Database required for F1 execution durability, not only health checks.
+      # Use a least-privilege runtime DB role scoped to the F1 write contract.
       DATABASE_URL: ${DATABASE_URL}
       # Redis
       REDIS_URL: ${REDIS_URL}

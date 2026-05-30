@@ -20,4 +20,7 @@ if rg -n "BYPASSRLS" packages/database/migrations | rg -v "^.+--"; then
   echo "Forbidden BYPASSRLS detected in migrations"; exit 1
 fi
 
+# Keep F1 runtime-worker direct-writer boundary explicit and non-contradictory.
+bash scripts/check-f1-runtime-boundary.sh
+
 echo "arch:check passed"

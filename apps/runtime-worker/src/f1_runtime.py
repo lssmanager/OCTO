@@ -16,6 +16,23 @@ from .tools.executor import ToolApprovalRequired, execute_tool_call
 
 log = structlog.get_logger(__name__)
 
+# F1 runtime direct-writer contract. This is accepted F1 debt: the runtime
+# persists durable execution progress directly in PostgreSQL so reclaim/replay
+# can recover after worker restarts. Keep this list synchronized with
+# docs/architecture/F1-architecture-status.md and scripts/check-f1-runtime-boundary.sh.
+F1_RUNTIME_DB_WRITE_TABLES = frozenset(
+    {
+        "executions",
+        "execution_steps",
+        "execution_checkpoints",
+        "execution_checkpoint_writes",
+        "tool_invocations",
+        "approvals",
+        "outbox_events",
+        "worker_heartbeats",
+    }
+)
+
 
 async def _next_outbox_sequence(conn: asyncpg.Connection, tenant_id: str, execution_id: str) -> int:
     await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", f"{tenant_id}:execution:{execution_id}")
