@@ -53,7 +53,7 @@ function buildReclaimDispatchPayload(candidate: ReclaimCandidate): ReclaimDispat
 }
 
 async function failReclaimTerminally(
-  db: ReturnType<typeof getDb>,
+  _db: ReturnType<typeof getDb>,
   candidate: ReclaimCandidate,
   errorCode: string,
   errorMessage: string
@@ -123,7 +123,7 @@ export async function processReclaimCandidate(
 
   if (candidate.status === 'running') {
     const outcome = await casReclaim(db, candidate.id, candidate.tenantId, {
-      correlationId: candidate.traceId ?? undefined,
+      ...(candidate.traceId ? { correlationId: candidate.traceId } : {}),
     });
 
     if (outcome !== 'reclaimed') {
@@ -173,7 +173,12 @@ export async function startReclaimLoop(
 
       for (const zombie of zombies) {
         try {
-          const outcome = await processReclaimCandidate(db, dispatchQueue, zombie, config.maxReclaimAttempts);
+          const outcome = await processReclaimCandidate(
+            db,
+            dispatchQueue,
+            zombie,
+            config.maxReclaimAttempts
+          );
 
           if (outcome === 'requeued') {
             console.log(

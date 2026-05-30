@@ -33,9 +33,10 @@
     "docker:build:migrate": "docker build -f docker/migrate.Dockerfile -t octo/migrate:sha-local --build-arg VERSION=local --build-arg REVISION=local --build-arg CREATED=local .",
     "docker:build:f1": "pnpm docker:build:api && pnpm docker:build:runtime-worker && pnpm docker:build:scheduler-worker && pnpm docker:build:migrate",
     "docker:verify-hardening": "bash scripts/verify-docker-hardening.sh",
-    "f1:verify": "bash scripts/f1-verify.sh",
+    "f1:verify": "bash scripts/f1-verify.sh --fast",
     "contracts:generate": "pnpm contracts:build && pnpm contracts:python",
-    "test:outbox": "turbo run test --filter=@octo/events --filter=@octo/api -- outbox"
+    "test:outbox": "turbo run test --filter=@octo/events --filter=@octo/api -- outbox",
+    "f1:close-gate": "bash scripts/f1-verify.sh --close"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.59.4",

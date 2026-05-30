@@ -19,7 +19,7 @@ import type { OtelTraceFields } from '@octo/queue';
 export type ReclaimOutcome = 'reclaimed' | 'already_taken' | 'not_found';
 
 export async function casReclaim(
-  db: ReturnType<typeof getDb>,
+  _db: ReturnType<typeof getDb>,
   executionId: string,
   tenantId: string,
   traceFields?: OtelTraceFields
