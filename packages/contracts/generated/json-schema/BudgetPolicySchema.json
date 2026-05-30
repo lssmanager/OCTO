@@ -12,6 +12,26 @@
           "type": "string",
           "pattern": "^\\d+\\.\\d{2}$"
         },
+        "minReservedCostUsd": {
+          "type": "string",
+          "pattern": "^\\d+(\\.\\d+)?$",
+          "default": "0.000001"
+        },
+        "currentSpendUsd": {
+          "type": "string",
+          "pattern": "^\\d+(\\.\\d+)?$",
+          "default": "0"
+        },
+        "onExhaust": {
+          "type": "string",
+          "enum": [
+            "fail",
+            "block",
+            "warn",
+            "require_approval"
+          ],
+          "default": "fail"
+        },
         "hardStop": {
           "type": "boolean",
           "default": true

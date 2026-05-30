@@ -119,21 +119,25 @@ def _budget_from_snapshot(snapshot: dict[str, Any]) -> BudgetPolicy:
     )
 
 
-def _explicit_model_policy(snapshot: dict[str, Any]) -> tuple[str, list[str], set[str]] | None:
+def _explicit_model_policy(
+    snapshot: dict[str, Any],
+) -> tuple[str, list[str], set[str], set[str]] | None:
     raw = snapshot.get("modelPolicy")
     if not isinstance(raw, dict):
-        raw = (
-            snapshot.get("model_policy") if isinstance(snapshot.get("model_policy"), dict) else None
-        )
+        raw = snapshot.get("model_policy") if isinstance(snapshot.get("model_policy"), dict) else None
     if not isinstance(raw, dict):
         return None
     primary = raw.get("primaryModel", raw.get("primary_model"))
-    fallbacks = _as_str_list(
-        raw.get("fallbackChain", raw.get("fallbackModels", raw.get("fallback_models")))
+    fallbacks = _unique(
+        [
+            *_as_str_list(raw.get("fallbackChain", raw.get("fallback_chain"))),
+            *_as_str_list(raw.get("fallbackModels", raw.get("fallback_models"))),
+        ]
     )
     allowed = set(_as_str_list(raw.get("allowedModels", raw.get("allowed_models"))))
+    registered = set(_as_str_list(raw.get("registeredModels", raw.get("registered_models"))))
     if isinstance(primary, str) and primary:
-        return primary, fallbacks, allowed
+        return primary, fallbacks, allowed, registered
     return None
 
 
@@ -149,6 +153,7 @@ def _hierarchy_models(snapshot: dict[str, Any], env_default: str) -> tuple[str, 
         primary = raw.get("primaryModel", raw.get("primary_model"))
         if isinstance(primary, str) and primary:
             candidates.append(primary)
+        candidates.extend(_as_str_list(raw.get("fallbackChain", raw.get("fallback_chain"))))
         candidates.extend(_as_str_list(raw.get("fallbackModels", raw.get("fallback_models"))))
     default_model = _get_path(snapshot, "global", "defaultModel")
     if isinstance(default_model, str) and default_model:
@@ -165,10 +170,11 @@ def _hierarchy_models(snapshot: dict[str, Any], env_default: str) -> tuple[str, 
 def resolve_effective_policy(snapshot: dict[str, Any], env_default: str = "") -> EffectiveLLMPolicy:
     explicit = _explicit_model_policy(snapshot)
     if explicit:
-        primary, fallbacks, policy_allowed = explicit
+        primary, fallbacks, policy_allowed, policy_registered = explicit
     else:
         primary, fallbacks = _hierarchy_models(snapshot, env_default)
         policy_allowed = set()
+        policy_registered = set()
 
     chain = _unique([primary, *fallbacks])
     if not chain:
@@ -177,7 +183,8 @@ def resolve_effective_policy(snapshot: dict[str, Any], env_default: str = "") ->
     fallbacks = chain[1:]
 
     registered = (
-        _model_set_from(snapshot.get("registeredModels"))
+        policy_registered
+        or _model_set_from(snapshot.get("registeredModels"))
         or _model_set_from(snapshot.get("modelRegistry"))
         or _model_set_from(_get_path(snapshot, "governance", "registeredModels"))
         or _model_set_from(_get_path(snapshot, "governance", "modelRegistry"))
@@ -226,6 +233,41 @@ def _cost_from_usage(usage: dict[str, Any]) -> Decimal:
     return _as_decimal(usage.get("estimated_cost_usd"), Decimal("0")) or Decimal("0")
 
 
+def _budget_snapshot(policy: EffectiveLLMPolicy) -> dict[str, str | None]:
+    return {
+        "max_usd_per_run": str(policy.budget.max_usd_per_run)
+        if policy.budget.max_usd_per_run is not None
+        else None,
+        "min_reserved_cost_usd": str(policy.budget.min_reserved_cost_usd),
+        "current_spend_usd": str(policy.budget.current_spend_usd),
+        "on_exhaust": policy.budget.on_exhaust,
+    }
+
+
+def _governed_usage(
+    usage: dict[str, Any],
+    *,
+    policy: EffectiveLLMPolicy,
+    model: str,
+    fallback_level: int,
+    attempted_models: list[str],
+    accounting_error: bool = False,
+    accounting_error_reason: str | None = None,
+) -> dict[str, Any]:
+    cost = str(usage.get("estimated_cost_usd", "0"))
+    return {
+        **usage,
+        "estimated_cost_usd": cost,
+        "model": model,
+        "provider": _provider_from_model(model),
+        "fallback_level": fallback_level,
+        "attempted_models": list(attempted_models),
+        "budget_policy": _budget_snapshot(policy),
+        "accounting_error": accounting_error,
+        "accounting_error_reason": accounting_error_reason,
+    }
+
+
 async def call_llm(
     tenant_id: str,
     execution_id: str,
@@ -238,22 +280,29 @@ async def call_llm(
     if fake_mode == "true":
         model = policy.primary_model if policy.primary_model else "fake/f1-test"
         _check_budget(policy, Decimal("0"), model=model)
+        attempted_models = [model]
         return LLMCallResult(
             content="F1 fake LLM response",
             tool_calls=None,
             finish_reason="stop",
-            usage={
-                "input_tokens": 10,
-                "output_tokens": 5,
-                "total_tokens": 15,
-                "estimated_cost_usd": "0",
-            },
+            usage=_governed_usage(
+                {
+                    "input_tokens": 10,
+                    "output_tokens": 5,
+                    "total_tokens": 15,
+                    "estimated_cost_usd": "0",
+                },
+                policy=policy,
+                model=model,
+                fallback_level=0,
+                attempted_models=attempted_models,
+            ),
             provider=_provider_from_model(model),
             model=model,
             retry_count=0,
             fallback_level=0,
             accounting_error=False,
-            attempted_models=[model],
+            attempted_models=attempted_models,
         )
     if fake_mode in {"tool_echo", "tool_math_add", "tool_unknown", "tool_invalid_args"}:
         model = policy.primary_model if policy.primary_model else "fake/f1-test"
@@ -263,12 +312,18 @@ async def call_llm(
                 content="Tool result received and finalized",
                 tool_calls=None,
                 finish_reason="stop",
-                usage={
-                    "input_tokens": 20,
-                    "output_tokens": 10,
-                    "total_tokens": 30,
-                    "estimated_cost_usd": "0",
-                },
+                usage=_governed_usage(
+                    {
+                        "input_tokens": 20,
+                        "output_tokens": 10,
+                        "total_tokens": 30,
+                        "estimated_cost_usd": "0",
+                    },
+                    policy=policy,
+                    model=model,
+                    fallback_level=0,
+                    attempted_models=[model],
+                ),
                 provider=_provider_from_model(model),
                 model=model,
                 retry_count=0,
@@ -287,12 +342,18 @@ async def call_llm(
             content="",
             tool_calls=[call],
             finish_reason="tool_calls",
-            usage={
-                "input_tokens": 15,
-                "output_tokens": 8,
-                "total_tokens": 23,
-                "estimated_cost_usd": "0",
-            },
+            usage=_governed_usage(
+                {
+                    "input_tokens": 15,
+                    "output_tokens": 8,
+                    "total_tokens": 23,
+                    "estimated_cost_usd": "0",
+                },
+                policy=policy,
+                model=model,
+                fallback_level=0,
+                attempted_models=[model],
+            ),
             provider=_provider_from_model(model),
             model=model,
             retry_count=0,
@@ -362,6 +423,7 @@ async def call_llm(
                     "output_tokens": int(usage.get("completion_tokens", 0) or 0),
                     "total_tokens": int(usage.get("total_tokens", 0) or 0),
                     "estimated_cost_usd": cost,
+                    "cost_source": "litellm.response_cost",
                     "latency_ms": int((time.perf_counter() - start) * 1000),
                 }
                 cumulative_spend += _cost_from_usage(normalized_usage)
@@ -378,7 +440,17 @@ async def call_llm(
                     content=msg.get("content") or "",
                     tool_calls=msg.get("tool_calls"),
                     finish_reason=choice.get("finish_reason", "error"),
-                    usage=normalized_usage,
+                    usage=_governed_usage(
+                        normalized_usage,
+                        policy=policy,
+                        model=model,
+                        fallback_level=level,
+                        attempted_models=attempted_models,
+                        accounting_error=accounting_error,
+                        accounting_error_reason=("missing usage fields: " + ",".join(missing))
+                        if missing
+                        else None,
+                    ),
                     provider=_provider_from_model(model),
                     model=model,
                     retry_count=attempt,

@@ -17,9 +17,12 @@ sys.modules.setdefault(
         )
     ),
 )
-sys.modules.setdefault(
-    "jsonschema", types.SimpleNamespace(validate=lambda **_kwargs: None, ValidationError=ValueError)
-)
+try:
+    import jsonschema  # noqa: F401
+except ModuleNotFoundError:
+    sys.modules.setdefault(
+        "jsonschema", types.SimpleNamespace(validate=lambda **_kwargs: None, ValidationError=ValueError)
+    )
 
 from src import f1_runtime
 from src.fsm_contract import InvalidExecutionTransitionError, validate_transition
@@ -281,7 +284,13 @@ def test_accounting_warning_emits_observable_outbox_event(monkeypatch: pytest.Mo
                 content="ok",
                 tool_calls=None,
                 finish_reason="stop",
-                usage={"total_tokens": 1, "estimated_cost_usd": "0.01"},
+                usage={
+                    "total_tokens": 1,
+                    "estimated_cost_usd": "0.01",
+                    "model": "fake/f1-test",
+                    "attempted_models": ["fake/f1-test"],
+                    "budget_policy": {"max_usd_per_run": "1.00"},
+                },
                 provider="fake",
                 model="fake/f1-test",
                 retry_count=0,
@@ -301,5 +310,13 @@ def test_accounting_warning_emits_observable_outbox_event(monkeypatch: pytest.Mo
             args[3] for sql, args in conn.executed if "INSERT INTO outbox_events" in sql
         ]
         assert "ExecutionAccountingWarning" in outbox_event_types
+        completed_updates = [
+            args
+            for sql, args in conn.executed
+            if "token_usage=$5::jsonb" in sql and "SET status='completed'" in sql
+        ]
+        assert completed_updates
+        assert '"estimated_cost_usd": "0.01"' in completed_updates[0][4]
+        assert '"budget_policy": {"max_usd_per_run": "1.00"}' in completed_updates[0][4]
 
     asyncio.run(run_case())

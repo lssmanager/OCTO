@@ -3,9 +3,17 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
+
+
+class OnExhaust(StrEnum):
+    fail = 'fail'
+    block = 'block'
+    warn = 'warn'
+    require_approval = 'require_approval'
 
 
 class BudgetPolicySchema(BaseModel):
@@ -18,6 +26,13 @@ class BudgetPolicySchema(BaseModel):
     max_usd_per_day: Annotated[
         str, Field(alias='maxUsdPerDay', pattern='^\\d+\\.\\d{2}$')
     ]
+    min_reserved_cost_usd: Annotated[
+        str, Field(alias='minReservedCostUsd', pattern='^\\d+(\\.\\d+)?$')
+    ] = '0.000001'
+    current_spend_usd: Annotated[
+        str, Field(alias='currentSpendUsd', pattern='^\\d+(\\.\\d+)?$')
+    ] = '0'
+    on_exhaust: Annotated[OnExhaust, Field(alias='onExhaust')] = 'fail'
     hard_stop: Annotated[bool, Field(alias='hardStop')] = True
 
 

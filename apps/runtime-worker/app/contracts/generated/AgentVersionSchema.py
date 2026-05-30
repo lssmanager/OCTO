@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Annotated
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
@@ -14,6 +15,9 @@ class ModelPolicy(BaseModel):
     )
     primary_model: Annotated[str, Field(alias='primaryModel')]
     fallback_models: Annotated[list[str], Field(alias='fallbackModels')] = []
+    fallback_chain: Annotated[list[str], Field(alias='fallbackChain')] = []
+    allowed_models: Annotated[list[str], Field(alias='allowedModels')] = []
+    registered_models: Annotated[list[str], Field(alias='registeredModels')] = []
     temperature: Annotated[float, Field(ge=0.0, le=2.0)] = 0.2
     max_output_tokens: Annotated[int, Field(alias='maxOutputTokens')] = 2048
 
@@ -27,6 +31,13 @@ class ToolPolicy(BaseModel):
     require_approval_for: Annotated[list[str], Field(alias='requireApprovalFor')] = []
 
 
+class OnExhaust(StrEnum):
+    fail = 'fail'
+    block = 'block'
+    warn = 'warn'
+    require_approval = 'require_approval'
+
+
 class BudgetPolicy(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -37,6 +48,13 @@ class BudgetPolicy(BaseModel):
     max_usd_per_day: Annotated[
         str, Field(alias='maxUsdPerDay', pattern='^\\d+\\.\\d{2}$')
     ]
+    min_reserved_cost_usd: Annotated[
+        str, Field(alias='minReservedCostUsd', pattern='^\\d+(\\.\\d+)?$')
+    ] = '0.000001'
+    current_spend_usd: Annotated[
+        str, Field(alias='currentSpendUsd', pattern='^\\d+(\\.\\d+)?$')
+    ] = '0'
+    on_exhaust: Annotated[OnExhaust, Field(alias='onExhaust')] = 'fail'
     hard_stop: Annotated[bool, Field(alias='hardStop')] = True
 
 
