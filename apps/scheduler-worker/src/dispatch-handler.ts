@@ -36,12 +36,17 @@ function resolveMode(data: DispatchPayload): DispatchMode {
 
 export async function processExecutionDispatchJob(
   data: DispatchPayload,
-  deps: { workerId: string; leaseSeconds: number; invokeRuntime: (payload: RuntimePayload) => Promise<void> }
-): Promise<'dispatched' | 'skipped'> {
+  deps: {
+    workerId: string;
+    leaseSeconds: number;
+    invokeRuntime: (payload: RuntimePayload) => Promise<void>;
+  }
+): Promise<'dispatched' | 'reinvoked' | 'skipped'> {
   if (!data.executionId || !data.tenantId) throw new Error('invalid_dispatch_payload');
 
   const mode = resolveMode(data);
-  const dispatchReason: DispatchReason = data.reason ?? (mode === 'reclaim' ? 'reclaim_replay' : 'dispatch');
+  const dispatchReason: DispatchReason =
+    data.reason ?? (mode === 'reclaim' ? 'reclaim_replay' : 'dispatch');
 
   let skippedStatus = 'unknown';
   const transitioned = await withTenantTx(data.tenantId, async (tx) => {
@@ -57,9 +62,19 @@ export async function processExecutionDispatchJob(
     skippedStatus = String(current.status);
     if (['completed', 'failed', 'cancelled'].includes(skippedStatus)) return false;
 
+    if (skippedStatus === 'dispatched') {
+      return {
+        agentId: current.agentId as string,
+        traceId: String(current.traceId || data.traceId || randomUUID()),
+        alreadyDispatched: true,
+      };
+    }
+
     const dispatchableStatus = mode === 'reclaim' ? 'reclaimable' : 'queued';
     const nextAttempt =
-      mode === 'reclaim' ? Math.max(Number(current.attempt ?? 0) + 1, Number(data.attempt ?? 0)) : Number(current.attempt ?? 0);
+      mode === 'reclaim'
+        ? Math.max(Number(current.attempt ?? 0) + 1, Number(data.attempt ?? 0))
+        : Number(current.attempt ?? 0);
     const now = new Date();
     const lease = new Date(now.getTime() + deps.leaseSeconds * 1000);
     const traceId = String(current.traceId || data.traceId || randomUUID());
@@ -127,7 +142,11 @@ export async function processExecutionDispatchJob(
       source: 'scheduler-worker',
     });
 
-    return { agentId: current.agentId as string };
+    return {
+      agentId: current.agentId as string,
+      traceId,
+      alreadyDispatched: false,
+    };
   });
 
   if (!transitioned) {
@@ -142,13 +161,13 @@ export async function processExecutionDispatchJob(
       executionId: data.executionId,
       tenantId: data.tenantId,
       agentId: data.agentId ?? transitioned.agentId,
-      traceId: data.traceId ?? randomUUID(),
+      traceId: transitioned.traceId,
       mode,
     });
     if (mode === 'reclaim') {
       replayedCounter.add(1, { executionId: data.executionId });
     }
-    return 'dispatched';
+    return transitioned.alreadyDispatched ? 'reinvoked' : 'dispatched';
   } catch (error) {
     if (mode === 'reclaim') {
       const current = await withTenantTx(data.tenantId, async (tx) => {

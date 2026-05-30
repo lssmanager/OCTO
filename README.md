@@ -169,8 +169,8 @@ pnpm dev
 Current F1 behavior (as implemented in this repository):
 
 - Control plane owns agent/execution APIs, auth/policy and dispatch decisions.
-- Runtime worker owns model/tool execution and **currently persists runtime progress directly to PostgreSQL** for durable execution and recovery.
-- Scheduler worker owns due/scheduled dispatch orchestration.
+- Runtime worker owns model/tool execution and **currently persists runtime progress directly to PostgreSQL** for durable execution and recovery. Its `/api/v1/execute` endpoint returns `202 Accepted` after handoff validation and does not block until completion.
+- Scheduler worker owns due/scheduled dispatch orchestration and is the F1 primary `execution.dispatch` consumer / HTTP runtime dispatcher.
 - Reclaimer worker owns stuck/zombie detection and replay/retry decisions.
 
 ### Control Plane vs Execution Plane (F1)
@@ -179,7 +179,7 @@ Current F1 behavior (as implemented in this repository):
 |---|---:|---:|
 | Agent CRUD/versioning | Yes | No |
 | AuthN/AuthZ/API policy | Yes | No |
-| Execution creation + dispatch | Yes | No |
+| Execution creation + dispatch | Yes — API creates; scheduler-worker consumes `execution.dispatch` and performs HTTP 202 runtime handoff | Runtime accepts the handoff, but does not consume BullMQ directly in F1 |
 | Model/tool loop execution | No | Yes |
 | Runtime progress/checkpoint persistence | Shared durable store | Yes (current F1 writer) |
 | Reclaim decisions | No | Reclaimer worker |

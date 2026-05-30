@@ -14,6 +14,7 @@ export class RuntimeInvocationError extends Error {
       readonly status?: number;
       readonly responseBody?: string;
       readonly cause?: unknown;
+      readonly timeoutMs?: number;
     }
   ) {
     super(message);
@@ -24,7 +25,8 @@ export class RuntimeInvocationError extends Error {
 export async function invokeRuntimeHttp(
   runtimeUrl: string,
   runtimeSecret: string,
-  payload: RuntimeInvokePayload
+  payload: RuntimeInvokePayload,
+  timeoutMs: number = Number(process.env['RUNTIME_INVOKE_TIMEOUT_MS'] ?? '10000')
 ): Promise<void> {
   let response: Response;
   try {
@@ -34,6 +36,7 @@ export async function invokeRuntimeHttp(
         'Content-Type': 'application/json',
         'x-internal-secret': runtimeSecret,
       },
+      ...(timeoutMs > 0 ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
       body: JSON.stringify({
         executionId: payload.executionId,
         tenantId: payload.tenantId,
@@ -49,8 +52,9 @@ export async function invokeRuntimeHttp(
       tenantId: payload.tenantId,
       runtimeUrl,
       error: cause instanceof Error ? cause.message : String(cause),
+      timeoutMs,
     });
-    throw new RuntimeInvocationError('runtime_network_failed', { runtimeUrl, cause });
+    throw new RuntimeInvocationError('runtime_network_failed', { runtimeUrl, cause, timeoutMs });
   }
 
   if (!response.ok) {
@@ -61,11 +65,13 @@ export async function invokeRuntimeHttp(
       runtimeUrl,
       status: response.status,
       responseBody,
+      timeoutMs,
     });
     throw new RuntimeInvocationError('runtime_http_failed', {
       runtimeUrl,
       status: response.status,
       responseBody,
+      timeoutMs,
     });
   }
 
@@ -75,5 +81,6 @@ export async function invokeRuntimeHttp(
     runtimeUrl,
     status: response.status,
     mode: payload.mode ?? 'normal',
+    timeoutMs,
   });
 }

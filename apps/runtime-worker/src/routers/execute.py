@@ -1,12 +1,14 @@
 """Execute router — single durable F1 execution entrypoint."""
 from __future__ import annotations
 
+import asyncio
+
 import asyncpg
 import structlog
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
 from ..config import Settings
-from ..schemas import ExecutionRequest, ExecutionResult, ExecutionStatus
+from ..schemas import ExecutionAccepted, ExecutionRequest, ExecutionStatus
 from ..services.executor import ExecutionService
 
 log = structlog.get_logger(__name__)
@@ -14,6 +16,7 @@ log = structlog.get_logger(__name__)
 router = APIRouter(tags=["execute"])
 _settings = Settings()
 _executor = ExecutionService()
+_inflight_tasks: set[asyncio.Task[None]] = set()
 
 
 def _verify_internal_secret(x_internal_secret: str | None) -> None:
@@ -25,22 +28,45 @@ def _verify_internal_secret(x_internal_secret: str | None) -> None:
         )
 
 
+async def _run_accepted_execution(body: ExecutionRequest, bound_log: structlog.BoundLogger) -> None:
+    """Run the accepted execution outside the HTTP request lifecycle."""
+    try:
+        result = await _executor.run(body)
+        if result.status == ExecutionStatus.COMPLETED:
+            bound_log.info(
+                "execution.completed",
+                status=result.status,
+                duration_ms=result.duration_ms,
+            )
+        else:
+            bound_log.error(
+                "execution.failed",
+                status=result.status,
+                duration_ms=result.duration_ms,
+                error=result.error or "runtime_execution_failed",
+            )
+    except Exception as exc:  # noqa: BLE001 - keep accepted request decoupled from runtime failure
+        bound_log.exception("execution.background_task_failed", error=str(exc))
+
+
 @router.post(
     "/execute",
-    response_model=ExecutionResult,
+    response_model=ExecutionAccepted,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Submit an F1 execution job",
     description=(
-        "Receives an ExecutionRequest from the Control Plane and routes it "
-        "through the canonical durable F1 runtime pipeline."
+        "Receives an ExecutionRequest from the scheduler dispatcher and accepts it "
+        "for asynchronous runtime processing. The 202 response only confirms "
+        "handoff acceptance; execution completion is observed from PostgreSQL status "
+        "and outbox events."
     ),
 )
 async def submit_execution(
     body: ExecutionRequest,
     request: Request,
     x_internal_secret: str | None = Header(default=None),
-) -> ExecutionResult:
-    """Accept one execution job from the Control Plane."""
+) -> ExecutionAccepted:
+    """Accept one execution job from the scheduler dispatcher without blocking."""
     _verify_internal_secret(x_internal_secret)
 
     bound_log = log.bind(
@@ -54,27 +80,18 @@ async def submit_execution(
     )
 
     bound_log.info(
-        "execution.received",
+        "execution.accepted",
         task_len=len(body.task),
         streaming=body.streaming,
         tool_count=len(body.tools),
+        mode=body.mode,
     )
 
-    result = await _executor.run(body)
+    task = asyncio.create_task(_run_accepted_execution(body, bound_log))
+    _inflight_tasks.add(task)
+    task.add_done_callback(_inflight_tasks.discard)
 
-    bound_log.info(
-        "execution.completed",
-        status=result.status,
-        duration_ms=result.duration_ms,
-    )
-
-    if result.status != ExecutionStatus.COMPLETED:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": result.error or "runtime_execution_failed", "execution_id": result.execution_id},
-        )
-
-    return result
+    return ExecutionAccepted(execution_id=body.execution_id, mode=body.mode)
 
 
 @router.get(
