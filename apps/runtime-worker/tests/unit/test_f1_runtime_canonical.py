@@ -9,8 +9,17 @@ import types
 import pytest
 
 sys.modules.setdefault("asyncpg", types.SimpleNamespace(Connection=object, connect=None))
-sys.modules.setdefault("structlog", types.SimpleNamespace(get_logger=lambda _name=None: types.SimpleNamespace(info=lambda *a, **k: None, exception=lambda *a, **k: None)))
-sys.modules.setdefault("jsonschema", types.SimpleNamespace(validate=lambda **_kwargs: None, ValidationError=ValueError))
+sys.modules.setdefault(
+    "structlog",
+    types.SimpleNamespace(
+        get_logger=lambda _name=None: types.SimpleNamespace(
+            info=lambda *a, **k: None, exception=lambda *a, **k: None
+        )
+    ),
+)
+sys.modules.setdefault(
+    "jsonschema", types.SimpleNamespace(validate=lambda **_kwargs: None, ValidationError=ValueError)
+)
 
 from src import f1_runtime
 from src.fsm_contract import InvalidExecutionTransitionError, validate_transition
@@ -87,7 +96,9 @@ class FakeConn:
         self.closed = True
 
 
-def test_run_f1_uses_status_as_authority_and_sends_real_agent_id(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_f1_uses_status_as_authority_and_sends_real_agent_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def run_case() -> None:
         conn = FakeConn(row_status="dispatched", row_state="cancelled", agent_id="agent-real")
         seen: dict[str, str] = {}
@@ -95,7 +106,14 @@ def test_run_f1_uses_status_as_authority_and_sends_real_agent_id(monkeypatch: py
         async def fake_connect(_dsn: str) -> FakeConn:
             return conn
 
-        async def fake_call_llm(*, tenant_id: str, execution_id: str, agent_id: str, messages: list[dict[str, Any]], snapshot: dict[str, Any]) -> LLMCallResult:
+        async def fake_call_llm(
+            *,
+            tenant_id: str,
+            execution_id: str,
+            agent_id: str,
+            messages: list[dict[str, Any]],
+            snapshot: dict[str, Any],
+        ) -> LLMCallResult:
             seen["agent_id"] = agent_id
             return LLMCallResult(
                 content="ok",
@@ -149,7 +167,11 @@ def test_reclaim_mode_resumes_from_latest_checkpoint(monkeypatch: pytest.MonkeyP
                     "write_index": 0,
                     "channel": "messages",
                     "type": "tool_result",
-                    "value_json": {"type": "tool_result", "tool_name": "search", "status": "succeeded"},
+                    "value_json": {
+                        "type": "tool_result",
+                        "tool_name": "search",
+                        "status": "succeeded",
+                    },
                 }
             ],
         )
@@ -157,12 +179,19 @@ def test_reclaim_mode_resumes_from_latest_checkpoint(monkeypatch: pytest.MonkeyP
         async def fake_connect(_dsn: str) -> FakeConn:
             return conn
 
-        async def fake_call_llm(*, tenant_id: str, execution_id: str, agent_id: str, messages: list[dict[str, Any]], snapshot: dict[str, Any]) -> LLMCallResult:
+        async def fake_call_llm(
+            *,
+            tenant_id: str,
+            execution_id: str,
+            agent_id: str,
+            messages: list[dict[str, Any]],
+            snapshot: dict[str, Any],
+        ) -> LLMCallResult:
             assert messages == [
                 {"role": "assistant", "content": "partial"},
                 {
                     "role": "tool",
-                    "content": "{\"type\": \"tool_result\", \"tool_name\": \"search\", \"status\": \"succeeded\"}",
+                    "content": '{"type": "tool_result", "tool_name": "search", "status": "succeeded"}',
                 },
             ]
             return LLMCallResult(
@@ -184,7 +213,9 @@ def test_reclaim_mode_resumes_from_latest_checkpoint(monkeypatch: pytest.MonkeyP
         result = await f1_runtime.run_f1_execution("exec-1", "tenant-1", "trace-1", mode="reclaim")
 
         assert result["status"] == "succeeded"
-        checkpoint_inserts = [args for sql, args in conn.executed if "INSERT INTO execution_checkpoints" in sql]
+        checkpoint_inserts = [
+            args for sql, args in conn.executed if "INSERT INTO execution_checkpoints" in sql
+        ]
         assert checkpoint_inserts
         reclaim_checkpoint_args = checkpoint_inserts[0]
         assert reclaim_checkpoint_args[3] == 3
@@ -194,7 +225,9 @@ def test_reclaim_mode_resumes_from_latest_checkpoint(monkeypatch: pytest.MonkeyP
     asyncio.run(run_case())
 
 
-def test_reclaim_mode_fails_terminally_when_lineage_is_broken(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reclaim_mode_fails_terminally_when_lineage_is_broken(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def run_case() -> None:
         conn = FakeConn(
             row_status="dispatched",
@@ -227,3 +260,46 @@ def test_reclaim_mode_fails_terminally_when_lineage_is_broken(monkeypatch: pytes
 def test_invalid_transition_is_rejected_by_contract() -> None:
     with pytest.raises(InvalidExecutionTransitionError):
         validate_transition("completed", "running")
+
+
+def test_accounting_warning_emits_observable_outbox_event(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def run_case() -> None:
+        conn = FakeConn(row_status="dispatched")
+
+        async def fake_connect(_dsn: str) -> FakeConn:
+            return conn
+
+        async def fake_call_llm(
+            *,
+            tenant_id: str,
+            execution_id: str,
+            agent_id: str,
+            messages: list[dict[str, Any]],
+            snapshot: dict[str, Any],
+        ) -> LLMCallResult:
+            return LLMCallResult(
+                content="ok",
+                tool_calls=None,
+                finish_reason="stop",
+                usage={"total_tokens": 1, "estimated_cost_usd": "0.01"},
+                provider="fake",
+                model="fake/f1-test",
+                retry_count=0,
+                fallback_level=0,
+                accounting_error=True,
+                accounting_error_reason="missing usage fields: completion_tokens",
+            )
+
+        monkeypatch.setenv("DATABASE_URL", "postgres://unit")
+        monkeypatch.setattr(f1_runtime.asyncpg, "connect", fake_connect)
+        monkeypatch.setattr(f1_runtime, "call_llm", fake_call_llm)
+
+        result = await f1_runtime.run_f1_execution("exec-1", "tenant-1", "trace-1")
+
+        assert result["status"] == "succeeded"
+        outbox_event_types = [
+            args[3] for sql, args in conn.executed if "INSERT INTO outbox_events" in sql
+        ]
+        assert "ExecutionAccountingWarning" in outbox_event_types
+
+    asyncio.run(run_case())

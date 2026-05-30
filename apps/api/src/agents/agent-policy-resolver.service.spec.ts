@@ -97,3 +97,38 @@ describe('AgentPolicyResolverService hierarchy resolution', () => {
     expect(got.modelPolicy.primaryModel).toBe('agent/config-json');
   });
 });
+
+describe('AgentPolicyResolverService model governance', () => {
+  it('emits explicit fallbackChain and model gates in the effective snapshot', async () => {
+    const got = await resolver(
+      {
+        workspaceId: 'workspace-1',
+        modelPolicy: {
+          primaryModel: 'agent/model',
+          fallbackModels: ['agent/fallback', 'blocked/fallback'],
+          allowedModels: ['agent/model', 'agent/fallback'],
+          registeredModels: ['agent/model', 'agent/fallback', 'blocked/fallback'],
+        },
+      },
+      []
+    ).resolveEffectivePolicies('tenant-1', 'agent-1');
+
+    expect(got.modelPolicy.primaryModel).toBe('agent/model');
+    expect(got.modelPolicy.fallbackChain).toEqual(['agent/fallback']);
+    expect(got.modelPolicy.fallbackModels).toEqual(['agent/fallback']);
+    expect(got.modelPolicy.allowedModels).toEqual(['agent/model', 'agent/fallback']);
+    expect(got.modelPolicy.registeredModels).toEqual(['agent/model', 'agent/fallback', 'blocked/fallback']);
+  });
+
+  it('rejects a primary model outside allowed policy', async () => {
+    await expect(
+      resolver(
+        {
+          workspaceId: 'workspace-1',
+          modelPolicy: { primaryModel: 'agent/model', allowedModels: ['other/model'] },
+        },
+        []
+      ).resolveEffectivePolicies('tenant-1', 'agent-1')
+    ).rejects.toThrow(BadRequestException);
+  });
+});

@@ -10,7 +10,7 @@ import asyncpg
 import structlog
 
 from .fsm_contract import validate_transition
-from .llm_provider import LLMCallResult, call_llm
+from .llm_provider import GovernedLLMError, LLMCallResult, call_llm
 from .reclaim_lineage import validate_checkpoint_lineage
 from .tools.executor import execute_tool_call
 
@@ -103,6 +103,7 @@ async def _mark_failed(
     error_code: str,
     error_message: str,
     trace_id: str | None,
+    retryable: bool = True,
 ) -> None:
     async with conn.transaction():
         row = await conn.fetchrow(
@@ -127,7 +128,7 @@ async def _mark_failed(
                 tenant_id,
                 error_code,
                 error_message,
-                _json({"code": error_code, "message": error_message, "retryable": True}),
+                _json({"code": error_code, "message": error_message, "retryable": retryable}),
                 current_status,
             )
             await _insert_outbox(
@@ -140,6 +141,7 @@ async def _mark_failed(
                     "traceId": trace_id,
                     "errorCode": error_code,
                     "errorMessage": error_message,
+                    "retryable": retryable,
                 },
             )
 
@@ -430,7 +432,9 @@ async def _persist_success(
                         "latency_ms": llm.usage.get("latency_ms", 0),
                         "retry_count": llm.retry_count,
                         "fallback_level": llm.fallback_level,
+                        "attempted_models": llm.attempted_models,
                         "accounting_error": llm.accounting_error,
+                        "accounting_error_reason": llm.accounting_error_reason,
                     }
                 }
             ),
@@ -474,6 +478,20 @@ async def _persist_success(
             event_type="ExecutionCheckpointed",
             payload={"executionId": execution_id, "checkpointId": cp1, "traceId": trace_id},
         )
+        if llm.accounting_error:
+            await _insert_outbox(
+                conn,
+                tenant_id=tenant_id,
+                execution_id=execution_id,
+                event_type="ExecutionAccountingWarning",
+                payload={
+                    "executionId": execution_id,
+                    "traceId": trace_id,
+                    "errorCode": "LLM_ACCOUNTING_INCOMPLETE",
+                    "errorMessage": llm.accounting_error_reason or "LLM usage accounting was incomplete",
+                    "model": llm.model,
+                },
+            )
         await _insert_outbox(
             conn,
             tenant_id=tenant_id,
@@ -515,6 +533,17 @@ async def run_f1_execution(
                 trace_id=trace_id,
                 started=started,
             )
+        except GovernedLLMError as exc:
+            await _mark_failed(
+                conn,
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                error_code=exc.code,
+                error_message=str(exc),
+                trace_id=trace_id,
+                retryable=exc.retryable,
+            )
+            raise
         except Exception as exc:
             await _mark_failed(
                 conn,
@@ -523,6 +552,7 @@ async def run_f1_execution(
                 error_code="RUNTIME_EXECUTION_FAILED",
                 error_message=str(exc),
                 trace_id=trace_id,
+                retryable=True,
             )
             raise
 
