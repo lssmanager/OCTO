@@ -11,11 +11,24 @@ const workerId = process.env['SCHEDULER_WORKER_ID'] ?? `scheduler-${process.pid}
 const leaseSeconds = Number(process.env['EXECUTION_LEASE_SECONDS'] ?? '90');
 const runtimeUrl = process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000/api/v1/execute';
 const runtimeSecret = process.env['API_INTERNAL_SECRET'] ?? 'dev-secret';
+const runtimeInvokeTimeoutMs = Number(process.env['RUNTIME_INVOKE_TIMEOUT_MS'] ?? '10000');
 const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
-const dispatchReconcilerIntervalMs = Number(process.env['EXECUTION_DISPATCH_RECONCILER_INTERVAL_MS'] ?? '30000');
-const dispatchReconcilerStaleMs = Number(process.env['EXECUTION_DISPATCH_RECONCILER_STALE_MS'] ?? '15000');
-const dispatchReconcilerBatchSize = Number(process.env['EXECUTION_DISPATCH_RECONCILER_BATCH_SIZE'] ?? '100');
-const activeDispatchStates = new Set(['waiting', 'active', 'delayed', 'prioritized', 'waiting-children']);
+const dispatchReconcilerIntervalMs = Number(
+  process.env['EXECUTION_DISPATCH_RECONCILER_INTERVAL_MS'] ?? '30000'
+);
+const dispatchReconcilerStaleMs = Number(
+  process.env['EXECUTION_DISPATCH_RECONCILER_STALE_MS'] ?? '15000'
+);
+const dispatchReconcilerBatchSize = Number(
+  process.env['EXECUTION_DISPATCH_RECONCILER_BATCH_SIZE'] ?? '100'
+);
+const activeDispatchStates = new Set([
+  'waiting',
+  'active',
+  'delayed',
+  'prioritized',
+  'waiting-children',
+]);
 const terminalDispatchStates = new Set(['completed', 'failed']);
 
 let ready = false;
@@ -100,7 +113,7 @@ async function start() {
                 executionId: gap.id,
                 tenantId: gap.tenantId,
                 agentId: gap.agentId,
-                traceId: gap.traceId || undefined,
+                traceId: gap.traceId,
                 expectedState: 'queued',
               },
               { jobId }
@@ -118,7 +131,9 @@ async function start() {
       dispatchRepairStatus = {
         lastRunAt: result.checkedAt.toISOString(),
         staleQueuedCount: Number(staleQueuedCount ?? 0),
-        oldestStaleQueuedAgeMs: oldest[0]?.updatedAt ? checkedAt.getTime() - oldest[0].updatedAt.getTime() : null,
+        oldestStaleQueuedAgeMs: oldest[0]?.updatedAt
+          ? checkedAt.getTime() - oldest[0].updatedAt.getTime()
+          : null,
         repaired: result.repaired,
         alreadyPresent: result.alreadyPresent,
         lastError: null,
@@ -131,56 +146,78 @@ async function start() {
       };
       console.error('execution_dispatch_reconciliation_failed', error);
     } finally {
-      dispatchReconcilerTimer = setTimeout(() => void runDispatchReconciliation(), dispatchReconcilerIntervalMs);
+      dispatchReconcilerTimer = setTimeout(
+        () => void runDispatchReconciliation(),
+        dispatchReconcilerIntervalMs
+      );
     }
   };
 
   void runDispatchReconciliation();
 
-  const worker = createWorker<DispatchPayload>(QUEUES.EXECUTION_DISPATCH, async (job) => {
-    await processExecutionDispatchJob(job.data, {
-      workerId,
-      leaseSeconds,
-      invokeRuntime: async (payload) => {
-        await invokeRuntimeHttp(runtimeUrl, runtimeSecret, payload);
-      },
-    });
-  }, { redisUrl, concurrency: Number(process.env['WORKER_CONCURRENCY'] ?? '5') });
+  const worker = createWorker<DispatchPayload>(
+    QUEUES.EXECUTION_DISPATCH,
+    async (job) => {
+      await processExecutionDispatchJob(job.data, {
+        workerId,
+        leaseSeconds,
+        invokeRuntime: async (payload) => {
+          await invokeRuntimeHttp(runtimeUrl, runtimeSecret, payload, runtimeInvokeTimeoutMs);
+        },
+      });
+    },
+    { redisUrl, concurrency: Number(process.env['WORKER_CONCURRENCY'] ?? '5') }
+  );
 
   const server = createServer(async (req, res) => {
-    if (req.url === '/health/live') { res.statusCode = 200; res.end('ok'); return; }
+    if (req.url === '/health/live') {
+      res.statusCode = 200;
+      res.end('ok');
+      return;
+    }
     if (req.url === '/health/ready') {
       try {
         await redis.ping();
         await db.execute(sql`select 1`);
         await dispatchQueue.getWaitingCount();
         if ((process.env['RUNTIME_HEALTH_REQUIRED'] ?? 'false') === 'true') {
-          const rr = await fetch((process.env['RUNTIME_WORKER_HEALTH_URL'] ?? 'http://localhost:8000/health/ready'));
+          const rr = await fetch(
+            process.env['RUNTIME_WORKER_HEALTH_URL'] ?? 'http://localhost:8000/health/ready'
+          );
           if (!rr.ok) throw new Error('runtime_not_ready');
         }
-        res.statusCode = ready ? 200 : 503; res.end(ready ? 'ready' : 'booting');
-      } catch { res.statusCode = 503; res.end('not_ready'); }
+        res.statusCode = ready ? 200 : 503;
+        res.end(ready ? 'ready' : 'booting');
+      } catch {
+        res.statusCode = 503;
+        res.end('not_ready');
+      }
       return;
     }
     if (req.url === '/health/status') {
       res.statusCode = 200;
       res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({
-        workerId,
-        topology: {
-          dispatchConsumer: 'scheduler-worker',
-          dispatchRepair: 'queued-dispatch-reconciler',
-          runtimeInvocation: 'scheduler-http-runtime',
-        },
-        executionDispatch: {
-          staleThresholdMs: dispatchReconcilerStaleMs,
-          intervalMs: dispatchReconcilerIntervalMs,
-          ...dispatchRepairStatus,
-        },
-      }));
+      res.end(
+        JSON.stringify({
+          workerId,
+          topology: {
+            dispatchConsumer: 'scheduler-worker',
+            dispatchRepair: 'queued-dispatch-reconciler',
+            runtimeInvocation: 'scheduler-http-runtime-202-accepted',
+            runtimeInvokeTimeoutMs,
+            leaseSeconds,
+          },
+          executionDispatch: {
+            staleThresholdMs: dispatchReconcilerStaleMs,
+            intervalMs: dispatchReconcilerIntervalMs,
+            ...dispatchRepairStatus,
+          },
+        })
+      );
       return;
     }
-    res.statusCode = 404; res.end('not_found');
+    res.statusCode = 404;
+    res.end('not_found');
   });
   server.listen(3003);
 
@@ -197,7 +234,11 @@ async function start() {
     server.close();
     process.exit(0);
   };
-  process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
-start().catch((e) => { console.error('scheduler_start_failed', e); process.exit(1); });
+start().catch((e) => {
+  console.error('scheduler_start_failed', e);
+  process.exit(1);
+});

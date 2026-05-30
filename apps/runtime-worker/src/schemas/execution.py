@@ -76,3 +76,9 @@ class ExecutionResult(OctoModel):
     error: str | None = None
     duration_ms: int = Field(ge=0)
     checkpoint: dict[str, Any] | None = None
+
+
+class ExecutionAccepted(OctoModel):
+    execution_id: str
+    status: Literal["accepted"] = "accepted"
+    mode: Literal["normal", "reclaim"] = "normal"

@@ -18,7 +18,7 @@ export function createDrizzleExecutionStateService(context: DrizzleExecutionStat
   return new ExecutionStateService({
     updateExecutionStatus: async (tx, executionId, from, to) => {
       const rowPatch = context.rowPatch ?? {};
-      const updatedAt = rowPatch.updatedAt instanceof Date ? rowPatch.updatedAt : new Date();
+      const updatedAt = rowPatch['updatedAt'] instanceof Date ? rowPatch['updatedAt'] : new Date();
       const updated = await (tx as TenantTransaction)
         .update(executions)
         .set({

@@ -44,6 +44,7 @@ async def test_execution_service_delegates_to_f1_runtime(monkeypatch: pytest.Mon
         execution_id: str,
         tenant_id: str,
         trace_id: str | None = None,
+        mode: str = "normal",
     ) -> dict[str, Any]:
         calls["execution_id"] = execution_id
         calls["tenant_id"] = tenant_id
@@ -93,6 +94,7 @@ async def test_execution_service_returns_failed_result_on_runtime_error(
         execution_id: str,
         tenant_id: str,
         trace_id: str | None = None,
+        mode: str = "normal",
     ) -> dict[str, Any]:
         raise RuntimeError("runtime unavailable")
 
@@ -119,3 +121,63 @@ async def test_execution_service_returns_failed_result_on_runtime_error(
     assert result.status.value == "failed"
     assert result.output is None
     assert "runtime unavailable" in (result.error or "")
+
+
+async def test_execute_endpoint_returns_202_before_runtime_finishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+    import time
+
+    import httpx
+
+    from src.routers import execute as execute_router
+    from src.schemas import ExecutionResult, ExecutionStatus
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    class SlowExecutor:
+        async def run(self, request: ExecutionRequest) -> ExecutionResult:
+            started.set()
+            await release.wait()
+            return ExecutionResult(
+                execution_id=request.execution_id,
+                status=ExecutionStatus.COMPLETED,
+                output="ok",
+                usage={},
+                duration_ms=1,
+            )
+
+    monkeypatch.setattr(execute_router, "_executor", SlowExecutor())
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        before = time.monotonic()
+        response = await client.post(
+            "/api/v1/execute",
+            headers={"x-internal-secret": "dev-secret"},
+            json={
+                "executionId": "exec-async-1",
+                "tenantId": "tenant-1",
+                "agentId": "agent-1",
+                "workspaceId": "ws-1",
+                "task": "do async work",
+                "traceId": "trace-1",
+                "runId": "exec-async-1",
+            },
+        )
+        elapsed_ms = (time.monotonic() - before) * 1000
+
+    try:
+        assert response.status_code == 202
+        assert response.json() == {
+            "executionId": "exec-async-1",
+            "status": "accepted",
+            "mode": "normal",
+        }
+        assert elapsed_ms < 200
+        assert started.is_set()
+    finally:
+        release.set()
+        await asyncio.sleep(0)
