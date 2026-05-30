@@ -5,7 +5,11 @@ import { describe, expect, it } from 'vitest';
 
 import { agents, agentVersions, db, executions, withTenantTx } from '@octo/database';
 import { createQueue, QUEUES } from '@octo/queue';
-import { reconcileQueuedDispatchGaps } from '../../../scheduler-worker/src/reconciliation/execution-reconciler';
+import type { DispatchPayload } from '../../../scheduler-worker/src/dispatch-handler';
+import {
+  reconcileQueuedDispatchGaps,
+  type QueuedDispatchGap,
+} from '../../../scheduler-worker/src/reconciliation/execution-reconciler';
 import { PostgresExecutionRepo } from './postgres-execution.repo';
 
 const hasInfra = Boolean(process.env.DATABASE_URL && process.env.REDIS_URL);
@@ -18,7 +22,7 @@ describeIfInfra('F1 queued dispatch reconciliation', () => {
     const tenantId = `tenant-dispatch-gap-${Date.now()}`;
     const agentId = randomUUID();
     const versionId = randomUUID();
-    const queue = createQueue(QUEUES.EXECUTION_DISPATCH, {
+    const queue = createQueue<DispatchPayload>(QUEUES.EXECUTION_DISPATCH, {
       redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
     });
 
@@ -81,13 +85,7 @@ describeIfInfra('F1 queued dispatch reconciliation', () => {
             )
             .limit(batchSize);
         },
-        ensureDispatchJob: async (gap: {
-          id: string;
-          tenantId: string;
-          agentId: string;
-          traceId: string;
-          queueJobId: string | null;
-        }) => {
+        ensureDispatchJob: async (gap: QueuedDispatchGap) => {
           const jobId = gap.queueJobId ?? gap.id;
           const existing = await queue.getJob(jobId);
           if (existing) return 'already_present' as const;
