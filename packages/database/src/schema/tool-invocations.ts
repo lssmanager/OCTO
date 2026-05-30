@@ -24,6 +24,7 @@ export const toolInvocationStatusEnum = pgEnum('tool_invocation_status', [
   'SUCCEEDED',
   'FAILED',
   'TIMED_OUT',
+  'APPROVAL_REQUIRED',
 ]);
 
 export const toolInvocations = pgTable(
@@ -48,6 +49,12 @@ export const toolInvocations = pgTable(
     approvalId: text('approval_id').references(() => approvals.id, { onDelete: 'set null' }),
     idempotencyKey: text('idempotency_key').notNull(),
     durationMs: integer('duration_ms'),
+    attempt: integer('attempt').notNull().default(1),
+    timeoutMs: integer('timeout_ms'),
+    argumentsHash: text('arguments_hash'),
+    inputSchemaValid: boolean('input_schema_valid'),
+    outputSchemaValid: boolean('output_schema_valid'),
+    policySnapshotJson: jsonb('policy_snapshot_json'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp('ended_at', { withTimezone: true }),
 
@@ -80,6 +87,11 @@ export const toolInvocations = pgTable(
       t.tenantId,
       t.status,
       t.startedAt.desc()
+    ),
+    tenantToolHashIdx: index('idx_tool_invocations_tenant_tool_hash').on(
+      t.tenantId,
+      t.toolName,
+      t.argumentsHash
     ),
   })
 );

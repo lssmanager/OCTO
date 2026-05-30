@@ -5,6 +5,9 @@ export const AgentStatusSchema = z.enum(['ACTIVE', 'ARCHIVED', 'DRAFT']);
 export const ModelPolicySchema = z.object({
   primaryModel: z.string(),
   fallbackModels: z.array(z.string()).default([]),
+  fallbackChain: z.array(z.string()).default([]),
+  allowedModels: z.array(z.string()).default([]),
+  registeredModels: z.array(z.string()).default([]),
   temperature: z.number().min(0).max(2).default(0.2),
   maxOutputTokens: z.number().int().default(2048),
 });
@@ -18,6 +21,9 @@ export const ToolPolicySchema = z.object({
 export const BudgetPolicySchema = z.object({
   maxUsdPerRun: z.string().regex(/^\d+\.\d{2}$/),
   maxUsdPerDay: z.string().regex(/^\d+\.\d{2}$/),
+  minReservedCostUsd: z.string().regex(/^\d+(\.\d+)?$/).default('0.000001'),
+  currentSpendUsd: z.string().regex(/^\d+(\.\d+)?$/).default('0'),
+  onExhaust: z.enum(['fail', 'block', 'warn', 'require_approval']).default('fail'),
   hardStop: z.boolean().default(true),
 });
 

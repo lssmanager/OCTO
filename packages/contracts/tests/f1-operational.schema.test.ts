@@ -46,9 +46,15 @@ describe('AgentVersionSchema', () => {
   it('defaults work', () => {
     const parsed = AgentVersionSchema.parse(base);
     expect(parsed.configJson.modelPolicy.fallbackModels).toEqual([]);
+    expect(parsed.configJson.modelPolicy.fallbackChain).toEqual([]);
+    expect(parsed.configJson.modelPolicy.allowedModels).toEqual([]);
+    expect(parsed.configJson.modelPolicy.registeredModels).toEqual([]);
     expect(parsed.configJson.modelPolicy.temperature).toBe(0.2);
     expect(parsed.configJson.modelPolicy.maxOutputTokens).toBe(2048);
     expect(parsed.configJson.budgetPolicy.hardStop).toBe(true);
+    expect(parsed.configJson.budgetPolicy.minReservedCostUsd).toBe('0.000001');
+    expect(parsed.configJson.budgetPolicy.currentSpendUsd).toBe('0');
+    expect(parsed.configJson.budgetPolicy.onExhaust).toBe('fail');
     expect(parsed.configJson.executionTimeoutMs).toBe(900000);
   });
   it('invalid budget string fails', () => expect(() => AgentVersionSchema.parse({ ...base, configJson: { ...base.configJson, budgetPolicy: { ...base.configJson.budgetPolicy, maxUsdPerRun: '10' } } })).toThrow());

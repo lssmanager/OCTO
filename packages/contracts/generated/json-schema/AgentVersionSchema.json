@@ -43,6 +43,27 @@
                   },
                   "default": []
                 },
+                "fallbackChain": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
+                },
+                "allowedModels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
+                },
+                "registeredModels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
+                },
                 "temperature": {
                   "type": "number",
                   "minimum": 0,
@@ -98,6 +119,26 @@
                 "maxUsdPerDay": {
                   "type": "string",
                   "pattern": "^\\d+\\.\\d{2}$"
+                },
+                "minReservedCostUsd": {
+                  "type": "string",
+                  "pattern": "^\\d+(\\.\\d+)?$",
+                  "default": "0.000001"
+                },
+                "currentSpendUsd": {
+                  "type": "string",
+                  "pattern": "^\\d+(\\.\\d+)?$",
+                  "default": "0"
+                },
+                "onExhaust": {
+                  "type": "string",
+                  "enum": [
+                    "fail",
+                    "block",
+                    "warn",
+                    "require_approval"
+                  ],
+                  "default": "fail"
                 },
                 "hardStop": {
                   "type": "boolean",

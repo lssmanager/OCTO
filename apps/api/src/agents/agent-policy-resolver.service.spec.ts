@@ -120,6 +120,25 @@ describe('AgentPolicyResolverService model governance', () => {
     expect(got.modelPolicy.registeredModels).toEqual(['agent/model', 'agent/fallback', 'blocked/fallback']);
   });
 
+
+  it('preserves explicit fallbackChain before legacy fallbackModels', async () => {
+    const got = await resolver(
+      {
+        workspaceId: 'workspace-1',
+        modelPolicy: {
+          primaryModel: 'agent/model',
+          fallbackChain: ['agent/first', 'agent/second'],
+          fallbackModels: ['agent/legacy'],
+          allowedModels: ['agent/model', 'agent/first', 'agent/second', 'agent/legacy'],
+          registeredModels: ['agent/model', 'agent/first', 'agent/second', 'agent/legacy'],
+        },
+      },
+      []
+    ).resolveEffectivePolicies('tenant-1', 'agent-1');
+
+    expect(got.modelPolicy.fallbackChain).toEqual(['agent/first', 'agent/second', 'agent/legacy']);
+  });
+
   it('rejects a primary model outside allowed policy', async () => {
     await expect(
       resolver(

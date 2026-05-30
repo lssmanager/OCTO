@@ -170,3 +170,88 @@ def test_accounting_incomplete_is_visible(monkeypatch: pytest.MonkeyPatch) -> No
     assert res.accounting_error is True
     assert res.accounting_error_reason == "missing usage fields: completion_tokens,total_tokens"
     assert res.usage["estimated_cost_usd"] == "0.00001"
+
+
+def test_fallback_chain_field_takes_policy_order() -> None:
+    snapshot = {
+        "modelPolicy": {
+            "primaryModel": "openai/primary",
+            "fallbackChain": ["anthropic/first", "gemini/second"],
+            "fallbackModels": ["openai/legacy"],
+            "allowedModels": ["openai/primary", "anthropic/first", "gemini/second", "openai/legacy"],
+            "registeredModels": ["openai/primary", "anthropic/first", "gemini/second", "openai/legacy"],
+        }
+    }
+
+    got = resolve_models_from_snapshot(snapshot, "")
+
+    assert got == ["openai/primary", "anthropic/first", "gemini/second", "openai/legacy"]
+
+
+def test_model_policy_registered_models_are_enforced() -> None:
+    with pytest.raises(GovernedLLMError) as exc:
+        resolve_effective_policy(
+            {
+                "modelPolicy": {
+                    "primaryModel": "openai/primary",
+                    "registeredModels": ["anthropic/only"],
+                }
+            }
+        )
+
+    assert exc.value.code == "LLM_MODEL_NOT_REGISTERED"
+
+
+def test_success_usage_includes_governance_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(AsyncClient=_FakeAsyncClient))
+    monkeypatch.setenv("LITELLM_MAX_RETRIES", "1")
+    _FakeAsyncClient.requests = []
+    _FakeAsyncClient.responses = [
+        _FakeResponse(
+            200,
+            {
+                "choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
+                "_hidden_params": {"response_cost": "0.00001"},
+            },
+        ),
+    ]
+    snapshot = {
+        "modelPolicy": {"primaryModel": "openai/primary"},
+        "registeredModels": ["openai/primary"],
+        "budgetPolicy": {"maxUsdPerRun": "1.00", "currentSpendUsd": "0.10"},
+    }
+
+    res = asyncio.run(call_llm("t1", "e1", "a1", [{"role": "user", "content": "hi"}], snapshot))
+
+    assert res.usage["model"] == "openai/primary"
+    assert res.usage["provider"] == "openai"
+    assert res.usage["attempted_models"] == ["openai/primary"]
+    assert res.usage["budget_policy"]["max_usd_per_run"] == "1.00"
+    assert res.usage["cost_source"] == "litellm.response_cost"
+
+
+def test_budget_reconciliation_blocks_overrun_after_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(AsyncClient=_FakeAsyncClient))
+    monkeypatch.setenv("LITELLM_MAX_RETRIES", "1")
+    _FakeAsyncClient.requests = []
+    _FakeAsyncClient.responses = [
+        _FakeResponse(
+            200,
+            {
+                "choices": [{"message": {"content": "too expensive"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
+                "_hidden_params": {"response_cost": "0.20"},
+            },
+        ),
+    ]
+    snapshot = {
+        "modelPolicy": {"primaryModel": "openai/primary"},
+        "registeredModels": ["openai/primary"],
+        "budgetPolicy": {"maxUsdPerRun": "0.10", "minReservedCostUsd": "0"},
+    }
+
+    with pytest.raises(GovernedLLMError) as exc:
+        asyncio.run(call_llm("t1", "e1", "a1", [{"role": "user", "content": "hi"}], snapshot))
+
+    assert exc.value.code == "LLM_BUDGET_RECONCILIATION_EXCEEDED"
