@@ -3,6 +3,21 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const migrationsDir = join(__dirname, '..', 'migrations');
+const runtimeWriteContractPath = join(__dirname, '..', '..', '..', 'docs', 'f1', 'runtime-write-contract.json');
+
+function readRuntimeWriteContract(): {
+  runtimeRole: string;
+  allowedWriteTables: string[];
+  runtimeProhibitedWrites: string[];
+  forbiddenRoleAttributes: string[];
+} {
+  return JSON.parse(readFileSync(runtimeWriteContractPath, 'utf8')) as {
+    runtimeRole: string;
+    allowedWriteTables: string[];
+    runtimeProhibitedWrites: string[];
+    forbiddenRoleAttributes: string[];
+  };
+}
 
 function readMigration(name: string): string {
   const path = join(migrationsDir, name);
@@ -99,6 +114,31 @@ describe('F1 database migrations contract', () => {
     expect(sql).toContain("ALTER TYPE \"public\".\"execution_status\" ADD VALUE IF NOT EXISTS 'dispatched'");
     expect(sql).not.toContain('CREATE TABLE "agent_versions"');
     expect(sql).not.toContain("ALTER TYPE \"public\".\"step_status\" ADD VALUE 'QUEUED';");
+  });
+
+  it('enforces the F1 runtime worker least-privilege database role', () => {
+    const sql = readMigration('202605300002_f1_runtime_db_role.sql');
+    const contract = readRuntimeWriteContract();
+
+    expect(sql).toContain(`CREATE ROLE ${contract.runtimeRole}`);
+    expect(sql).toContain(`ALTER ROLE ${contract.runtimeRole}`);
+    for (const attribute of contract.forbiddenRoleAttributes) {
+      expect(sql.toUpperCase()).toContain(`NO${attribute}`);
+    }
+    expect(sql).toContain('REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM octo_runtime_worker');
+    expect(sql).toContain('REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM octo_runtime_worker');
+    expect(sql).toContain('REVOKE ALL PRIVILEGES ON SCHEMA public FROM octo_runtime_worker');
+    expect(sql).toContain('GRANT SELECT, INSERT, UPDATE ON TABLE');
+    expect(sql).toContain('information_schema.role_table_grants');
+    expect(sql).toContain('has_schema_privilege');
+    expect(sql).toContain('has_database_privilege');
+
+    for (const table of contract.allowedWriteTables) {
+      expect(sql).toMatch(new RegExp(`\\b${table}\\b`));
+    }
+    for (const table of contract.runtimeProhibitedWrites) {
+      expect(sql).not.toMatch(new RegExp(`GRANT\\s+[^;]*\\b${table}\\b`, 'i'));
+    }
   });
 
 });

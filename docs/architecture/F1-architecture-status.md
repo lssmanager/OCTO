@@ -9,22 +9,24 @@ F1 keeps a strict **Control Plane / Execution Plane responsibility boundary**, b
 - PostgreSQL remains the system of record; Redis/BullMQ is command transport and coordination, not durable truth.
 - `DATABASE_URL` is required by runtime execution paths, not just by liveness/readiness probes.
 
-This direct runtime writer is an explicit F1 debt item, not an accidental deployment detail.
+This direct runtime writer is an explicit F1 debt item, not an accidental deployment detail. Control Plane owns external APIs, authn/authz, tenant policy, execution creation/dispatch, scheduling ownership and user-facing status. Runtime Worker owns model/tool execution and writes durable runtime progress directly to PostgreSQL in F1.
 
 ## Runtime Worker F1 PostgreSQL write contract
 
 Runtime Worker DB privileges for F1 should be least-privilege and scoped to the following tables.
 
+<!-- runtime-write-contract:start -->
 | Table | Runtime operation | Why F1 allows it |
 |---|---|---|
-| `executions` | `SELECT ... FOR UPDATE`; `UPDATE` status/state/version, worker ownership, completion/error fields, checkpoints and token usage. | The runtime must claim dispatched work atomically, advance the FSM with CAS semantics and persist terminal state even if the API is not in the hot path. |
-| `execution_steps` | `INSERT` the runtime/LLM step; `UPDATE` step output and completion timestamps. | Step history is part of durable replay/timeline state. |
-| `execution_checkpoints` | `SELECT` existing checkpoints during reclaim; `INSERT` input/reclaim/loop checkpoints. | Checkpoint lineage is the recovery boundary after worker restart or reclaim. |
-| `execution_checkpoint_writes` | `SELECT` writes during reclaim; `INSERT` tool-result channel writes. | Tool outputs must be replayable from durable checkpoint writes. |
-| `tool_invocations` | `INSERT` tool attempts; `UPDATE` validation, timeout, failure, success and approval linkage. | Tool governance/audit state is generated inside the runtime tool executor. |
-| `approvals` | `INSERT` pending tool approvals. | Human-in-the-loop pauses originate when the runtime hits a governed tool call. |
-| `outbox_events` | `SELECT` aggregate sequence; `INSERT` execution/tool lifecycle events. | Events must be committed atomically with state changes and then published by the outbox publisher. |
+| `approvals` | INSERT pending tool approvals. | Human-in-the-loop pauses originate when the runtime hits a governed tool call. |
+| `execution_checkpoint_writes` | SELECT writes during reclaim; INSERT tool-result channel writes. | Tool outputs must be replayable from durable checkpoint writes. |
+| `execution_checkpoints` | SELECT existing checkpoints during reclaim; INSERT input/reclaim/loop checkpoints. | Checkpoint lineage is the recovery boundary after worker restart or reclaim. |
+| `execution_steps` | INSERT the runtime/LLM step; UPDATE step output and completion timestamps. | Step history is part of durable replay/timeline state. |
+| `executions` | SELECT ... FOR UPDATE; UPDATE status/state/version, worker ownership, completion/error fields, checkpoints and token usage. | The runtime must claim dispatched work atomically, advance the FSM with CAS semantics and persist terminal state even if the API is not in the hot path. |
+| `outbox_events` | SELECT aggregate sequence; INSERT execution/tool lifecycle events. | Events must be committed atomically with state changes and then published by the outbox publisher. |
+| `tool_invocations` | INSERT tool attempts; UPDATE validation, timeout, failure, success and approval linkage. | Tool governance/audit state is generated inside the runtime tool executor. |
 | `worker_heartbeats` | `INSERT ... ON CONFLICT DO UPDATE` runtime heartbeat rows. | F1 operational status needs durable worker liveness visible to ops/status APIs. |
+<!-- runtime-write-contract:end -->
 
 The runtime role must not have broad schema ownership, migration privileges or `BYPASSRLS`. If differentiated database roles are introduced, the runtime role should receive only the table permissions needed above plus sequence/default privileges required by those inserts.
 

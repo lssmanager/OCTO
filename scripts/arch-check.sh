@@ -15,9 +15,11 @@ if [[ -n "$violations" ]]; then
   echo "Forbidden direct Redis stream publish usage detected:"; echo "$violations"; exit 1
 fi
 
-# No BYPASSRLS in migrations
-if rg -n "BYPASSRLS" packages/database/migrations | rg -v "^.+--"; then
-  echo "Forbidden BYPASSRLS detected in migrations"; exit 1
+# No BYPASSRLS grants in migrations. NOBYPASSRLS assertions are required for
+# the F1 runtime DB role and are intentionally allowed.
+if rg -n "\bBYPASSRLS\b" packages/database/migrations \
+  | rg -v "NOBYPASSRLS|must not have BYPASSRLS|^.+--"; then
+  echo "Forbidden BYPASSRLS grant detected in migrations"; exit 1
 fi
 
 # Keep F1 runtime-worker direct-writer boundary explicit and non-contradictory.

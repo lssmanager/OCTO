@@ -45,3 +45,22 @@ F1 reclaim uses one canonical replay handoff:
 6. If checkpoint lineage is broken, runtime fails the execution terminally with `CHECKPOINT_LINEAGE_BROKEN`.
 
 This keeps reclaim observable, queue-backed, and durable without leaving zombie rows stuck in `retrying`.
+
+## Runtime durable write contract
+
+F1 intentionally keeps the Runtime Worker as a direct PostgreSQL writer for durable runtime progress while preserving ownership separation: Control Plane owns external APIs, authn/authz, tenant policy, execution creation/dispatch, scheduling ownership and user-facing status; Runtime Worker owns model/tool execution and writes durable runtime progress directly to PostgreSQL in F1.
+
+The machine-readable source of truth is `docs/f1/runtime-write-contract.json`; the code source of truth is `apps/runtime-worker/src/f1_runtime.py:F1_RUNTIME_DB_WRITE_TABLES`.
+
+<!-- runtime-write-contract:start -->
+- `approvals`
+- `execution_checkpoint_writes`
+- `execution_checkpoints`
+- `execution_steps`
+- `executions`
+- `outbox_events`
+- `tool_invocations`
+- `worker_heartbeats`
+<!-- runtime-write-contract:end -->
+
+No Runtime Worker code may write to Control Plane owned tables such as `agents`, `agent_versions`, `hierarchy_nodes`, `tenant_memberships`, `audit_log`, `idempotency_keys` or `execution_dlq`. F2+ may move this persistence behind event-sourcing, a Control Plane persistence API or a persistence adapter, but F1 keeps the direct writer under the least-privilege `octo_runtime_worker` role.

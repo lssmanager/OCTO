@@ -8,11 +8,21 @@ const databaseUrl = process.env['TEST_DATABASE_URL'] ?? process.env['DATABASE_UR
 const runIfDatabase = databaseUrl ? describe : describe.skip;
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(currentDir, '..', 'migrations');
+const runtimeWriteContract = JSON.parse(
+  readFileSync(join(currentDir, '..', '..', '..', 'docs', 'f1', 'runtime-write-contract.json'), 'utf8')
+) as {
+  runtimeRole: string;
+  allowedWriteTables: string[];
+  runtimeProhibitedWrites: string[];
+};
+
 const migrationFiles = [
   '202605230001_f1_executions_core.sql',
   '202605230002_f1_tools_approvals_outbox.sql',
   '202605230003_f1_rls_policies.sql',
   '202605230004_f1_rls_hardening.sql',
+  '202605280002_worker_heartbeats.sql',
+  '202605300002_f1_runtime_db_role.sql',
 ];
 
 type Sql = ReturnType<typeof postgres>;
@@ -62,6 +72,47 @@ runIfDatabase('F1 database integration', () => {
     for (const row of rows) {
       expect(row.relrowsecurity).toBe(true);
       expect(row.relforcerowsecurity).toBe(true);
+    }
+  });
+
+  it('enforces the runtime worker least-privilege DB role', async () => {
+    const [role] = await sql<
+      {
+        rolsuper: boolean;
+        rolbypassrls: boolean;
+        rolcreatedb: boolean;
+        rolcreaterole: boolean;
+        rolreplication: boolean;
+      }[]
+    >`
+      SELECT rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolreplication
+      FROM pg_roles
+      WHERE rolname = ${runtimeWriteContract.runtimeRole}
+    `;
+
+    expect(role).toBeDefined();
+    expect(role?.rolsuper).toBe(false);
+    expect(role?.rolbypassrls).toBe(false);
+    expect(role?.rolcreatedb).toBe(false);
+    expect(role?.rolcreaterole).toBe(false);
+    expect(role?.rolreplication).toBe(false);
+
+    const grants = await sql<{ table_name: string; privilege_type: string }[]>`
+      SELECT table_name, privilege_type
+      FROM information_schema.role_table_grants
+      WHERE grantee = ${runtimeWriteContract.runtimeRole}
+        AND table_schema = 'public'
+      ORDER BY table_name, privilege_type
+    `;
+    const grantedTables = [...new Set(grants.map((grant) => grant.table_name))].sort();
+    expect(grantedTables).toEqual([...runtimeWriteContract.allowedWriteTables].sort());
+    expect(grants.every((grant) => ['SELECT', 'INSERT', 'UPDATE'].includes(grant.privilege_type))).toBe(true);
+
+    for (const table of ['agents', 'agent_versions']) {
+      const [{ canWrite }] = await sql<{ canWrite: boolean }[]>`
+        SELECT has_table_privilege(${runtimeWriteContract.runtimeRole}, ${`public.${table}`}, 'INSERT, UPDATE, DELETE') AS "canWrite"
+      `;
+      expect(canWrite).toBe(false);
     }
   });
 
