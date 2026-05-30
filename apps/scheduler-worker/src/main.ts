@@ -46,10 +46,24 @@ async function start() {
   startHeartbeat(db, workerId);
 
   const runDispatchReconciliation = async () => {
+    const checkedAt = new Date();
+    const staleBefore = new Date(checkedAt.getTime() - dispatchReconcilerStaleMs);
+
     try {
+      const [{ staleQueuedCount }] = await db
+        .select({ staleQueuedCount: sql<number>`count(*)::int` })
+        .from(executions)
+        .where(and(eq(executions.status, 'queued'), lt(executions.updatedAt, staleBefore)));
+      const oldest = await db
+        .select({ updatedAt: executions.updatedAt })
+        .from(executions)
+        .where(and(eq(executions.status, 'queued'), lt(executions.updatedAt, staleBefore)))
+        .orderBy(asc(executions.updatedAt))
+        .limit(1);
+
       const result = await reconcileQueuedDispatchGaps(
         {
-          findQueuedDispatchGaps: async (staleBefore, batchSize) => {
+          findQueuedDispatchGaps: async (_scanStaleBefore, batchSize) => {
             return db
               .select({
                 id: executions.id,
@@ -97,13 +111,14 @@ async function start() {
         {
           staleMs: dispatchReconcilerStaleMs,
           batchSize: dispatchReconcilerBatchSize,
+          now: checkedAt,
         }
       );
 
       dispatchRepairStatus = {
         lastRunAt: result.checkedAt.toISOString(),
-        staleQueuedCount: result.staleQueuedCount,
-        oldestStaleQueuedAgeMs: result.oldestStaleQueuedAgeMs,
+        staleQueuedCount: Number(staleQueuedCount ?? 0),
+        oldestStaleQueuedAgeMs: oldest[0]?.updatedAt ? checkedAt.getTime() - oldest[0].updatedAt.getTime() : null,
         repaired: result.repaired,
         alreadyPresent: result.alreadyPresent,
         lastError: null,
@@ -111,7 +126,7 @@ async function start() {
     } catch (error) {
       dispatchRepairStatus = {
         ...dispatchRepairStatus,
-        lastRunAt: new Date().toISOString(),
+        lastRunAt: checkedAt.toISOString(),
         lastError: error instanceof Error ? error.message : String(error),
       };
       console.error('execution_dispatch_reconciliation_failed', error);
