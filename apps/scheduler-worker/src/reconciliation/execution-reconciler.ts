@@ -17,13 +17,12 @@
  *   Cause:  Partial write or crash between steps.
  *   Action: Transition to 'failed', write to execution_dlq.
  *
+ * CASE 4 -- DB says 'queued', BullMQ has no dispatch job
+ *   Cause:  API committed Postgres and crashed or Redis failed before queue.add.
+ *   Action: Re-enqueue deterministically using executionId/jobId.
+ *
  * All operations are idempotent: conditional WHERE clauses are no-ops
  * if the case was already resolved.
- *
- * CHAOS SCENARIO PREVENTED:
- *   Redis keyspace eviction wipes BullMQ job while execution is 'running'.
- *   Without reconciler: zombie forever.
- *   With reconciler: detected within RECONCILER_INTERVAL_MS, re-enqueued.
  */
 
 export const RECONCILER_INTERVAL_MS = 60_000;
@@ -32,7 +31,8 @@ export const RECONCILER_BATCH_SIZE = 50;
 export type ReconcilerCase =
   | 'db-running-queue-missing'
   | 'queue-active-db-missing'
-  | 'stuck-retrying';
+  | 'stuck-retrying'
+  | 'queued-dispatch-gap';
 
 export interface ReconcilerOutcome {
   readonly case: ReconcilerCase;
@@ -116,4 +116,68 @@ export async function runReconciliation(deps: ReconcilerDeps): Promise<Reconcile
   }
 
   return outcomes;
+}
+
+export interface QueuedDispatchGap {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly agentId: string;
+  readonly traceId: string;
+  readonly queueJobId: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface QueuedDispatchGapDeps {
+  findQueuedDispatchGaps(staleBefore: Date, batchSize: number): Promise<QueuedDispatchGap[]>;
+  ensureDispatchJob(gap: QueuedDispatchGap): Promise<'enqueued' | 'already_present'>;
+}
+
+export interface QueuedDispatchGapResult {
+  readonly checkedAt: Date;
+  readonly staleQueuedCount: number;
+  readonly repaired: number;
+  readonly alreadyPresent: number;
+  readonly oldestStaleQueuedAgeMs: number | null;
+}
+
+export async function reconcileQueuedDispatchGaps(
+  deps: QueuedDispatchGapDeps,
+  opts?: {
+    staleMs?: number;
+    batchSize?: number;
+    now?: Date;
+  }
+): Promise<QueuedDispatchGapResult> {
+  const checkedAt = opts?.now ?? new Date();
+  const staleMs = opts?.staleMs ?? RECONCILER_INTERVAL_MS;
+  const batchSize = opts?.batchSize ?? RECONCILER_BATCH_SIZE;
+  const staleBefore = new Date(checkedAt.getTime() - staleMs);
+  const queued = await deps.findQueuedDispatchGaps(staleBefore, batchSize);
+
+  let repaired = 0;
+  let alreadyPresent = 0;
+  let oldestStaleQueuedAgeMs: number | null = null;
+
+  for (const gap of queued) {
+    const ageMs = checkedAt.getTime() - gap.updatedAt.getTime();
+    if (oldestStaleQueuedAgeMs === null || ageMs > oldestStaleQueuedAgeMs) {
+      oldestStaleQueuedAgeMs = ageMs;
+    }
+
+    const action = await deps.ensureDispatchJob(gap);
+    if (action === 'enqueued') {
+      repaired += 1;
+    } else {
+      alreadyPresent += 1;
+    }
+  }
+
+  return {
+    checkedAt,
+    staleQueuedCount: queued.length,
+    repaired,
+    alreadyPresent,
+    oldestStaleQueuedAgeMs,
+  };
 }
