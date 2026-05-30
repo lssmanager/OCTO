@@ -29,26 +29,23 @@ export async function invokeRuntimeHttp(
   timeoutMs: number = Number(process.env['RUNTIME_INVOKE_TIMEOUT_MS'] ?? '10000')
 ): Promise<void> {
   let response: Response;
-  const requestInit: RequestInit = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-internal-secret': runtimeSecret,
-    },
-    body: JSON.stringify({
-      executionId: payload.executionId,
-      tenantId: payload.tenantId,
-      agentId: payload.agentId,
-      traceId: payload.traceId,
-      runId: payload.executionId,
-      mode: payload.mode ?? 'normal',
-    }),
-  };
-  if (timeoutMs > 0) {
-    requestInit.signal = AbortSignal.timeout(timeoutMs);
-  }
   try {
-    response = await fetch(runtimeUrl, requestInit);
+    response = await fetch(runtimeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': runtimeSecret,
+      },
+      ...(timeoutMs > 0 ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
+      body: JSON.stringify({
+        executionId: payload.executionId,
+        tenantId: payload.tenantId,
+        agentId: payload.agentId,
+        traceId: payload.traceId,
+        runId: payload.executionId,
+        mode: payload.mode ?? 'normal',
+      }),
+    });
   } catch (cause) {
     console.error('execution_runtime_invoke_network_failed', {
       executionId: payload.executionId,
