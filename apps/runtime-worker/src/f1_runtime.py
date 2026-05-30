@@ -12,7 +12,7 @@ import structlog
 from .fsm_contract import validate_transition
 from .llm_provider import GovernedLLMError, LLMCallResult, call_llm
 from .reclaim_lineage import validate_checkpoint_lineage
-from .tools.executor import execute_tool_call
+from .tools.executor import ToolApprovalRequired, execute_tool_call
 
 log = structlog.get_logger(__name__)
 
@@ -360,7 +360,14 @@ async def _run_llm_and_tools(
                 step_index=started["llm_step_index"] + idx + 1,
                 tool_call=tc,
                 trace_id=trace_id,
+                agent_id=agent_id,
+                context_snapshot=snapshot,
             )
+            if tool_res.get("status") == "approval_required":
+                raise ToolApprovalRequired(
+                    str(tool_res.get("approval_id") or ""),
+                    str(tool_res.get("tool_invocation_id") or ""),
+                )
             await conn.execute(
                 """
                 INSERT INTO execution_checkpoint_writes (
@@ -533,6 +540,36 @@ async def run_f1_execution(
                 trace_id=trace_id,
                 started=started,
             )
+        except ToolApprovalRequired as exc:
+            await _insert_outbox(
+                conn,
+                tenant_id=tenant_id,
+                execution_id=execution_id,
+                event_type="ToolApprovalRequested",
+                payload={
+                    "executionId": execution_id,
+                    "traceId": trace_id,
+                    "approvalId": exc.approval_id,
+                    "toolInvocationId": exc.invocation_id,
+                },
+            )
+            await _insert_outbox(
+                conn,
+                tenant_id=tenant_id,
+                execution_id=execution_id,
+                event_type="ExecutionPaused",
+                payload={
+                    "executionId": execution_id,
+                    "traceId": trace_id,
+                    "approvalId": exc.approval_id,
+                    "reason": exc.code,
+                },
+            )
+            return {
+                "status": "waiting_human",
+                "approval_id": exc.approval_id,
+                "tool_invocation_id": exc.invocation_id,
+            }
         except GovernedLLMError as exc:
             await _mark_failed(
                 conn,
