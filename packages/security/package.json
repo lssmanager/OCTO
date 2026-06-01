@@ -30,7 +30,7 @@
     "@octo/config": "workspace:*",
     "reflect-metadata": "0.2.2",
     "rimraf": "5.0.10",
-    "tsup": "8.5.0",
+    "tsup": "8.5.1",
     "typescript": "5.9.3"
   }
 }
