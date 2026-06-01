@@ -331,7 +331,7 @@ jobs:
           sarif_file: trivy-${{ matrix.service }}.sarif
       - name: Install Cosign
         if: github.ref == 'refs/heads/main' && secrets.COSIGN_KEY != ''
-        uses: sigstore/cosign-installer@v3.10.0
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Cosign sign (main + secret)
         if: github.ref == 'refs/heads/main' && secrets.COSIGN_KEY != ''
