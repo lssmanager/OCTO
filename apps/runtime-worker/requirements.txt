@@ -34,7 +34,7 @@ opentelemetry-instrumentation-fastapi==0.51b0
 opentelemetry-instrumentation-httpx==0.51b0
 
 # ── JSON schema validation ───────────────────────────────────────────
-jsonschema==4.23.0
+jsonschema==4.26.0
 
 # ── LiteLLM proxy client (F2: real LLM calls) ─────────────────────
 # litellm==1.55.0  # Uncomment in F2 when wiring real execution
