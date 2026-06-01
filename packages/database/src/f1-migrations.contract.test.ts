@@ -106,6 +106,19 @@ describe('F1 database migrations contract', () => {
     expect(sql).not.toMatch(/\b(GRANT|ALTER)\s+.*BYPASSRLS\b/i);
   });
 
+
+  it('expands forced tenant RLS to DLQ and idempotency runtime tables', () => {
+    const sql = readMigration('202606010001_f1_tenant_isolation_rls_expansion.sql');
+    for (const table of ['execution_dlq', 'idempotency_keys']) {
+      expect(sql).toContain(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY`);
+      expect(sql).toContain(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`);
+      expect(sql).toContain(`tenant_isolation_${table}`);
+    }
+    expect(sql).toContain("COALESCE(current_setting('app.current_tenant', true), '') <> ''");
+    expect(sql).not.toMatch(/ALTER\s+ROLE\s+.*BYPASSRLS/i);
+    expect(sql).not.toMatch(/\b(GRANT|ALTER)\s+.*BYPASSRLS\b/i);
+  });
+
   it('keeps legacy 0004 migration idempotent and non-duplicative', () => {
     const sql = readMigration('0004_shocking_yellow_claw.sql');
 

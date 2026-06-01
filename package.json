@@ -36,7 +36,9 @@
     "f1:verify": "bash scripts/f1-verify.sh --fast",
     "contracts:generate": "pnpm contracts:build && pnpm contracts:python",
     "test:outbox": "turbo run test --filter=@octo/events --filter=@octo/api -- outbox",
-    "f1:close-gate": "bash scripts/f1-verify.sh --close"
+    "f1:close-gate": "bash scripts/f1-verify.sh --close",
+    "test:tenant-isolation": "vitest run apps/api/src/security/tenant-isolation.integration.test.ts packages/database/src/f1-database.integration.test.ts",
+    "f1:tenant-isolation": "pnpm test:tenant-isolation"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.59.4",

@@ -1,6 +1,7 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { executions, outboxEvents, withTenantTx, insertOutboxEvent } from '@octo/database';
+import { agentVersions, executions, outboxEvents, withTenantTx, insertOutboxEvent } from '@octo/database';
 import { randomUUID } from 'crypto';
+import { NotFoundException } from '@nestjs/common';
 import { createQueue, QUEUES } from '@octo/queue';
 import { AgentPolicyResolverService } from '../agents/agent-policy-resolver.service';
 import { PostgresAgentRepo } from '../agents/postgres-agent.repo';
@@ -36,6 +37,23 @@ export class PostgresExecutionRepo {
   async createExecution(input: any, tenantId: string, createdBy: string): Promise<{ id: string }> {
     const id = randomUUID();
     const traceId = input.traceId ?? randomUUID();
+    const version = await withTenantTx(tenantId, async (tx) => {
+      return (
+        await tx
+          .select({ id: agentVersions.id })
+          .from(agentVersions)
+          .where(
+            and(
+              eq(agentVersions.tenantId, tenantId),
+              eq(agentVersions.agentId, input.agentId),
+              eq(agentVersions.id, input.agentVersionId)
+            )
+          )
+          .limit(1)
+      )[0];
+    });
+    if (!version) throw new NotFoundException('agent_version_not_found');
+
     const contextSnapshot = await this.policyResolver.resolveEffectivePolicies(tenantId, input.agentId);
 
     await withTenantTx(tenantId, async (tx) => {

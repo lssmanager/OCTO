@@ -63,6 +63,8 @@ export async function processExecutionDispatchJob(
     )[0];
     if (!current) throw new Error('execution_not_found');
 
+    if (data.agentId && data.agentId !== current.agentId) throw new Error('dispatch_tenant_agent_mismatch');
+
     skippedStatus = String(current.status);
     if (['completed', 'failed', 'cancelled'].includes(skippedStatus)) return false;
 
@@ -185,7 +187,7 @@ export async function processExecutionDispatchJob(
     await deps.invokeRuntime({
       executionId: data.executionId,
       tenantId: data.tenantId,
-      agentId: data.agentId ?? transitioned.agentId,
+      agentId: transitioned.agentId,
       traceId: transitioned.traceId,
       mode,
       reason: dispatchReason,

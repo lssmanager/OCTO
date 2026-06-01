@@ -145,6 +145,34 @@ export async function processReclaimCandidate(
   candidate: ReclaimCandidate,
   maxReclaimAttempts: number
 ): Promise<'requeued' | 'skipped' | 'failed_terminal'> {
+  if (!candidate.tenantId) throw new Error('invalid_reclaim_payload');
+
+  const current = await withTenantTx(candidate.tenantId, async (tx) => {
+    return (
+      await tx
+        .select({
+          id: executions.id,
+          tenantId: executions.tenantId,
+          agentId: executions.agentId,
+          status: executions.status,
+          attempt: executions.attempt,
+          reclaimCount: executions.reclaimCount,
+          traceId: executions.traceId,
+          runId: executions.runId,
+          leaseToken: executions.leaseToken,
+          queueJobId: executions.queueJobId,
+        })
+        .from(executions)
+        .where(and(eq(executions.id, candidate.id), eq(executions.tenantId, candidate.tenantId)))
+        .limit(1)
+    )[0] as ReclaimCandidate | undefined;
+  });
+  if (!current || current.agentId !== candidate.agentId) {
+    skippedCounter.add(1, { executionId: candidate.id, outcome: 'tenant_mismatch' });
+    return 'skipped';
+  }
+  candidate = { ...candidate, ...current };
+
   if (Number(candidate.reclaimCount ?? 0) >= maxReclaimAttempts) {
     await failReclaimTerminally(
       db,

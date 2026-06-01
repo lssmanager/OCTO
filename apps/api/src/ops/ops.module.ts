@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NotFoundException } from '@nestjs/common';
 import { and, desc, eq } from 'drizzle-orm';
 import { db, executionDlq, executions } from '@octo/database';
 import { createQueue, QUEUES } from '@octo/queue';
@@ -33,6 +33,13 @@ import { F1StatusService } from './f1-status.service';
             return { jobs, total: jobs.length, page, pageSize };
           },
           requeue: async (tenantId, _actorId, jobId, _body) => {
+            const [entry] = await db
+              .select()
+              .from(executionDlq)
+              .where(and(eq(executionDlq.tenantId, tenantId), eq(executionDlq.id, jobId)))
+              .limit(1);
+            if (!entry?.executionId) throw new NotFoundException('DLQ_ENTRY_NOT_FOUND');
+
             const queue = createQueue(QUEUES.EXECUTION_DISPATCH, {
               redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
             });
@@ -40,10 +47,10 @@ import { F1StatusService } from './f1-status.service';
               await queue.add(
                 QUEUES.EXECUTION_DISPATCH,
                 {
-                  tenantId,
-                  executionId: jobId,
+                  tenantId: entry.tenantId,
+                  executionId: entry.executionId,
                   reason: 'manual_replay',
-                  attempt: 1,
+                  attempt: Number(entry.attemptsMade ?? 0) + 1,
                   enqueuedAt: new Date().toISOString(),
                 },
                 { jobId: `requeue:${jobId}`, priority: 1 }
@@ -51,9 +58,16 @@ import { F1StatusService } from './f1-status.service';
             } finally {
               await queue.close().catch(() => undefined);
             }
-            return { jobId, executionId: jobId, requeued: true, targetQueue: QUEUES.EXECUTION_DISPATCH };
+            return { jobId, executionId: entry.executionId, requeued: true, targetQueue: QUEUES.EXECUTION_DISPATCH };
           },
-          discard: async () => undefined,
+          discard: async (tenantId, actorId, jobId, body) => {
+            const updated = await db
+              .update(executionDlq)
+              .set({ resolvedAt: new Date(), resolvedBy: actorId, notes: body.reason, updatedAt: new Date() })
+              .where(and(eq(executionDlq.tenantId, tenantId), eq(executionDlq.id, jobId)))
+              .returning({ id: executionDlq.id });
+            if (!updated.length) throw new NotFoundException('DLQ_ENTRY_NOT_FOUND');
+          },
           metrics: async (tenantId) => {
             const status = await f1StatusService.getStatus(tenantId, 5);
             return {
