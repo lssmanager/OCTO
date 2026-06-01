@@ -21,7 +21,7 @@ httpx==0.28.1
 redis==5.2.1
 
 # ── PostgreSQL durable runtime state ─────────────────────────────────
-asyncpg==0.30.0
+asyncpg==0.31.0
 
 # ── OpenTelemetry (F0-015 observability) ──────────────────────────
 # Core SDK: https://pypi.org/project/opentelemetry-api/#history
