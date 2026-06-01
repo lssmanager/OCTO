@@ -43,7 +43,7 @@
     "f1:observability": "pnpm test:observability"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "8.59.4",
+    "@typescript-eslint/eslint-plugin": "8.60.1",
     "@typescript-eslint/parser": "8.59.4",
     "@vitest/coverage-v8": "4.1.8",
     "ajv": "6.14.0",
