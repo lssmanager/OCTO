@@ -522,8 +522,8 @@ importers:
         version: 3.24.0
     devDependencies:
       '@types/json-schema':
-        specifier: 7.0.0
-        version: 7.0.0
+        specifier: 7.0.15
+        version: 7.0.15
       '@types/node':
         specifier: 22.0.0
         version: 22.0.0
@@ -2142,9 +2142,6 @@ packages:
 
   '@types/http-errors@2.0.5':
     resolution: {integrity: sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg==}
-
-  '@types/json-schema@7.0.0':
-    resolution: {integrity: sha512-vKFTUFiUOLIoe80UE1l3ZvnlDYxgNCrpa/KEesJoTMIvWuI4zA6pxNlOBHR81ghVpyx3M4CRf0LPTd9HivK7Mg==}
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
@@ -6515,7 +6512,7 @@ snapshots:
   '@types/eslint@9.6.1':
     dependencies:
       '@types/estree': 1.0.9
-      '@types/json-schema': 7.0.0
+      '@types/json-schema': 7.0.15
 
   '@types/estree@1.0.8': {}
 
@@ -6536,8 +6533,6 @@ snapshots:
       '@types/serve-static': 1.15.10
 
   '@types/http-errors@2.0.5': {}
-
-  '@types/json-schema@7.0.0': {}
 
   '@types/json-schema@7.0.15': {}
 
