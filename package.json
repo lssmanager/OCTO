@@ -60,7 +60,7 @@
     "rimraf": "5.0.10",
     "tsx": "4.20.6",
     "turbo": "2.9.14",
-    "typescript": "5.9.3",
+    "typescript": "6.0.3",
     "vitest": "3.2.4",
     "zod-to-json-schema": "3.24.1"
   },
