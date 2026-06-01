@@ -28,7 +28,7 @@ asyncpg==0.31.0
 # Instrumentation packages version = sdk_minor * 2 - 1 (b0)
 # otel 1.30.0 → instrumentation 0.51b0
 opentelemetry-api==1.30.0
-opentelemetry-sdk==1.30.0
+opentelemetry-sdk==1.42.1
 opentelemetry-exporter-otlp-proto-http==1.42.1
 opentelemetry-instrumentation-fastapi==0.51b0
 opentelemetry-instrumentation-httpx==0.63b1
