@@ -275,7 +275,7 @@ jobs:
         service: [api, runtime-worker, scheduler-worker, reclaimer-worker, migrate]
     steps:
       - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - run: |
           docker build -f docker/${{ matrix.service }}.Dockerfile \
             --build-arg VERSION=${{ github.ref_name }} \
