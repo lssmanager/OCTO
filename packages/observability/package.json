@@ -31,7 +31,7 @@
     "@octo/config": "workspace:*",
     "@types/node": "22.0.0",
     "drizzle-orm": "0.45.2",
-    "rimraf": "5.0.10",
+    "rimraf": "6.1.3",
     "tsup": "8.5.1",
     "typescript": "6.0.3"
   }
