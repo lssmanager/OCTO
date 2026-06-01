@@ -63,7 +63,7 @@
     "turbo": "2.9.16",
     "typescript": "6.0.3",
     "vitest": "4.1.8",
-    "zod-to-json-schema": "3.24.1"
+    "zod-to-json-schema": "3.25.2"
   },
   "engines": {
     "node": ">=20.0.0",
