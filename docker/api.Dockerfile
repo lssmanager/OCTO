@@ -6,7 +6,7 @@ COPY apps ./apps
 COPY packages ./packages
 RUN HUSKY=0 pnpm install --frozen-lockfile
 RUN pnpm turbo build --filter=@octo/api
-RUN pnpm --filter @octo/api --prod deploy /prod/api
+RUN pnpm --filter @octo/api deploy --prod --legacy /prod/api
 
 FROM node:22-alpine AS runtime
 ARG VERSION=0.0.0
