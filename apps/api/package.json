@@ -19,7 +19,7 @@
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "11.1.23",
     "@nestjs/platform-express": "11.1.24",
-    "@nestjs/platform-fastify": "11.1.23",
+    "@nestjs/platform-fastify": "11.1.24",
     "@nestjs/swagger": "11.4.4",
     "@octo/config": "workspace:*",
     "@octo/contracts": "workspace:*",
