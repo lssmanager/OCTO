@@ -23,6 +23,9 @@ class ExecutionService:
                 tenant_id=request.tenant_id,
                 trace_id=request.trace_id,
                 mode=request.mode,
+                lease_token=request.lease_token,
+                attempt=request.attempt,
+                lease_owner=request.lease_owner,
             )
         except Exception as exc:
             duration_ms = int((time.monotonic() - start) * 1000)

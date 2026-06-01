@@ -65,6 +65,10 @@ class ExecutionRequest(OctoModel):
     trace_id: str
     run_id: str = ""
     mode: Literal["normal", "reclaim"] = "normal"
+    reason: Literal["dispatch", "reclaim_replay"] = "dispatch"
+    lease_owner: str = Field(min_length=1)
+    lease_token: str = Field(min_length=1)
+    attempt: int = Field(ge=0)
 
 
 class ExecutionResult(OctoModel):

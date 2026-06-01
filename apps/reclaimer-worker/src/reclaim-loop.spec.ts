@@ -1,29 +1,38 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { QUEUES } from '@octo/queue';
 
-const add = vi.fn(async () => undefined);
-const createQueue = vi.fn(() => ({ add }));
-const casReclaim = vi.fn(async () => 'reclaimed');
-const reclaimedCounter = { add: vi.fn() };
-const alreadyTakenCounter = { add: vi.fn() };
-const reclaimErrorCounter = { add: vi.fn() };
+const mocks = vi.hoisted(() => ({
+  add: vi.fn(async () => undefined),
+  createQueue: vi.fn(() => ({ add: mocks.add })),
+  casReclaim: vi.fn(async () => 'reclaimed'),
+  reclaimedCounter: { add: vi.fn() },
+  alreadyTakenCounter: { add: vi.fn() },
+  reclaimErrorCounter: { add: vi.fn() },
+}));
 
 vi.mock('@octo/queue', () => ({
   QUEUES: { EXECUTION_DISPATCH: 'execution.dispatch' },
-  createQueue,
+  createQueue: mocks.createQueue,
 }));
 
-vi.mock('./cas-reclaim', () => ({ casReclaim }));
-vi.mock('./metrics', () => ({ reclaimedCounter, alreadyTakenCounter, reclaimErrorCounter }));
+vi.mock('./cas-reclaim', () => ({ casReclaim: mocks.casReclaim }));
+vi.mock('./metrics', () => ({
+  reclaimedCounter: mocks.reclaimedCounter,
+  alreadyTakenCounter: mocks.alreadyTakenCounter,
+  reclaimErrorCounter: mocks.reclaimErrorCounter,
+  requeuedCounter: { add: vi.fn() },
+  skippedCounter: { add: vi.fn() },
+  failedTerminalCounter: { add: vi.fn() },
+}));
 
 import { startReclaimLoop, stopReclaimLoop } from './reclaim-loop';
 
 describe('reclaim loop', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    add.mockClear();
-    createQueue.mockClear();
-    casReclaim.mockClear();
+    mocks.add.mockClear();
+    mocks.createQueue.mockClear();
+    mocks.casReclaim.mockClear();
   });
 
   afterEach(async () => {
@@ -35,16 +44,42 @@ describe('reclaim loop', () => {
     const db = {
       select: () => ({
         from: () => ({
-          where: async () => ([{ id: 'exec-1', attempt: 2, task: { tenantId: 'tenant-1' }, traceId: 'trace-1' }]),
+          where: async () => [
+            {
+              id: 'exec-1',
+              tenantId: 'tenant-1',
+              agentId: 'agent-1',
+              status: 'running',
+              attempt: 2,
+              reclaimCount: 0,
+              traceId: 'trace-1',
+              runId: 'run-1',
+              leaseToken: 'lease-1',
+              queueJobId: 'job-1',
+            },
+          ],
         }),
       }),
     };
 
-    await startReclaimLoop(db as never, 'redis://localhost:6379', { intervalMs: 10, leaseTimeoutMs: 1000 });
+    await startReclaimLoop(db as never, 'redis://localhost:6379', {
+      intervalMs: 10,
+      leaseTimeoutMs: 1000,
+      maxReclaimAttempts: 3,
+    });
     await vi.advanceTimersByTimeAsync(15);
 
-    expect(createQueue).toHaveBeenCalledWith(QUEUES.EXECUTION_DISPATCH, { redisUrl: 'redis://localhost:6379' });
-    expect(add).toHaveBeenCalledWith(
+    expect(mocks.createQueue).toHaveBeenCalledWith(QUEUES.EXECUTION_DISPATCH, {
+      redisUrl: 'redis://localhost:6379',
+    });
+    expect(mocks.casReclaim).toHaveBeenCalledWith(
+      db,
+      'exec-1',
+      'tenant-1',
+      { correlationId: 'trace-1' },
+      { attempt: 2, leaseToken: 'lease-1' }
+    );
+    expect(mocks.add).toHaveBeenCalledWith(
       QUEUES.EXECUTION_DISPATCH,
       expect.objectContaining({
         executionId: 'exec-1',
@@ -52,7 +87,7 @@ describe('reclaim loop', () => {
         reason: 'reclaim_replay',
         attempt: 3,
       }),
-      expect.objectContaining({ jobId: 'reclaim:exec-1:3', attempts: 3 })
+      expect.objectContaining({ jobId: 'reclaim:exec-1:3', attempts: 1 })
     );
   });
 });

@@ -52,8 +52,9 @@ COPY --from=builder --chown=reclaimer:octo /app/apps/reclaimer-worker/dist ./dis
 COPY --from=builder --chown=reclaimer:octo /app/node_modules               ./node_modules
 
 ENV NODE_ENV=production
+EXPOSE 3011
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD node -e "process.exit(0)"
+  CMD node -e "fetch('http://localhost:3011/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "--enable-source-maps", "dist/index.js"]

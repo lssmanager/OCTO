@@ -7,11 +7,11 @@ on:
     branches: [main]
 
 env:
-  PNPM_VERSION: "9"
-  NODE_VERSION: "22"
-  PYTHON_VERSION: "3.12"
-  POSTGRES_VERSION: "16"
-  REDIS_VERSION: "7"
+  PNPM_VERSION: '9'
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.12'
+  POSTGRES_VERSION: '16'
+  REDIS_VERSION: '7'
 
 jobs:
   lint:
@@ -104,12 +104,12 @@ jobs:
           POSTGRES_USER: octo
           POSTGRES_PASSWORD: octo
           POSTGRES_DB: octo_test
-        ports: ["5432:5432"]
+        ports: ['5432:5432']
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7-alpine
-        ports: ["6379:6379"]
+        ports: ['6379:6379']
         options: >-
           --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
@@ -150,12 +150,12 @@ jobs:
           POSTGRES_USER: octo
           POSTGRES_PASSWORD: octo
           POSTGRES_DB: octo_test
-        ports: ["5432:5432"]
+        ports: ['5432:5432']
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7-alpine
-        ports: ["6379:6379"]
+        ports: ['6379:6379']
         options: >-
           --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
@@ -191,10 +191,10 @@ jobs:
           POSTGRES_USER: octo
           POSTGRES_PASSWORD: octo
           POSTGRES_DB: octo_test
-        ports: ["5432:5432"]
+        ports: ['5432:5432']
       redis:
         image: redis:7-alpine
-        ports: ["6379:6379"]
+        ports: ['6379:6379']
     env:
       API_INTERNAL_SECRET: test-internal-secret-minimum-32-chars
       DATABASE_URL: postgresql://octo:octo@localhost:5432/octo_test
@@ -207,6 +207,60 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -r apps/runtime-worker/requirements.txt
       - run: pytest apps/runtime-worker/tests/ -v --tb=short
+
+  f1-close-gate:
+    runs-on: ubuntu-latest
+    needs: [integration-tests, runtime-worker-tests, python-integration-tests]
+    env:
+      NODE_ENV: test
+      POSTGRES_DB: octo
+      POSTGRES_USER: octo
+      POSTGRES_PASSWORD: octo
+      REDIS_PASSWORD: octo
+      F1_HOST_DATABASE_URL: postgresql://octo:octo@localhost:5432/octo
+      F1_HOST_REDIS_URL: redis://:octo@localhost:6379
+      F1_COMPOSE_DATABASE_URL: postgresql://octo:octo@postgres:5432/octo
+      F1_COMPOSE_REDIS_URL: redis://:octo@redis:6379
+      JWT_SECRET: dev-secret
+      JWT_SIGNING_KEYS: '[{"kid":"dev-hs256","algorithm":"HS256","isActive":true,"secret":"dev-secret"}]'
+      RUNTIME_API_SECRET: test-runtime-secret-minimum-32-chars
+      LITELLM_MASTER_KEY: sk-f1-close-gate-minimum-16
+      OPENAI_API_KEY: sk-f1-close-gate-fake-openai-key
+      OCTO_TEST_LLM_FAKE: tool_echo
+      OTEL_ENABLED: 'false'
+      RECLAIM_INTERVAL_MS: '1000'
+      LEASE_TIMEOUT_MS: '1000'
+      OUTBOX_POLL_INTERVAL_MS: '250'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          HUSKY=0 pnpm install --frozen-lockfile
+          python -m pip install --upgrade pip
+          python -m pip install -r apps/runtime-worker/requirements.txt pytest pytest-asyncio asyncpg
+      - name: Run strict F1 close gate
+        run: pnpm f1:close-gate
+      - name: Capture compose diagnostics
+        if: failure()
+        run: |
+          mkdir -p f1-close-gate-artifacts
+          docker compose ps > f1-close-gate-artifacts/compose-ps.txt || true
+          docker compose logs --no-color > f1-close-gate-artifacts/compose.log || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: f1-close-gate-diagnostics
+          path: f1-close-gate-artifacts/
 
   docker-build:
     if: github.ref == 'refs/heads/main'

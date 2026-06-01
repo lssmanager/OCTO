@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --project tsconfig.json",
+    "build": "tsup src/index.ts --format esm --no-dts",
     "start": "node --enable-source-maps dist/index.js",
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit"
@@ -21,6 +21,7 @@
   "devDependencies": {
     "@types/node": "22.0.0",
     "tsx": "4.20.6",
-    "typescript": "5.4.2"
+    "typescript": "5.4.2",
+    "tsup": "8.5.0"
   }
 }

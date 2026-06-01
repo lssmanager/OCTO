@@ -37,6 +37,9 @@ export const dlqReasonEnum = pgEnum('dlq_reason', [
   'governance_limit', // token/cost/recursion budget exceeded
   'timeout', // step or execution timeout
   'poison_message', // caused worker panic / unhandled crash
+  'reclaim_max_attempts_exceeded', // F1 reclaim exhausted ownership attempts
+  'stale_ownership', // stale runtime/worker attempted to mutate after losing lease
+  'runtime_non_retryable', // runtime returned a stable non-retryable failure
   'manual', // operator-triggered via API
 ]);
 
@@ -53,6 +56,10 @@ export const executionDlq = pgTable(
     lastError: jsonb('last_error').notNull(), // { message, code, stack, retryable }
     errorChain: jsonb('error_chain'), // full retry history
     failureContext: jsonb('failure_context').notNull(), // original OctoJobPayload + BullMQ metadata
+    firstFailureAt: timestamp('first_failure_at'),
+    lastFailureAt: timestamp('last_failure_at'),
+    retryAfter: timestamp('retry_after'),
+    payloadJson: jsonb('payload_json'),
 
     // ── Queue metadata ────────────────────────────────────────────────────────
     queueName: text('queue_name').notNull(),

@@ -4,6 +4,10 @@ export type RuntimeInvokePayload = {
   agentId: string;
   traceId: string;
   mode?: 'normal' | 'reclaim';
+  reason?: 'dispatch' | 'reclaim_replay';
+  leaseOwner: string;
+  leaseToken: string;
+  attempt: number;
 };
 
 export class RuntimeInvocationError extends Error {
@@ -44,6 +48,10 @@ export async function invokeRuntimeHttp(
         traceId: payload.traceId,
         runId: payload.executionId,
         mode: payload.mode ?? 'normal',
+        reason: payload.reason ?? (payload.mode === 'reclaim' ? 'reclaim_replay' : 'dispatch'),
+        leaseOwner: payload.leaseOwner,
+        leaseToken: payload.leaseToken,
+        attempt: payload.attempt,
       }),
     });
   } catch (cause) {
@@ -81,6 +89,10 @@ export async function invokeRuntimeHttp(
     runtimeUrl,
     status: response.status,
     mode: payload.mode ?? 'normal',
+    reason: payload.reason ?? (payload.mode === 'reclaim' ? 'reclaim_replay' : 'dispatch'),
+    leaseOwner: payload.leaseOwner,
+    leaseToken: payload.leaseToken,
+    attempt: payload.attempt,
     timeoutMs,
   });
 }

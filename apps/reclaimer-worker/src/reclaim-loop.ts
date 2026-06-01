@@ -1,5 +1,7 @@
+import crypto from 'node:crypto';
+
 import { and, eq, lt, or, sql } from 'drizzle-orm';
-import { executions, getDb, insertOutboxEvent, withTenantTx } from '@octo/database';
+import { executionDlq, executions, getDb, insertOutboxEvent, withTenantTx } from '@octo/database';
 import { createQueue, QUEUES } from '@octo/queue';
 
 import { casReclaim } from './cas-reclaim';
@@ -25,6 +27,9 @@ type ReclaimCandidate = {
   attempt: number | null;
   reclaimCount: number | null;
   traceId: string | null;
+  runId: string | null;
+  leaseToken: string | null;
+  queueJobId: string | null;
 };
 
 type ReclaimDispatchPayload = {
@@ -53,7 +58,7 @@ function buildReclaimDispatchPayload(candidate: ReclaimCandidate): ReclaimDispat
 }
 
 async function failReclaimTerminally(
-  db: ReturnType<typeof getDb>,
+  _db: ReturnType<typeof getDb>,
   candidate: ReclaimCandidate,
   errorCode: string,
   errorMessage: string
@@ -74,6 +79,7 @@ async function failReclaimTerminally(
         completedAt: new Date(),
         updatedAt: new Date(),
         leaseOwner: null,
+        leaseToken: null,
         workerId: null,
         leaseExpiresAt: null,
       })
@@ -87,6 +93,35 @@ async function failReclaimTerminally(
       .returning({ id: executions.id });
 
     if (!updated.length) return;
+
+    await tx.insert(executionDlq).values({
+      id: crypto.randomUUID(),
+      executionId: candidate.id,
+      tenantId: candidate.tenantId,
+      reason: 'reclaim_max_attempts_exceeded',
+      attemptsMade: Number(candidate.attempt ?? 0),
+      lastError: { code: errorCode, message: errorMessage, retryable: false },
+      errorChain: [{ code: errorCode, message: errorMessage, at: new Date().toISOString() }],
+      failureContext: {
+        reason: 'RECLAIM_MAX_ATTEMPTS_EXCEEDED',
+        reclaimCount: candidate.reclaimCount ?? 0,
+        attempt: candidate.attempt ?? 0,
+        leaseToken: candidate.leaseToken,
+      },
+      queueName: 'execution.dispatch',
+      queueJobId: candidate.queueJobId ?? candidate.id,
+      traceId: candidate.traceId,
+      runId: candidate.runId,
+      quarantine: true,
+      firstFailureAt: new Date(),
+      lastFailureAt: new Date(),
+      retryAfter: null,
+      payloadJson: {
+        executionId: candidate.id,
+        tenantId: candidate.tenantId,
+        agentId: candidate.agentId,
+      },
+    });
 
     await insertOutboxEvent(tx, {
       tenantId: candidate.tenantId,
@@ -122,9 +157,15 @@ export async function processReclaimCandidate(
   }
 
   if (candidate.status === 'running') {
-    const outcome = await casReclaim(db, candidate.id, candidate.tenantId, {
-      correlationId: candidate.traceId ?? undefined,
-    });
+    const outcome = await casReclaim(
+      db,
+      candidate.id,
+      candidate.tenantId,
+      {
+        ...(candidate.traceId ? { correlationId: candidate.traceId } : {}),
+      },
+      { attempt: candidate.attempt, leaseToken: candidate.leaseToken }
+    );
 
     if (outcome !== 'reclaimed') {
       skippedCounter.add(1, { executionId: candidate.id, outcome });
@@ -162,6 +203,9 @@ export async function startReclaimLoop(
           attempt: executions.attempt,
           reclaimCount: executions.reclaimCount,
           traceId: executions.traceId,
+          runId: executions.runId,
+          leaseToken: executions.leaseToken,
+          queueJobId: executions.queueJobId,
         })
         .from(executions)
         .where(
@@ -173,7 +217,12 @@ export async function startReclaimLoop(
 
       for (const zombie of zombies) {
         try {
-          const outcome = await processReclaimCandidate(db, dispatchQueue, zombie, config.maxReclaimAttempts);
+          const outcome = await processReclaimCandidate(
+            db,
+            dispatchQueue,
+            zombie,
+            config.maxReclaimAttempts
+          );
 
           if (outcome === 'requeued') {
             console.log(

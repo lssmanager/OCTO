@@ -112,6 +112,40 @@ def _apply_checkpoint_writes_to_messages(
     return messages
 
 
+def _ownership_matches(row: asyncpg.Record, lease_token: str | None, attempt: int | None) -> bool:
+    if not lease_token or attempt is None:
+        return False
+    return str(row["lease_token"] or "") == lease_token and int(row["attempt"] or 0) == attempt
+
+
+async def _has_current_ownership(
+    conn: asyncpg.Connection,
+    *,
+    execution_id: str,
+    tenant_id: str,
+    lease_token: str,
+    attempt: int,
+) -> bool:
+    row = await conn.fetchrow(
+        """
+        SELECT status, lease_token, attempt
+        FROM executions
+        WHERE id=$1 AND tenant_id=$2
+        """,
+        execution_id,
+        tenant_id,
+    )
+    return bool(row and str(row["status"]) == "running" and _ownership_matches(row, lease_token, attempt))
+
+
+class LostOwnershipError(RuntimeError):
+    def __init__(self, execution_id: str, tenant_id: str, reason: str = "STALE_OWNERSHIP") -> None:
+        super().__init__(reason)
+        self.execution_id = execution_id
+        self.tenant_id = tenant_id
+        self.reason = reason
+
+
 async def _mark_failed(
     conn: asyncpg.Connection,
     *,
@@ -121,10 +155,12 @@ async def _mark_failed(
     error_message: str,
     trace_id: str | None,
     retryable: bool = True,
+    lease_token: str | None = None,
+    attempt: int | None = None,
 ) -> None:
     async with conn.transaction():
         row = await conn.fetchrow(
-            "SELECT status FROM executions WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
+            "SELECT status, lease_token, attempt FROM executions WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
             execution_id,
             tenant_id,
         )
@@ -132,14 +168,26 @@ async def _mark_failed(
             return
         current_status = str(row["status"])
         if current_status not in {"completed", "failed", "cancelled"}:
+            if not _ownership_matches(row, lease_token, attempt):
+                log.warning(
+                    "execution.stale_owner_failed_write_rejected",
+                    execution_id=execution_id,
+                    tenant_id=tenant_id,
+                    expected_lease_token=lease_token,
+                    expected_attempt=attempt,
+                    current_lease_token=row["lease_token"],
+                    current_attempt=row["attempt"],
+                )
+                raise LostOwnershipError(execution_id, tenant_id)
             validate_transition(current_status, "failed")
-            await conn.execute(
+            updated = await conn.fetchrow(
                 """
                 UPDATE executions
                 SET status='failed', state='failed', version=version+1,
                     error_code=$3, error_message=$4,
                     error=$5::jsonb, updated_at=now(), completed_at=now()
-                WHERE id=$1 AND tenant_id=$2 AND status=$6
+                WHERE id=$1 AND tenant_id=$2 AND status=$6 AND lease_token=$7 AND attempt=$8
+                RETURNING version
                 """,
                 execution_id,
                 tenant_id,
@@ -147,7 +195,11 @@ async def _mark_failed(
                 error_message,
                 _json({"code": error_code, "message": error_message, "retryable": retryable}),
                 current_status,
+                lease_token,
+                attempt,
             )
+            if updated is None:
+                raise LostOwnershipError(execution_id, tenant_id)
             await _insert_outbox(
                 conn,
                 tenant_id=tenant_id,
@@ -170,6 +222,9 @@ async def _claim_and_start(
     tenant_id: str,
     trace_id: str | None,
     mode: str,
+    lease_token: str,
+    attempt: int,
+    lease_owner: str | None = None,
 ) -> dict[str, Any] | None:
     worker_id = os.environ.get("HOSTNAME", "runtime-worker")
     fake = os.environ.get("OCTO_TEST_LLM_FAKE", "false").lower() == "true"
@@ -177,7 +232,7 @@ async def _claim_and_start(
     async with conn.transaction():
         row = await conn.fetchrow(
             """
-            SELECT id, status, state, version, input_json, context_snapshot_json, agent_id
+            SELECT id, status, state, version, input_json, context_snapshot_json, agent_id, lease_token, attempt, lease_owner
             FROM executions
             WHERE id=$1 AND tenant_id=$2
             FOR UPDATE
@@ -210,6 +265,8 @@ async def _claim_and_start(
             if checkpoint_rows:
                 if not validate_checkpoint_lineage(checkpoint_rows):
                     if status not in {"completed", "failed", "cancelled"}:
+                        if not _ownership_matches(row, lease_token, attempt):
+                            return {"status": "lost_ownership", "reason": "STALE_OWNERSHIP"}
                         validate_transition(status, "failed")
                         await conn.execute(
                             """
@@ -218,11 +275,13 @@ async def _claim_and_start(
                                 error_code='CHECKPOINT_LINEAGE_BROKEN',
                                 error_message='checkpoint lineage invalid',
                                 updated_at=now(), completed_at=now()
-                            WHERE id=$1 AND tenant_id=$2 AND status=$3
+                            WHERE id=$1 AND tenant_id=$2 AND status=$3 AND lease_token=$4 AND attempt=$5
                             """,
                             execution_id,
                             tenant_id,
                             status,
+                            lease_token,
+                            attempt,
                         )
                         await _insert_outbox(
                             conn,
@@ -260,6 +319,29 @@ async def _claim_and_start(
                     [dict(write) for write in writes],
                 )
 
+        if not _ownership_matches(row, lease_token, attempt):
+            log.warning(
+                "execution.stale_owner_start_rejected",
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                expected_lease_token=lease_token,
+                expected_attempt=attempt,
+                current_lease_token=row["lease_token"],
+                current_attempt=row["attempt"],
+                current_status=status,
+            )
+            return {"status": "lost_ownership", "reason": "STALE_OWNERSHIP"}
+
+        if lease_owner and str(row["lease_owner"] or "") != lease_owner:
+            log.warning(
+                "execution.stale_owner_lease_owner_rejected",
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                expected_lease_owner=lease_owner,
+                current_lease_owner=row["lease_owner"],
+            )
+            return {"status": "lost_ownership", "reason": "STALE_OWNERSHIP"}
+
         if status != "dispatched":
             log.info(
                 "execution.f1_runtime_skipped",
@@ -277,13 +359,15 @@ async def _claim_and_start(
             UPDATE executions
             SET status='running', state='running', version=version+1,
                 started_at=COALESCE(started_at, now()), updated_at=now(), worker_id=$4
-            WHERE id=$1 AND tenant_id=$2 AND status='dispatched' AND version=$3
+            WHERE id=$1 AND tenant_id=$2 AND status='dispatched' AND version=$3 AND lease_token=$5 AND attempt=$6
             RETURNING version
             """,
             execution_id,
             tenant_id,
             row["version"],
             worker_id,
+            lease_token,
+            attempt,
         )
         if updated is None:
             return {"status": "cas_conflict"}
@@ -344,6 +428,9 @@ async def _claim_and_start(
             "llm_step_index": llm_step_index,
             "messages": base_messages,
             "mode": mode,
+            "lease_token": lease_token,
+            "attempt": attempt,
+            "lease_owner": lease_owner,
         }
 
 
@@ -385,6 +472,22 @@ async def _run_llm_and_tools(
                     str(tool_res.get("approval_id") or ""),
                     str(tool_res.get("tool_invocation_id") or ""),
                 )
+            if not await _has_current_ownership(
+                conn,
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                lease_token=str(started["lease_token"]),
+                attempt=int(started["attempt"]),
+            ):
+                log.warning(
+                    "execution.stale_owner_checkpoint_write_rejected",
+                    execution_id=execution_id,
+                    tenant_id=tenant_id,
+                    lease_token=started["lease_token"],
+                    attempt=started["attempt"],
+                )
+                raise LostOwnershipError(execution_id, tenant_id)
+
             await conn.execute(
                 """
                 INSERT INTO execution_checkpoint_writes (
@@ -426,13 +529,24 @@ async def _persist_success(
     worker_id = os.environ.get("HOSTNAME", "runtime-worker")
     async with conn.transaction():
         row = await conn.fetchrow(
-            "SELECT status FROM executions WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
+            "SELECT status, lease_token, attempt FROM executions WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
             execution_id,
             tenant_id,
         )
         if row is None:
             raise RuntimeError("execution_not_found")
         current_status = str(row["status"])
+        if not _ownership_matches(row, str(started["lease_token"]), int(started["attempt"])):
+            log.warning(
+                "execution.stale_owner_terminal_write_rejected",
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                expected_lease_token=started["lease_token"],
+                expected_attempt=started["attempt"],
+                current_lease_token=row["lease_token"],
+                current_attempt=row["attempt"],
+            )
+            raise LostOwnershipError(execution_id, tenant_id)
         validate_transition(current_status, "completed")
 
         await conn.execute(
@@ -480,21 +594,26 @@ async def _persist_success(
             _json({"checkpoint_schema_version": 1}),
             worker_id,
         )
-        await conn.execute(
+        updated = await conn.fetchrow(
             """
             UPDATE executions
             SET status='completed', state='completed', version=version+1,
                 result=$4::jsonb, output_json=$4::jsonb, completed_at=now(),
                 updated_at=now(), last_checkpoint_id=$3,
                 token_usage=$5::jsonb
-            WHERE id=$1 AND tenant_id=$2 AND status='running'
+            WHERE id=$1 AND tenant_id=$2 AND status='running' AND lease_token=$6 AND attempt=$7
+            RETURNING version
             """,
             execution_id,
             tenant_id,
             cp1,
             _json({"output": output}),
             _json(llm.usage),
+            str(started["lease_token"]),
+            int(started["attempt"]),
         )
+        if updated is None:
+            raise LostOwnershipError(execution_id, tenant_id)
         await _insert_outbox(
             conn,
             tenant_id=tenant_id,
@@ -530,10 +649,15 @@ async def run_f1_execution(
     tenant_id: str,
     trace_id: str | None = None,
     mode: str = "normal",
+    lease_token: str | None = None,
+    attempt: int | None = None,
+    lease_owner: str | None = None,
 ) -> dict[str, Any]:
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise RuntimeError("DATABASE_URL required")
+    if not lease_token or attempt is None:
+        raise RuntimeError("lease_token and attempt are required for F1 runtime ownership")
 
     conn = await asyncpg.connect(dsn)
     try:
@@ -543,10 +667,13 @@ async def run_f1_execution(
             tenant_id=tenant_id,
             trace_id=trace_id,
             mode=mode,
+            lease_token=lease_token,
+            attempt=attempt,
+            lease_owner=lease_owner,
         )
         if started is None:
             return {"status": "skipped", "reason": "not_dispatched"}
-        if started.get("status") in {"cas_conflict", "failed"}:
+        if started.get("status") in {"cas_conflict", "failed", "lost_ownership"}:
             return started
 
         try:
@@ -558,6 +685,14 @@ async def run_f1_execution(
                 started=started,
             )
         except ToolApprovalRequired as exc:
+            if not await _has_current_ownership(
+                conn,
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                lease_token=str(started["lease_token"]),
+                attempt=int(started["attempt"]),
+            ):
+                return {"status": "lost_ownership", "reason": "STALE_OWNERSHIP"}
             await _insert_outbox(
                 conn,
                 tenant_id=tenant_id,
@@ -587,38 +722,53 @@ async def run_f1_execution(
                 "approval_id": exc.approval_id,
                 "tool_invocation_id": exc.invocation_id,
             }
+        except LostOwnershipError as exc:
+            return {"status": "lost_ownership", "reason": exc.reason}
         except GovernedLLMError as exc:
-            await _mark_failed(
-                conn,
-                execution_id=execution_id,
-                tenant_id=tenant_id,
-                error_code=exc.code,
-                error_message=str(exc),
-                trace_id=trace_id,
-                retryable=exc.retryable,
-            )
+            try:
+                await _mark_failed(
+                    conn,
+                    execution_id=execution_id,
+                    tenant_id=tenant_id,
+                    error_code=exc.code,
+                    error_message=str(exc),
+                    trace_id=trace_id,
+                    retryable=exc.retryable,
+                    lease_token=str(started["lease_token"]),
+                    attempt=int(started["attempt"]),
+                )
+            except LostOwnershipError as ownership_exc:
+                return {"status": "lost_ownership", "reason": ownership_exc.reason}
             raise
         except Exception as exc:
-            await _mark_failed(
+            try:
+                await _mark_failed(
+                    conn,
+                    execution_id=execution_id,
+                    tenant_id=tenant_id,
+                    error_code="RUNTIME_EXECUTION_FAILED",
+                    error_message=str(exc),
+                    trace_id=trace_id,
+                    retryable=True,
+                    lease_token=str(started["lease_token"]),
+                    attempt=int(started["attempt"]),
+                )
+            except LostOwnershipError as ownership_exc:
+                return {"status": "lost_ownership", "reason": ownership_exc.reason}
+            raise
+
+        try:
+            await _persist_success(
                 conn,
                 execution_id=execution_id,
                 tenant_id=tenant_id,
-                error_code="RUNTIME_EXECUTION_FAILED",
-                error_message=str(exc),
                 trace_id=trace_id,
-                retryable=True,
+                started=started,
+                output=output,
+                llm=llm,
             )
-            raise
-
-        await _persist_success(
-            conn,
-            execution_id=execution_id,
-            tenant_id=tenant_id,
-            trace_id=trace_id,
-            started=started,
-            output=output,
-            llm=llm,
-        )
+        except LostOwnershipError as exc:
+            return {"status": "lost_ownership", "reason": exc.reason}
         return {"status": "succeeded", "output": output, "usage": llm.usage}
     finally:
         await conn.close()

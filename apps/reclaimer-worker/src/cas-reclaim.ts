@@ -18,11 +18,17 @@ import type { OtelTraceFields } from '@octo/queue';
 
 export type ReclaimOutcome = 'reclaimed' | 'already_taken' | 'not_found';
 
+export type ReclaimPrecondition = {
+  attempt?: number | null;
+  leaseToken?: string | null;
+};
+
 export async function casReclaim(
-  db: ReturnType<typeof getDb>,
+  _db: ReturnType<typeof getDb>,
   executionId: string,
   tenantId: string,
-  traceFields?: OtelTraceFields
+  traceFields?: OtelTraceFields,
+  precondition: ReclaimPrecondition = {}
 ): Promise<ReclaimOutcome> {
   const parentCtx = traceFields ? extractOtelContext(traceFields) : context.active();
   const tracer = trace.getTracer('octo.reclaimer', '0.1.0');
@@ -56,6 +62,7 @@ export async function casReclaim(
               status: 'reclaimable',
               state: 'reclaimable',
               leaseOwner: null,
+              leaseToken: null,
               workerId: null,
               leaseExpiresAt: null,
               reclaimedAt: sql`NOW()`,
@@ -67,7 +74,13 @@ export async function casReclaim(
                 eq(executions.id, executionId),
                 eq(executions.tenantId, tenantId),
                 eq(executions.status, 'running'),
-                lt(executions.leaseExpiresAt, sql`NOW()`)
+                lt(executions.leaseExpiresAt, sql`NOW()`),
+                precondition.attempt == null
+                  ? sql`TRUE`
+                  : eq(executions.attempt, precondition.attempt),
+                precondition.leaseToken == null
+                  ? sql`TRUE`
+                  : eq(executions.leaseToken, precondition.leaseToken)
               )
             )
             .returning({ id: executions.id });
