@@ -3,6 +3,9 @@ export type RuntimeInvokePayload = {
   tenantId: string;
   agentId: string;
   traceId: string;
+  correlationId: string;
+  runId: string;
+  queueJobId: string;
   mode?: 'normal' | 'reclaim';
   reason?: 'dispatch' | 'reclaim_replay';
   leaseOwner: string;
@@ -46,7 +49,9 @@ export async function invokeRuntimeHttp(
         tenantId: payload.tenantId,
         agentId: payload.agentId,
         traceId: payload.traceId,
-        runId: payload.executionId,
+        correlationId: payload.correlationId,
+        runId: payload.runId,
+        queueJobId: payload.queueJobId,
         mode: payload.mode ?? 'normal',
         reason: payload.reason ?? (payload.mode === 'reclaim' ? 'reclaim_replay' : 'dispatch'),
         leaseOwner: payload.leaseOwner,
@@ -55,26 +60,34 @@ export async function invokeRuntimeHttp(
       }),
     });
   } catch (cause) {
-    console.error('execution_runtime_invoke_network_failed', {
+    console.error(JSON.stringify({ msg: 'execution_runtime_invoke_network_failed',
       executionId: payload.executionId,
       tenantId: payload.tenantId,
+      traceId: payload.traceId,
+      correlationId: payload.correlationId,
+      runId: payload.runId,
+      queueJobId: payload.queueJobId,
       runtimeUrl,
       error: cause instanceof Error ? cause.message : String(cause),
       timeoutMs,
-    });
+    }));
     throw new RuntimeInvocationError('runtime_network_failed', { runtimeUrl, cause, timeoutMs });
   }
 
   if (!response.ok) {
     const responseBody = await response.text().catch(() => '');
-    console.error('execution_runtime_invoke_http_failed', {
+    console.error(JSON.stringify({ msg: 'execution_runtime_invoke_http_failed',
       executionId: payload.executionId,
       tenantId: payload.tenantId,
+      traceId: payload.traceId,
+      correlationId: payload.correlationId,
+      runId: payload.runId,
+      queueJobId: payload.queueJobId,
       runtimeUrl,
       status: response.status,
       responseBody,
       timeoutMs,
-    });
+    }));
     throw new RuntimeInvocationError('runtime_http_failed', {
       runtimeUrl,
       status: response.status,
@@ -83,9 +96,13 @@ export async function invokeRuntimeHttp(
     });
   }
 
-  console.info('execution_runtime_invoked', {
+  console.info(JSON.stringify({ msg: 'execution_runtime_invoked',
     executionId: payload.executionId,
     tenantId: payload.tenantId,
+    traceId: payload.traceId,
+    correlationId: payload.correlationId,
+    runId: payload.runId,
+    queueJobId: payload.queueJobId,
     runtimeUrl,
     status: response.status,
     mode: payload.mode ?? 'normal',
@@ -94,5 +111,5 @@ export async function invokeRuntimeHttp(
     leaseToken: payload.leaseToken,
     attempt: payload.attempt,
     timeoutMs,
-  });
+  }));
 }

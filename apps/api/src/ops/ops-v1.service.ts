@@ -10,12 +10,16 @@ export class OpsV1Service {
     stale: (tenantId: string) => Promise<any>;
     reset: (tenantId: string, actorId: string, executionId: string, b: any) => Promise<any>;
     f1Status: (tenantId: string, windowMinutes: number) => Promise<any>;
+    observeExecution: (tenantId: string, executionId: string) => Promise<any>;
+    observeTrace: (tenantId: string, traceId: string) => Promise<any>;
   }) {}
   listDlq(tenantId: string, q: any) { return this.deps.listDlq(tenantId, q); }
   async requeue(tenantId: string, actorId: string, jobId: string, b: any) { if (!b?.reason) throw new BadRequestException('VALIDATION_ERROR'); return this.deps.requeue(tenantId, actorId, jobId, b); }
   async discard(tenantId: string, actorId: string, jobId: string, b: any) { if (!b?.reason) throw new BadRequestException('VALIDATION_ERROR'); await this.deps.discard(tenantId, actorId, jobId, b); return; }
   metrics(tenantId: string) { return this.deps.metrics(tenantId); }
   stale(tenantId: string) { return this.deps.stale(tenantId); }
+  observeExecution(tenantId: string, executionId: string) { return this.deps.observeExecution(tenantId, executionId); }
+  observeTrace(tenantId: string, traceId: string) { return this.deps.observeTrace(tenantId, traceId); }
   f1Status(tenantId: string, windowMinutes?: number) {
     const window = Number(windowMinutes ?? 15);
     return this.deps.f1Status(tenantId, Number.isFinite(window) && window > 0 ? window : 15);

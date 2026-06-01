@@ -63,7 +63,9 @@ class ExecutionRequest(OctoModel):
     tools: list[str] = Field(default_factory=list)
     streaming: bool = False
     trace_id: str
+    correlation_id: str = ""
     run_id: str = ""
+    queue_job_id: str = ""
     mode: Literal["normal", "reclaim"] = "normal"
     reason: Literal["dispatch", "reclaim_replay"] = "dispatch"
     lease_owner: str = Field(min_length=1)

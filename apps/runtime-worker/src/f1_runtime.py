@@ -59,6 +59,9 @@ async def _insert_outbox(
     execution_id: str,
     event_type: str,
     payload: dict[str, Any],
+    correlation_id: str | None = None,
+    run_id: str | None = None,
+    queue_job_id: str | None = None,
 ) -> None:
     seq = await _next_outbox_sequence(conn, tenant_id, execution_id)
     meta = dict(payload.get("_meta", {})) if isinstance(payload.get("_meta"), dict) else {}
@@ -69,6 +72,9 @@ async def _insert_outbox(
             **meta,
             "traceId": str(meta.get("traceId") or payload.get("traceId") or "unknown-trace"),
             "spanId": str(meta.get("spanId") or "unknown-span"),
+            "correlationId": str(meta.get("correlationId") or payload.get("correlationId") or correlation_id or payload.get("traceId") or "unknown-correlation"),
+            "runId": str(meta.get("runId") or payload.get("runId") or run_id or execution_id),
+            "queueJobId": str(meta.get("queueJobId") or payload.get("queueJobId") or queue_job_id or execution_id),
             "occurredAt": str(occurred_at),
             "schemaVersion": str(meta.get("schemaVersion") or "1.0"),
             "source": "runtime-worker",
@@ -154,6 +160,9 @@ async def _mark_failed(
     error_code: str,
     error_message: str,
     trace_id: str | None,
+    correlation_id: str | None = None,
+    run_id: str | None = None,
+    queue_job_id: str | None = None,
     retryable: bool = True,
     lease_token: str | None = None,
     attempt: int | None = None,
@@ -211,7 +220,13 @@ async def _mark_failed(
                     "errorCode": error_code,
                     "errorMessage": error_message,
                     "retryable": retryable,
+                    "correlationId": correlation_id,
+                    "runId": run_id,
+                    "queueJobId": queue_job_id,
                 },
+                correlation_id=correlation_id,
+                run_id=run_id,
+                queue_job_id=queue_job_id,
             )
 
 
@@ -221,6 +236,9 @@ async def _claim_and_start(
     execution_id: str,
     tenant_id: str,
     trace_id: str | None,
+    correlation_id: str | None,
+    run_id: str | None,
+    queue_job_id: str | None,
     mode: str,
     lease_token: str,
     attempt: int,
@@ -292,7 +310,13 @@ async def _claim_and_start(
                                 "executionId": execution_id,
                                 "traceId": trace_id,
                                 "errorCode": "CHECKPOINT_LINEAGE_BROKEN",
+                                "correlationId": correlation_id,
+                                "runId": run_id,
+                                "queueJobId": queue_job_id,
                             },
+                            correlation_id=correlation_id,
+                            run_id=run_id,
+                            queue_job_id=queue_job_id,
                         )
                     return {"status": "failed", "error": "CHECKPOINT_LINEAGE_BROKEN"}
 
@@ -415,7 +439,10 @@ async def _claim_and_start(
             tenant_id=tenant_id,
             execution_id=execution_id,
             event_type="ExecutionStarted",
-            payload={"executionId": execution_id, "traceId": trace_id, "mode": mode},
+            payload={"executionId": execution_id, "traceId": trace_id, "correlationId": correlation_id, "runId": run_id, "queueJobId": queue_job_id, "mode": mode},
+            correlation_id=correlation_id,
+            run_id=run_id,
+            queue_job_id=queue_job_id,
         )
 
         return {
@@ -428,6 +455,10 @@ async def _claim_and_start(
             "llm_step_index": llm_step_index,
             "messages": base_messages,
             "mode": mode,
+            "trace_id": trace_id,
+            "correlation_id": correlation_id,
+            "run_id": run_id or execution_id,
+            "queue_job_id": queue_job_id or execution_id,
             "lease_token": lease_token,
             "attempt": attempt,
             "lease_owner": lease_owner,
@@ -619,7 +650,10 @@ async def _persist_success(
             tenant_id=tenant_id,
             execution_id=execution_id,
             event_type="ExecutionCheckpointed",
-            payload={"executionId": execution_id, "checkpointId": cp1, "traceId": trace_id},
+            payload={"executionId": execution_id, "checkpointId": cp1, "traceId": trace_id, "correlationId": started.get("correlation_id"), "runId": started.get("run_id"), "queueJobId": started.get("queue_job_id")},
+            correlation_id=str(started.get("correlation_id") or trace_id or ""),
+            run_id=str(started.get("run_id") or execution_id),
+            queue_job_id=str(started.get("queue_job_id") or execution_id),
         )
         if llm.accounting_error:
             await _insert_outbox(
@@ -633,14 +667,23 @@ async def _persist_success(
                     "errorCode": "LLM_ACCOUNTING_INCOMPLETE",
                     "errorMessage": llm.accounting_error_reason or "LLM usage accounting was incomplete",
                     "model": llm.model,
+                    "correlationId": started.get("correlation_id"),
+                    "runId": started.get("run_id"),
+                    "queueJobId": started.get("queue_job_id"),
                 },
+                correlation_id=str(started.get("correlation_id") or trace_id or ""),
+                run_id=str(started.get("run_id") or execution_id),
+                queue_job_id=str(started.get("queue_job_id") or execution_id),
             )
         await _insert_outbox(
             conn,
             tenant_id=tenant_id,
             execution_id=execution_id,
             event_type="ExecutionSucceeded",
-            payload={"executionId": execution_id, "output": output, "traceId": trace_id},
+            payload={"executionId": execution_id, "output": output, "traceId": trace_id, "correlationId": started.get("correlation_id"), "runId": started.get("run_id"), "queueJobId": started.get("queue_job_id")},
+            correlation_id=str(started.get("correlation_id") or trace_id or ""),
+            run_id=str(started.get("run_id") or execution_id),
+            queue_job_id=str(started.get("queue_job_id") or execution_id),
         )
 
 
@@ -648,6 +691,9 @@ async def run_f1_execution(
     execution_id: str,
     tenant_id: str,
     trace_id: str | None = None,
+    correlation_id: str | None = None,
+    run_id: str | None = None,
+    queue_job_id: str | None = None,
     mode: str = "normal",
     lease_token: str | None = None,
     attempt: int | None = None,
@@ -661,11 +707,26 @@ async def run_f1_execution(
 
     conn = await asyncpg.connect(dsn)
     try:
+        log.info(
+            "execution.runtime_accepted",
+            execution_id=execution_id,
+            tenant_id=tenant_id,
+            trace_id=trace_id,
+            correlation_id=correlation_id or trace_id,
+            run_id=run_id or execution_id,
+            queue_job_id=queue_job_id or execution_id,
+            mode=mode,
+            attempt=attempt,
+            lease_owner=lease_owner,
+        )
         started = await _claim_and_start(
             conn,
             execution_id=execution_id,
             tenant_id=tenant_id,
             trace_id=trace_id,
+            correlation_id=correlation_id or trace_id,
+            run_id=run_id or execution_id,
+            queue_job_id=queue_job_id or execution_id,
             mode=mode,
             lease_token=lease_token,
             attempt=attempt,
@@ -703,7 +764,13 @@ async def run_f1_execution(
                     "traceId": trace_id,
                     "approvalId": exc.approval_id,
                     "toolInvocationId": exc.invocation_id,
+                    "correlationId": correlation_id or trace_id,
+                    "runId": run_id or execution_id,
+                    "queueJobId": queue_job_id or execution_id,
                 },
+                correlation_id=correlation_id or trace_id,
+                run_id=run_id or execution_id,
+                queue_job_id=queue_job_id or execution_id,
             )
             await _insert_outbox(
                 conn,
@@ -715,7 +782,13 @@ async def run_f1_execution(
                     "traceId": trace_id,
                     "approvalId": exc.approval_id,
                     "reason": exc.code,
+                    "correlationId": correlation_id or trace_id,
+                    "runId": run_id or execution_id,
+                    "queueJobId": queue_job_id or execution_id,
                 },
+                correlation_id=correlation_id or trace_id,
+                run_id=run_id or execution_id,
+                queue_job_id=queue_job_id or execution_id,
             )
             return {
                 "status": "waiting_human",
@@ -733,6 +806,9 @@ async def run_f1_execution(
                     error_code=exc.code,
                     error_message=str(exc),
                     trace_id=trace_id,
+                    correlation_id=correlation_id or trace_id,
+                    run_id=run_id or execution_id,
+                    queue_job_id=queue_job_id or execution_id,
                     retryable=exc.retryable,
                     lease_token=str(started["lease_token"]),
                     attempt=int(started["attempt"]),
@@ -749,6 +825,9 @@ async def run_f1_execution(
                     error_code="RUNTIME_EXECUTION_FAILED",
                     error_message=str(exc),
                     trace_id=trace_id,
+                    correlation_id=correlation_id or trace_id,
+                    run_id=run_id or execution_id,
+                    queue_job_id=queue_job_id or execution_id,
                     retryable=True,
                     lease_token=str(started["lease_token"]),
                     attempt=int(started["attempt"]),

@@ -99,6 +99,7 @@ export async function publishOutboxBatch(deps: {
 
   const limit = deps.batchSize ?? OUTBOX_BATCH_SIZE;
   const rows = await deps.db.fetchUnpublished(limit);
+  console.log(JSON.stringify({ msg: 'outbox_batch_scanned', batchSize: rows.length, limit }));
   deps.metrics.observeBatchSize(rows.length);
   deps.metrics.setPendingTotal(await deps.db.pendingCount());
   if (deps.db.oldestUnpublishedAgeMs && deps.metrics.setOldestUnpublishedAgeMs) {
@@ -119,13 +120,16 @@ export async function publishOutboxBatch(deps: {
       await deps.redis.xadd(deps.stream ?? OUTBOX_STREAM_KEY, '*', ...fields);
       await deps.db.markPublished(row.id);
       deps.metrics.observePublishLatencyMs(row.createdAt ? Date.now() - row.createdAt.getTime() : Date.now() - start);
+      console.log(JSON.stringify({ msg: 'outbox_event_published', eventId: row.id, tenantId: row.tenantId, executionId: row.aggregateId, eventType: row.eventType, traceId: envelope.traceId, correlationId: (envelope.payload as any)?._meta?.correlationId, stream: deps.stream ?? OUTBOX_STREAM_KEY }));
       published += 1;
     } catch (error) {
       failed += 1;
       deps.metrics.incPublishFailed();
+      console.error(JSON.stringify({ msg: 'outbox_event_publish_failed', eventId: row.id, tenantId: row.tenantId, executionId: row.aggregateId, eventType: row.eventType, traceId: (row.payloadJson._meta as any)?.traceId, correlationId: (row.payloadJson._meta as any)?.correlationId, error: error instanceof Error ? error.message : String(error) }));
       const attempts = await deps.db.recordFailure(row.id, error instanceof Error ? error.message : String(error));
       if (attempts >= (deps.maxAttempts ?? MAX_PUBLISH_ATTEMPTS)) {
         await deps.db.moveToDlq(row, error instanceof Error ? error.message : String(error), attempts);
+        console.error(JSON.stringify({ msg: 'outbox_event_dead_lettered', eventId: row.id, tenantId: row.tenantId, executionId: row.aggregateId, eventType: row.eventType, attempts }));
         deps.metrics.incDlqTotal();
       }
     }

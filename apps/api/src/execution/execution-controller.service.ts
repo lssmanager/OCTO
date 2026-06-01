@@ -25,6 +25,9 @@ export type CreateExecutionRequest = {
   agentId: string;
   agentVersionId: string;
   input: Record<string, unknown>;
+  traceId?: string;
+  correlationId?: string;
+  runId?: string;
 };
 
 @Injectable()

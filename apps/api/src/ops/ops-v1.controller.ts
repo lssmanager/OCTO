@@ -17,6 +17,8 @@ export class OpsV1Controller {
     return this.svc.f1Status(req.tenantId, windowMinutes ? Number(windowMinutes) : undefined);
   }
   @Get('executions/stale') @RequireScopes('ops:read') stale(@Req() req: any) { return this.svc.stale(req.tenantId); }
+  @Get('executions/:id/observability') @RequireScopes('ops:read') observeExecution(@Req() req: any, @Param('id') id: string) { return this.svc.observeExecution(req.tenantId, id); }
+  @Get('traces/:traceId') @RequireScopes('ops:read') observeTrace(@Req() req: any, @Param('traceId') traceId: string) { return this.svc.observeTrace(req.tenantId, traceId); }
 }
 
 @Controller('v1/executions')

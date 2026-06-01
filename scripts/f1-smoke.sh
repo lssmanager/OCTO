@@ -167,12 +167,15 @@ wait_sql_count() {
 create_execution_via_api() {
   local output_file execution_body
   output_file="$(mktemp)"
-  execution_body="{\"agentId\":\"${AGENT_ID}\",\"agentVersionId\":\"${AGENT_VERSION_ID}\",\"input\":{\"prompt\":\"Run the F1 close-gate smoke path with a deterministic tool call.\"}}"
+  TRACE_ID="trace-$(make_uuid)"
+  CORRELATION_ID="corr-$(make_uuid)"
+  export TRACE_ID CORRELATION_ID
+  execution_body="{\"agentId\":\"${AGENT_ID}\",\"agentVersionId\":\"${AGENT_VERSION_ID}\",\"traceId\":\"${TRACE_ID}\",\"correlationId\":\"${CORRELATION_ID}\",\"input\":{\"prompt\":\"Run the F1 close-gate smoke path with a deterministic tool call.\"}}"
   log "creating execution through Control Plane API"
   api_post_json "/v1/executions" "$execution_body" "$output_file"
   EXECUTION_ID="$(json_field "$output_file" id)"
   rm -f "$output_file"
-  echo "created execution ${EXECUTION_ID}"
+  echo "created execution ${EXECUTION_ID} trace=${TRACE_ID} correlation=${CORRELATION_ID}"
 }
 
 verify_execution_evidence() {
@@ -183,12 +186,22 @@ verify_execution_evidence() {
 const fs = require('fs');
 const file = process.argv[2];
 const events = JSON.parse(fs.readFileSync(file, 'utf8'));
+const expectedTrace = process.env.TRACE_ID;
+const expectedCorrelation = process.env.CORRELATION_ID;
 const types = events.map((event) => event.eventType);
 for (const required of ['ExecutionQueued', 'ExecutionDispatched', 'ExecutionStarted', 'ExecutionCheckpointed', 'ExecutionSucceeded']) {
   if (!types.includes(required)) {
     console.error(`missing ${required}; saw ${types.join(',')}`);
     process.exit(1);
   }
+}
+if (!events.every((event) => event.payloadJson?._meta?.traceId === expectedTrace)) {
+  console.error('timeline events are not trace-correlated');
+  process.exit(1);
+}
+if (!events.every((event) => event.payloadJson?._meta?.correlationId === expectedCorrelation)) {
+  console.error('timeline events are not correlationId-correlated');
+  process.exit(1);
 }
 NODE
   rm -f "$timeline_file"
@@ -197,6 +210,27 @@ NODE
   wait_sql_count "checkpoint write rows for ${execution_id}" "SELECT count(*) FROM execution_checkpoint_writes WHERE tenant_id='${TENANT_ID}' AND task_id='${execution_id}'" 1
   wait_sql_count "tool invocation rows for ${execution_id}" "SELECT count(*) FROM tool_invocations WHERE tenant_id='${TENANT_ID}' AND execution_id='${execution_id}' AND status='COMPLETED'" 1
   wait_sql_count "published outbox rows for ${execution_id}" "SELECT count(*) FROM outbox_events WHERE tenant_id='${TENANT_ID}' AND aggregate_id='${execution_id}' AND published_at IS NOT NULL" 5
+
+  local ops_file trace_file
+  ops_file="$(mktemp)"
+  api_get_json "/v1/ops/executions/${execution_id}/observability" "$ops_file"
+  node - "$ops_file" <<'NODE' || fail "ops observability endpoint missing execution evidence"
+const fs = require('fs');
+const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (!data.execution || data.execution.id !== process.env.EXECUTION_ID) process.exit(1);
+if (!Array.isArray(data.timeline) || data.timeline.length < 5) process.exit(1);
+if (!data.queue || data.queue.source !== 'bullmq') process.exit(1);
+NODE
+  rm -f "$ops_file"
+  trace_file="$(mktemp)"
+  api_get_json "/v1/ops/traces/${TRACE_ID}" "$trace_file"
+  node - "$trace_file" <<'NODE' || fail "ops trace endpoint missing execution evidence"
+const fs = require('fs');
+const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (data.traceId !== process.env.TRACE_ID) process.exit(1);
+if (!Array.isArray(data.executions) || !data.executions.some((row) => row.id === process.env.EXECUTION_ID)) process.exit(1);
+NODE
+  rm -f "$trace_file"
 
   if docker_compose_available; then
     local stream_len

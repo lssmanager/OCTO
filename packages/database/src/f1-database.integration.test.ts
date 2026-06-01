@@ -23,6 +23,7 @@ const migrationFiles = [
   '202605230004_f1_rls_hardening.sql',
   '202605280002_worker_heartbeats.sql',
   '202605300002_f1_runtime_db_role.sql',
+  '202606010001_f1_tenant_isolation_rls_expansion.sql',
 ];
 
 type Sql = ReturnType<typeof postgres>;
@@ -59,7 +60,7 @@ runIfDatabase('F1 database integration', () => {
   it('enables and forces RLS on all F1 tenant-scoped tables', async () => {
     const tables = [
       'agents','agent_versions','executions','execution_steps','execution_checkpoints',
-      'execution_checkpoint_writes','tool_invocations','approvals','outbox_events',
+      'execution_checkpoint_writes','tool_invocations','approvals','outbox_events','execution_dlq','idempotency_keys',
     ];
     const rows = await sql<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }[]>`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
@@ -119,7 +120,7 @@ runIfDatabase('F1 database integration', () => {
   it('creates tenant isolation policies with non-empty tenant guard', async () => {
     const tables = [
       'agents','agent_versions','executions','execution_steps','execution_checkpoints',
-      'execution_checkpoint_writes','tool_invocations','approvals','outbox_events',
+      'execution_checkpoint_writes','tool_invocations','approvals','outbox_events','execution_dlq','idempotency_keys',
     ];
     const rows = await sql<{ tablename: string; policyname: string; qual: string | null; with_check: string | null }[]>`
       SELECT tablename, policyname, qual, with_check

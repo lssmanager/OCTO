@@ -22,6 +22,9 @@ class ExecutionService:
                 execution_id=request.execution_id,
                 tenant_id=request.tenant_id,
                 trace_id=request.trace_id,
+                correlation_id=request.correlation_id or request.trace_id,
+                run_id=request.run_id or request.execution_id,
+                queue_job_id=request.queue_job_id or request.execution_id,
                 mode=request.mode,
                 lease_token=request.lease_token,
                 attempt=request.attempt,
@@ -34,6 +37,9 @@ class ExecutionService:
                 execution_id=request.execution_id,
                 tenant_id=request.tenant_id,
                 trace_id=request.trace_id,
+                correlation_id=request.correlation_id or request.trace_id,
+                run_id=request.run_id or request.execution_id,
+                queue_job_id=request.queue_job_id or request.execution_id,
             )
             return ExecutionResult(
                 execution_id=request.execution_id,

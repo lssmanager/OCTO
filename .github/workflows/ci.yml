@@ -162,6 +162,7 @@ jobs:
       DATABASE_URL: postgresql://octo:octo@localhost:5432/octo_test
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: test-secret-ci
+      JWT_SIGNING_KEYS: '[{"kid":"tenant-isolation-test","algorithm":"HS256","isActive":true,"secret":"test-secret-ci"}]'
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
@@ -175,6 +176,8 @@ jobs:
       - run: HUSKY=0 pnpm install --frozen-lockfile
       - run: pnpm db:migrate
       - run: pnpm testintegration --reporter=verbose
+      - run: pnpm test:tenant-isolation --reporter=verbose
+      - run: pnpm test:observability --reporter=verbose
       - uses: actions/upload-artifact@v4
         if: always()
         with:
