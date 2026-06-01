@@ -78,7 +78,7 @@ jobs:
           cache: pnpm
       - run: HUSKY=0 pnpm install --frozen-lockfile
       - run: pnpm testunit --coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-ts
           path: coverage/
@@ -178,7 +178,7 @@ jobs:
       - run: pnpm testintegration --reporter=verbose
       - run: pnpm test:tenant-isolation --reporter=verbose
       - run: pnpm test:observability --reporter=verbose
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: integration-results
@@ -259,7 +259,7 @@ jobs:
           mkdir -p f1-close-gate-artifacts
           docker compose ps > f1-close-gate-artifacts/compose-ps.txt || true
           docker compose logs --no-color > f1-close-gate-artifacts/compose.log || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: f1-close-gate-diagnostics
@@ -289,7 +289,7 @@ jobs:
             docker tag octo/${{ matrix.service }}:sha-${{ github.sha }} octo/${{ matrix.service }}:latest
           fi
           docker save octo/${{ matrix.service }}:sha-${{ github.sha }} -o ${{ matrix.service }}.tar
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image-${{ matrix.service }}
           path: ${{ matrix.service }}.tar
@@ -299,7 +299,7 @@ jobs:
 
       - name: Generate SBOM
         run: syft octo/${{ matrix.service }}:sha-${{ github.sha }} -o cyclonedx-json > sbom-${{ matrix.service }}.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom-${{ matrix.service }}
           path: sbom-${{ matrix.service }}.json
