@@ -18,7 +18,9 @@ LABEL org.opencontainers.image.title="octo/api" \
       org.opencontainers.image.created="${CREATED}" \
       org.opencontainers.image.source="https://github.com/lssmanager/OCTO" \
       org.opencontainers.image.licenses="Proprietary"
-RUN addgroup -S -g 1001 octo && adduser -S -u 1001 -G octo octo
+RUN apk upgrade --no-cache \
+  && addgroup -S -g 1001 octo \
+  && adduser -S -u 1001 -G octo octo
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder --chown=octo:octo /app/apps/api/dist ./dist
