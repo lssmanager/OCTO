@@ -53,6 +53,9 @@ describe('reclaim loop', () => {
               attempt: 2,
               reclaimCount: 0,
               traceId: 'trace-1',
+              runId: 'run-1',
+              leaseToken: 'lease-1',
+              queueJobId: 'job-1',
             },
           ],
         }),
@@ -69,6 +72,13 @@ describe('reclaim loop', () => {
     expect(mocks.createQueue).toHaveBeenCalledWith(QUEUES.EXECUTION_DISPATCH, {
       redisUrl: 'redis://localhost:6379',
     });
+    expect(mocks.casReclaim).toHaveBeenCalledWith(
+      db,
+      'exec-1',
+      'tenant-1',
+      { correlationId: 'trace-1' },
+      { attempt: 2, leaseToken: 'lease-1' }
+    );
     expect(mocks.add).toHaveBeenCalledWith(
       QUEUES.EXECUTION_DISPATCH,
       expect.objectContaining({

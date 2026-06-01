@@ -57,6 +57,7 @@ export const executions = pgTable(
     attemptCount: integer('attempt_count').notNull().default(0),
     reclaimCount: integer('reclaim_count').notNull().default(0),
     leaseOwner: text('lease_owner'),
+    leaseToken: text('lease_token'),
     leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
     cancellationRequestedAt: timestamp('cancellation_requested_at', { withTimezone: true }),
     budgetSnapshotJson: jsonb('budget_snapshot_json').notNull().default({}),
@@ -96,6 +97,12 @@ export const executions = pgTable(
     tenantStatusIdx: index('executions_tenant_status_idx').on(t.tenantId, t.status),
     workerIdx: index('executions_worker_id_idx').on(t.workerId),
     leaseIdx: index('idx_executions_lease').on(t.status, t.leaseExpiresAt),
+    leaseTokenIdx: index('idx_executions_lease_token').on(
+      t.tenantId,
+      t.id,
+      t.attempt,
+      t.leaseToken
+    ),
     heartbeatIdx: index('idx_executions_heartbeat').on(t.status, t.heartbeatAt),
     f1TenantStateCreatedIdx: index('idx_executions_tenant_state_created').on(
       t.tenantId,

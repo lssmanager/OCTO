@@ -213,7 +213,7 @@ seed_reclaim_candidate() {
 INSERT INTO executions (
   id, tenant_id, agent_id, agent_version_id, state, status, version, input_json, task,
   context_snapshot_json, budget_snapshot_json, governance, created_by, queue_job_id,
-  trace_id, run_id, attempt, attempt_count, reclaim_count, lease_owner, worker_id,
+  trace_id, run_id, attempt, attempt_count, reclaim_count, lease_owner, lease_token, worker_id,
   lease_expires_at, started_at, updated_at
 ) VALUES (
   '${RECLAIM_EXECUTION_ID}', '${TENANT_ID}', '${AGENT_ID}', '${AGENT_VERSION_ID}', 'running', 'running', 1,
@@ -221,7 +221,7 @@ INSERT INTO executions (
   '{"agentId":"${AGENT_ID}","agentVersion":1,"workspaceId":"","instructions":"reclaim smoke","modelPolicy":{"primaryModel":"fake/f1-test","allowedModels":["fake/f1-test"],"registeredModels":["fake/f1-test"]},"toolPolicy":{"allow":["builtin.echo"],"deny":[]},"budgetPolicy":{"maxUsdPerRun":"0.01"},"governance":{},"hierarchySnapshot":{"chain":[]},"schemaVersion":2,"resolvedAt":"smoke"}'::jsonb,
   '{"maxUsdPerRun":"0.01"}'::jsonb, '{}'::jsonb, '${USER_ID}', '${RECLAIM_EXECUTION_ID}',
   'trace-${RECLAIM_EXECUTION_ID}', 'run-${RECLAIM_EXECUTION_ID}', 0, 0, 0,
-  'dead-worker', 'dead-worker', NOW() - interval '5 minutes', NOW() - interval '10 minutes', NOW() - interval '5 minutes'
+  'dead-worker', 'dead-token-${RECLAIM_EXECUTION_ID}', 'dead-worker', NOW() - interval '5 minutes', NOW() - interval '10 minutes', NOW() - interval '5 minutes'
 );
 SQL
 }

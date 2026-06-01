@@ -45,10 +45,16 @@ async def test_execution_service_delegates_to_f1_runtime(monkeypatch: pytest.Mon
         tenant_id: str,
         trace_id: str | None = None,
         mode: str = "normal",
+        lease_token: str | None = None,
+        attempt: int | None = None,
+        lease_owner: str | None = None,
     ) -> dict[str, Any]:
         calls["execution_id"] = execution_id
         calls["tenant_id"] = tenant_id
         calls["trace_id"] = trace_id or ""
+        calls["lease_token"] = lease_token or ""
+        calls["lease_owner"] = lease_owner or ""
+        calls["attempt"] = str(attempt)
         return {
             "status": "succeeded",
             "output": "ok",
@@ -71,6 +77,9 @@ async def test_execution_service_delegates_to_f1_runtime(monkeypatch: pytest.Mon
         llm={"primary": "litellm/default"},
         trace_id="trace-1",
         run_id="1",
+        lease_owner="scheduler-test",
+        lease_token="lease-test",
+        attempt=1,
     )
 
     service = ExecutionService()
@@ -83,6 +92,9 @@ async def test_execution_service_delegates_to_f1_runtime(monkeypatch: pytest.Mon
         "execution_id": "exec-1",
         "tenant_id": "tenant-1",
         "trace_id": "trace-1",
+        "lease_token": "lease-test",
+        "lease_owner": "scheduler-test",
+        "attempt": "1",
     }
 
 
@@ -95,6 +107,9 @@ async def test_execution_service_returns_failed_result_on_runtime_error(
         tenant_id: str,
         trace_id: str | None = None,
         mode: str = "normal",
+        lease_token: str | None = None,
+        attempt: int | None = None,
+        lease_owner: str | None = None,
     ) -> dict[str, Any]:
         raise RuntimeError("runtime unavailable")
 
@@ -113,6 +128,9 @@ async def test_execution_service_returns_failed_result_on_runtime_error(
         llm={"primary": "litellm/default"},
         trace_id="trace-1",
         run_id="1",
+        lease_owner="scheduler-test",
+        lease_token="lease-test",
+        attempt=1,
     )
 
     service = ExecutionService()
@@ -156,7 +174,7 @@ async def test_execute_endpoint_returns_202_before_runtime_finishes(
         before = time.monotonic()
         response = await client.post(
             "/api/v1/execute",
-            headers={"x-internal-secret": "dev-secret"},
+            headers={"x-internal-secret": "0123456789abcdef0123456789abcdef"},
             json={
                 "executionId": "exec-async-1",
                 "tenantId": "tenant-1",
@@ -165,6 +183,9 @@ async def test_execute_endpoint_returns_202_before_runtime_finishes(
                 "task": "do async work",
                 "traceId": "trace-1",
                 "runId": "exec-async-1",
+                "leaseOwner": "scheduler-test",
+                "leaseToken": "lease-test",
+                "attempt": 1,
             },
         )
         elapsed_ms = (time.monotonic() - before) * 1000

@@ -13,12 +13,19 @@ import { createQueue, QUEUES } from '@octo/queue';
 import { PostgresExecutionRepo } from './postgres-execution.repo';
 import { processExecutionDispatchJob } from '../../../scheduler-worker/src/dispatch-handler';
 
-const runtime = async (executionId: string, tenantId: string) => {
+const runtime = async (payload: {
+  executionId: string;
+  tenantId: string;
+  leaseToken: string;
+  attempt: number;
+  leaseOwner: string;
+  mode?: 'normal' | 'reclaim';
+}) => {
   execFileSync(
     'python',
     [
       '-c',
-      `import asyncio; from src.f1_runtime import run_f1_execution; asyncio.run(run_f1_execution("${executionId}","${tenantId}","trace-test"))`,
+      `import asyncio; from src.f1_runtime import run_f1_execution; asyncio.run(run_f1_execution("${payload.executionId}","${payload.tenantId}","trace-test", mode="${payload.mode ?? 'normal'}", lease_token="${payload.leaseToken}", attempt=${payload.attempt}, lease_owner="${payload.leaseOwner}"))`,
     ],
     {
       cwd: '../../runtime-worker',
@@ -42,15 +49,13 @@ describeIfInfra('F1 dispatch->runtime integration', () => {
       await tx
         .insert(agents)
         .values({ id: agentId, tenantId: tenantA, name: 'a', role: 'r', goal: 'g' });
-      await tx
-        .insert(agentVersions)
-        .values({
-          id: versionId,
-          tenantId: tenantA,
-          agentId,
-          version: 1,
-          configJson: { model: 'fake' },
-        });
+      await tx.insert(agentVersions).values({
+        id: versionId,
+        tenantId: tenantA,
+        agentId,
+        version: 1,
+        configJson: { model: 'fake' },
+      });
     });
     const repo = new PostgresExecutionRepo();
     const created = await repo.createExecution(
@@ -77,7 +82,9 @@ describeIfInfra('F1 dispatch->runtime integration', () => {
         leaseSeconds: 90,
         invokeRuntime: async (p) => {
           expect(p.agentId).toBe(agentId);
-          await runtime(p.executionId, p.tenantId);
+          expect(p.leaseToken).toBeTruthy();
+          expect(p.attempt).toBe(1);
+          await runtime(p);
         },
       }
     );

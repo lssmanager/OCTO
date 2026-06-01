@@ -27,6 +27,10 @@ export type RuntimePayload = {
   agentId: string;
   traceId: string;
   mode?: DispatchMode;
+  reason: DispatchReason;
+  leaseOwner: string;
+  leaseToken: string;
+  attempt: number;
 };
 
 function resolveMode(data: DispatchPayload): DispatchMode {
@@ -63,9 +67,20 @@ export async function processExecutionDispatchJob(
     if (['completed', 'failed', 'cancelled'].includes(skippedStatus)) return false;
 
     if (skippedStatus === 'dispatched') {
+      if (!current.leaseToken || !current.leaseOwner) {
+        console.warn('execution_dispatch_reinvoke_without_lease_skipped', {
+          executionId: data.executionId,
+          tenantId: data.tenantId,
+          mode,
+        });
+        return false;
+      }
       return {
         agentId: current.agentId as string,
         traceId: String(current.traceId || data.traceId || randomUUID()),
+        leaseOwner: String(current.leaseOwner),
+        leaseToken: String(current.leaseToken),
+        attempt: Number(current.attempt ?? data.attempt ?? 1),
         alreadyDispatched: true,
       };
     }
@@ -74,7 +89,8 @@ export async function processExecutionDispatchJob(
     const nextAttempt =
       mode === 'reclaim'
         ? Math.max(Number(current.attempt ?? 0) + 1, Number(data.attempt ?? 0))
-        : Number(current.attempt ?? 0);
+        : Math.max(Number(current.attempt ?? 0), Number(data.attempt ?? 1));
+    const leaseToken = randomUUID();
     const now = new Date();
     const lease = new Date(now.getTime() + deps.leaseSeconds * 1000);
     const traceId = String(current.traceId || data.traceId || randomUUID());
@@ -89,6 +105,7 @@ export async function processExecutionDispatchJob(
         leaseOwner: deps.workerId,
         workerId: deps.workerId,
         leaseExpiresAt: lease,
+        leaseToken,
         attempt: nextAttempt,
         attemptCount: nextAttempt,
         updatedAt: now,
@@ -97,6 +114,9 @@ export async function processExecutionDispatchJob(
         workerId: deps.workerId,
         mode,
         reason: dispatchReason,
+        leaseToken,
+        attempt: nextAttempt,
+        leaseOwner: deps.workerId,
       },
     });
 
@@ -104,7 +124,7 @@ export async function processExecutionDispatchJob(
       await stateService.transition(tx, data.executionId, dispatchableStatus, 'dispatched', {
         workerId: deps.workerId,
         stepName: 'dispatch',
-        stepPayload: { reason: dispatchReason, mode },
+        stepPayload: { reason: dispatchReason, mode, leaseToken, attempt: nextAttempt },
       });
     } catch (error) {
       if (error instanceof ConcurrentTransitionError) {
@@ -122,8 +142,8 @@ export async function processExecutionDispatchJob(
       status: 'running',
       stateFrom: dispatchableStatus,
       stateTo: 'dispatched',
-      inputJson: { reason: dispatchReason, mode },
-      outputJson: { workerId: deps.workerId },
+      inputJson: { reason: dispatchReason, mode, attempt: nextAttempt },
+      outputJson: { workerId: deps.workerId, leaseToken },
     });
 
     await insertOutboxEvent(tx, {
@@ -137,6 +157,8 @@ export async function processExecutionDispatchJob(
         reason: dispatchReason,
         mode,
         attempt: nextAttempt,
+        leaseOwner: deps.workerId,
+        leaseToken,
       },
       traceId: data.traceId ?? null,
       source: 'scheduler-worker',
@@ -145,6 +167,9 @@ export async function processExecutionDispatchJob(
     return {
       agentId: current.agentId as string,
       traceId,
+      leaseOwner: deps.workerId,
+      leaseToken,
+      attempt: nextAttempt,
       alreadyDispatched: false,
     };
   });
@@ -163,6 +188,10 @@ export async function processExecutionDispatchJob(
       agentId: data.agentId ?? transitioned.agentId,
       traceId: transitioned.traceId,
       mode,
+      reason: dispatchReason,
+      leaseOwner: transitioned.leaseOwner,
+      leaseToken: transitioned.leaseToken,
+      attempt: transitioned.attempt,
     });
     if (mode === 'reclaim') {
       replayedCounter.add(1, { executionId: data.executionId });
