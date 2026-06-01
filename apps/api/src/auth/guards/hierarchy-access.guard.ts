@@ -26,7 +26,7 @@ export class HierarchyAccessGuard implements CanActivate {
     if (!user?.tenant_id) throw new ForbiddenException({ code: 'TENANT_CONTEXT_MISSING' });
 
     const cfg = this.reflector.getAllAndOverride<HierarchyContext>(HIERARCHY_CONTEXT_KEY, [context.getHandler(), context.getClass()]) ?? {};
-    const bag = { ...(req.params ?? {}), ...(req.body ?? {}) };
+    const bag = { ...(req.body ?? {}), ...(req.params ?? {}) };
     const agencyId = getByPath(bag, cfg.agencyIdPath);
     const workspaceId = getByPath(bag, cfg.workspaceIdPath);
     const agentId = getByPath(bag, cfg.agentIdPath);
