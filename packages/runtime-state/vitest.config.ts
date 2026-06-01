@@ -1,9 +1,15 @@
 // packages/runtime-state/vitest.config.ts
 // Vitest config for @octo/runtime-state
 
+import { resolve } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@octo/contracts': resolve(__dirname, '../contracts/src/index.ts'),
+    },
+  },
   test: {
     globals: true,
     environment: 'node',

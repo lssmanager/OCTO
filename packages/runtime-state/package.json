@@ -2,7 +2,7 @@
   "name": "@octo/runtime-state",
   "version": "0.1.0",
   "private": true,
-  "description": "Execution state machine \u2014 single source of truth for all status transitions.",
+  "description": "Execution state machine — single source of truth for all status transitions.",
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
@@ -21,6 +21,6 @@
     "@types/node": "22.0.0",
     "dependency-cruiser": "16.10.0",
     "typescript": "6.0.3",
-    "vitest": "3.2.4"
+    "vitest": "4.1.8"
   }
 }

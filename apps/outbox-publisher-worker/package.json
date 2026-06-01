@@ -12,7 +12,7 @@
     "@octo/database": "workspace:*",
     "@octo/events": "workspace:*",
     "@octo/observability": "workspace:*",
-    "ioredis": "5.6.1"
+    "ioredis": "5.10.1"
   },
   "devDependencies": {
     "@octo/config": "workspace:*",

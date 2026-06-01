@@ -40,7 +40,8 @@
     "test:tenant-isolation": "vitest run apps/api/src/security/tenant-isolation.integration.test.ts packages/database/src/f1-database.integration.test.ts",
     "f1:tenant-isolation": "pnpm test:tenant-isolation",
     "test:observability": "vitest run apps/api/src/ops/f1-observability.integration.test.ts apps/api/src/ops/ops-v1.service.spec.ts",
-    "f1:observability": "pnpm test:observability"
+    "f1:observability": "pnpm test:observability",
+    "security:vitest": "node scripts/verify-vitest-security.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.60.1",
@@ -61,7 +62,7 @@
     "tsx": "4.20.6",
     "turbo": "2.9.14",
     "typescript": "6.0.3",
-    "vitest": "3.2.4",
+    "vitest": "4.1.8",
     "zod-to-json-schema": "3.24.1"
   },
   "engines": {

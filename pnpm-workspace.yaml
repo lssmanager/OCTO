@@ -23,6 +23,11 @@ overrides:
   source-map: '0.7.4'
   typescript: '5.9.3'
   esbuild: '0.25.12'
+  vitest: '4.1.8'
+  '@vitest/coverage-v8': '4.1.8'
+  '@vitest/ui': '4.1.8'
+  '@vitest/browser': '4.1.8'
+  '@vitest/coverage-istanbul': '4.1.8'
   vite: '6.4.2'
   postcss: '8.5.14'
   tmp: '0.2.5'
@@ -44,3 +49,18 @@ allowBuilds:
   protobufjs: true
   sharp: true
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - '@typescript-eslint/eslint-plugin@8.60.1'
+  - '@typescript-eslint/project-service@8.60.1'
+  - '@typescript-eslint/scope-manager@8.60.1'
+  - '@typescript-eslint/tsconfig-utils@8.60.1'
+  - '@typescript-eslint/type-utils@8.60.1'
+  - '@typescript-eslint/types@8.60.1'
+  - '@typescript-eslint/typescript-estree@8.60.1'
+  - '@typescript-eslint/utils@8.60.1'
+  - '@typescript-eslint/visitor-keys@8.60.1'
+  - '@vitest/*'
+  - 'vitest@4.1.8'
+  - 'bullmq@5.77.7'
+  - 'react-dom@19.2.7'
