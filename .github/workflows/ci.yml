@@ -315,7 +315,7 @@ jobs:
       matrix:
         service: [api, runtime-worker, scheduler-worker, reclaimer-worker, migrate]
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: image-${{ matrix.service }}
       - run: docker load -i ${{ matrix.service }}.tar
