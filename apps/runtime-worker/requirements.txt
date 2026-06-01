@@ -12,7 +12,7 @@ pydantic==2.10.3
 pydantic-settings==2.6.1
 
 # ── Structured logging ─────────────────────────────────────────────
-structlog==24.4.0
+structlog==25.5.0
 
 # ── HTTP client ───────────────────────────────────────────────────
 httpx==0.28.1
