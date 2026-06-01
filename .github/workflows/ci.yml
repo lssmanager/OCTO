@@ -189,10 +189,11 @@ jobs:
           name: image-${{ matrix.service }}
           path: ${{ matrix.service }}.tar
 
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0.20.6
+
       - name: Generate SBOM
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-          syft octo/${{ matrix.service }}:sha-${{ github.sha }} -o cyclonedx-json > sbom-${{ matrix.service }}.json
+        run: syft octo/${{ matrix.service }}:sha-${{ github.sha }} -o cyclonedx-json > sbom-${{ matrix.service }}.json
       - uses: actions/upload-artifact@v4
         with:
           name: sbom-${{ matrix.service }}
@@ -222,10 +223,12 @@ jobs:
       - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-${{ matrix.service }}.sarif
+      - name: Install Cosign
+        if: github.ref == 'refs/heads/main' && secrets.COSIGN_KEY != ''
+        uses: sigstore/cosign-installer@v3.10.0
+
       - name: Cosign sign (main + secret)
         if: github.ref == 'refs/heads/main' && secrets.COSIGN_KEY != ''
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/sigstore/cosign/main/install.sh | sh -s -- -b /usr/local/bin
-          COSIGN_PASSWORD=${{ secrets.COSIGN_PASSWORD }} cosign sign --key env://COSIGN_KEY octo/${{ matrix.service }}:sha-${{ github.sha }}
+        run: COSIGN_PASSWORD=${{ secrets.COSIGN_PASSWORD }} cosign sign --key env://COSIGN_KEY octo/${{ matrix.service }}:sha-${{ github.sha }}
         env:
           COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
