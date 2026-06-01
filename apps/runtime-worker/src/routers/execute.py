@@ -79,12 +79,27 @@ async def submit_execution(
         path=str(request.url.path),
     )
 
+    max_inflight = _settings.max_concurrent_executions
+    if len(_inflight_tasks) >= max_inflight:
+        bound_log.warning(
+            "execution.rejected_runtime_capacity",
+            inflight_count=len(_inflight_tasks),
+            max_concurrent_executions=max_inflight,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="runtime_execution_capacity_exhausted",
+            headers={"Retry-After": "1"},
+        )
+
     bound_log.info(
         "execution.accepted",
         task_len=len(body.task),
         streaming=body.streaming,
         tool_count=len(body.tools),
         mode=body.mode,
+        inflight_count=len(_inflight_tasks) + 1,
+        max_concurrent_executions=max_inflight,
     )
 
     task = asyncio.create_task(_run_accepted_execution(body, bound_log))

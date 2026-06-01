@@ -168,13 +168,14 @@ async def test_execute_endpoint_returns_202_before_runtime_finishes(
             )
 
     monkeypatch.setattr(execute_router, "_executor", SlowExecutor())
+    internal_secret = execute_router._settings.api_internal_secret
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         before = time.monotonic()
         response = await client.post(
             "/api/v1/execute",
-            headers={"x-internal-secret": "0123456789abcdef0123456789abcdef"},
+            headers={"x-internal-secret": internal_secret},
             json={
                 "executionId": "exec-async-1",
                 "tenantId": "tenant-1",
@@ -202,3 +203,76 @@ async def test_execute_endpoint_returns_202_before_runtime_finishes(
     finally:
         release.set()
         await asyncio.sleep(0)
+
+
+async def test_execute_endpoint_rejects_when_runtime_capacity_is_full(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    import httpx
+
+    from src.routers import execute as execute_router
+    from src.schemas import ExecutionResult, ExecutionStatus
+
+    release = asyncio.Event()
+
+    class SlowExecutor:
+        async def run(self, request: ExecutionRequest) -> ExecutionResult:
+            await release.wait()
+            return ExecutionResult(
+                execution_id=request.execution_id,
+                status=ExecutionStatus.COMPLETED,
+                output="ok",
+                usage={},
+                duration_ms=1,
+            )
+
+    monkeypatch.setattr(execute_router, "_executor", SlowExecutor())
+    monkeypatch.setattr(execute_router._settings, "max_concurrent_executions", 1)
+    execute_router._inflight_tasks.clear()
+    internal_secret = execute_router._settings.api_internal_secret
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        try:
+            first_response = await client.post(
+                "/api/v1/execute",
+                headers={"x-internal-secret": internal_secret},
+                json={
+                    "executionId": "exec-capacity-1",
+                    "tenantId": "tenant-1",
+                    "agentId": "agent-1",
+                    "workspaceId": "ws-1",
+                    "task": "hold capacity",
+                    "traceId": "trace-1",
+                    "runId": "exec-capacity-1",
+                    "leaseOwner": "scheduler-test",
+                    "leaseToken": "lease-test",
+                    "attempt": 1,
+                },
+            )
+            second_response = await client.post(
+                "/api/v1/execute",
+                headers={"x-internal-secret": internal_secret},
+                json={
+                    "executionId": "exec-capacity-2",
+                    "tenantId": "tenant-1",
+                    "agentId": "agent-1",
+                    "workspaceId": "ws-1",
+                    "task": "exceed capacity",
+                    "traceId": "trace-2",
+                    "runId": "exec-capacity-2",
+                    "leaseOwner": "scheduler-test",
+                    "leaseToken": "lease-test",
+                    "attempt": 2,
+                },
+            )
+        finally:
+            release.set()
+            await asyncio.sleep(0)
+
+    assert first_response.status_code == 202
+    assert second_response.status_code == 429
+    assert second_response.json() == {"detail": "runtime_execution_capacity_exhausted"}
+    assert second_response.headers["retry-after"] == "1"
