@@ -1,31 +1,38 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
-    target-branch: "main"
+  - package-ecosystem: 'npm'
+    directory: '/'
+    target-branch: 'main'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "UTC"
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'UTC'
+    open-pull-requests-limit: 10
+    groups:
+      vitest-security-surface:
+        patterns:
+          - 'vitest'
+          - '@vitest/*'
+          - 'vite'
+          - 'vite-node'
+
+  - package-ecosystem: 'pip'
+    directory: '/apps/runtime-worker'
+    target-branch: 'main'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:15'
+      timezone: 'UTC'
     open-pull-requests-limit: 10
 
-  - package-ecosystem: "pip"
-    directory: "/apps/runtime-worker"
-    target-branch: "main"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    target-branch: 'main'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:15"
-      timezone: "UTC"
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    target-branch: "main"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:30"
-      timezone: "UTC"
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:30'
+      timezone: 'UTC'
     open-pull-requests-limit: 5
