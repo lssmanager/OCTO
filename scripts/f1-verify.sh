@@ -56,6 +56,7 @@ run_fast_integration_if_available() {
     log "F1 fast: integration tests with provided DATABASE_URL/REDIS_URL"
     pnpm testintegration
     pnpm test:tenant-isolation
+    pnpm test:observability
   else
     warn "F1 fast: skipping integration tests because DATABASE_URL and/or REDIS_URL are not set. Use 'pnpm f1:close-gate' for the strict F1 close gate; close mode never skips this."
   fi
@@ -149,6 +150,9 @@ run_close_gate() {
 
   log "F1 close: tenant isolation gate (API, DB/RLS, queue, scheduler, reclaimer, outbox)"
   pnpm test:tenant-isolation
+
+  log "F1 close: observability gate (executionId/traceId reconstruction)"
+  pnpm test:observability
 
   log "F1 close: build full compose stack"
   compose build api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker

@@ -11,6 +11,9 @@ export type DispatchEnqueuePayload = {
   tenantId: string;
   agentId: string;
   traceId: string;
+  correlationId: string;
+  runId: string;
+  queueJobId: string;
   expectedState: 'queued';
 };
 
@@ -36,7 +39,9 @@ export class PostgresExecutionRepo {
 
   async createExecution(input: any, tenantId: string, createdBy: string): Promise<{ id: string }> {
     const id = randomUUID();
-    const traceId = input.traceId ?? randomUUID();
+    const traceId = typeof input.traceId === 'string' && input.traceId.length > 0 ? input.traceId : randomUUID();
+    const runId = typeof input.runId === 'string' && input.runId.length > 0 ? input.runId : id;
+    const correlationId = typeof input.correlationId === 'string' && input.correlationId.length > 0 ? input.correlationId : traceId;
     const version = await withTenantTx(tenantId, async (tx) => {
       return (
         await tx
@@ -66,6 +71,7 @@ export class PostgresExecutionRepo {
         state: 'queued',
         queueJobId: id,
         traceId,
+        runId,
         createdBy,
         inputJson: input.input ?? {},
         task: input.input ?? {},
@@ -78,8 +84,10 @@ export class PostgresExecutionRepo {
         aggregateType: 'execution',
         aggregateId: id,
         eventType: 'ExecutionQueued',
-        payloadJson: { executionId: id, queueJobId: id },
+        payloadJson: { executionId: id, queueJobId: id, traceId, correlationId, runId },
         traceId,
+        correlationId,
+        runId,
         source: 'api',
       });
     });
@@ -91,17 +99,26 @@ export class PostgresExecutionRepo {
           tenantId,
           agentId: input.agentId,
           traceId,
+          correlationId,
+          runId,
+          queueJobId: id,
           expectedState: 'queued',
         },
         id
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('execution_dispatch_enqueue_deferred', {
+      console.error(JSON.stringify({
+        msg: 'execution_dispatch_enqueue_deferred',
         executionId: id,
         tenantId,
+        agentId: input.agentId,
+        traceId,
+        correlationId,
+        runId,
+        queueJobId: id,
         error: errorMessage,
-      });
+      }));
 
       try {
         await withTenantTx(tenantId, async (tx) => {
@@ -115,8 +132,13 @@ export class PostgresExecutionRepo {
               queueJobId: id,
               errorCode: 'DISPATCH_ENQUEUE_DEFERRED',
               errorMessage,
+              traceId,
+              correlationId,
+              runId,
             },
             traceId,
+            correlationId,
+            runId,
             source: 'api',
           });
         });
@@ -135,5 +157,8 @@ export class PostgresExecutionRepo {
   getExecutionTimeline(executionId: string, tenantId: string) { return withTenantTx(tenantId, (tx) => tx.select().from(outboxEvents).where(and(eq(outboxEvents.aggregateId, executionId), eq(outboxEvents.tenantId, tenantId))).orderBy(asc(outboxEvents.sequence), asc(outboxEvents.createdAt))); }
   casRequestCancellation(executionId: string, tenantId: string) { return withTenantTx(tenantId, async (tx) => (await tx.update(executions).set({ cancellationRequestedAt: new Date(), status: 'cancelled', state: 'cancelled' }).where(and(eq(executions.id, executionId), eq(executions.tenantId, tenantId), sql`${executions.status} NOT IN ('completed','failed','cancelled')`)).returning({ id: executions.id })).length > 0); }
   casResumeSuspended(executionId: string, tenantId: string) { return withTenantTx(tenantId, async (tx) => (await tx.update(executions).set({ status: 'queued', state: 'queued' }).where(and(eq(executions.id, executionId), eq(executions.tenantId, tenantId), eq(executions.status, 'suspended'))).returning({ id: executions.id })).length > 0); }
-  createOutboxEntry(executionId: string, tenantId: string, command: 'cancel'|'resume') { return withTenantTx(tenantId, (tx) => insertOutboxEvent(tx, { tenantId, aggregateType: 'execution', aggregateId: executionId, eventType: command === 'cancel' ? 'ExecutionCancellationRequested' : 'ExecutionResumeRequested', payloadJson: { executionId, command }, source: 'api' }).then(() => undefined)); }
+  createOutboxEntry(executionId: string, tenantId: string, command: 'cancel'|'resume') { return withTenantTx(tenantId, async (tx) => {
+    const [current] = await tx.select({ traceId: executions.traceId, runId: executions.runId }).from(executions).where(and(eq(executions.id, executionId), eq(executions.tenantId, tenantId))).limit(1);
+    await insertOutboxEvent(tx, { tenantId, aggregateType: 'execution', aggregateId: executionId, eventType: command === 'cancel' ? 'ExecutionCancellationRequested' : 'ExecutionResumeRequested', payloadJson: { executionId, command, traceId: current?.traceId, correlationId: current?.traceId, runId: current?.runId }, traceId: current?.traceId ?? null, correlationId: current?.traceId ?? null, runId: current?.runId ?? null, source: 'api' });
+  }); }
 }

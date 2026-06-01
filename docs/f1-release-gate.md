@@ -11,7 +11,7 @@ close command:
 pnpm f1:close-gate
 ```
 
-Tenant isolation is a mandatory close-gate check. `pnpm f1:close-gate` runs
-`pnpm test:tenant-isolation` with real Postgres and Redis before the full F1
-smoke test. See `docs/f1-tenant-isolation.md` for local, CI, and Coolify staging
+Tenant isolation and execution observability are mandatory close-gate checks. `pnpm f1:close-gate` runs
+`pnpm test:tenant-isolation` and `pnpm test:observability` with real Postgres and Redis before the full F1
+smoke test. See `docs/f1-tenant-isolation.md` and `docs/f1-observability.md` for local, CI, and Coolify staging
 operation.

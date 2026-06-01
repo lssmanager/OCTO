@@ -116,3 +116,164 @@ export const outboxPublishDlqTotal = new Gauge({
   help: 'Total outbox events moved to publish DLQ',
   registers: [metricsRegistry],
 });
+
+
+// ── F1 execution observability ──────────────────────────────────────────────
+export const executionsQueued = new Gauge({
+  name: 'executions_queued',
+  help: 'Current queued/dispatched execution count visible to F1 operators',
+  registers: [metricsRegistry],
+});
+
+export const executionsRunning = new Gauge({
+  name: 'executions_running',
+  help: 'Current running execution count visible to F1 operators',
+  registers: [metricsRegistry],
+});
+
+export const executionsReclaimable = new Gauge({
+  name: 'executions_reclaimable',
+  help: 'Current reclaimable execution count',
+  registers: [metricsRegistry],
+});
+
+export const executionsCompletedTotal = new Counter({
+  name: 'executions_completed_total',
+  help: 'Total completed executions observed by F1 services',
+  registers: [metricsRegistry],
+});
+
+export const executionsFailedTotal = new Counter({
+  name: 'executions_failed_total',
+  help: 'Total failed executions observed by F1 services',
+  registers: [metricsRegistry],
+});
+
+export const executionsCancelledTotal = new Counter({
+  name: 'executions_cancelled_total',
+  help: 'Total cancelled executions observed by F1 services',
+  registers: [metricsRegistry],
+});
+
+export const executionStartLatencyMs = new Histogram({
+  name: 'execution_start_latency_ms',
+  help: 'Execution latency from creation to runtime start',
+  buckets: [50, 100, 250, 500, 1000, 2500, 5000, 15000, 60000],
+  registers: [metricsRegistry],
+});
+
+export const executionRuntimeDurationMs = new Histogram({
+  name: 'execution_runtime_duration_ms',
+  help: 'Runtime duration from started_at to completed_at',
+  buckets: [100, 500, 1000, 2500, 5000, 15000, 60000, 300000],
+  registers: [metricsRegistry],
+});
+
+export const executionTerminalLatencyMs = new Histogram({
+  name: 'execution_terminal_latency_ms',
+  help: 'Execution latency from creation to terminal state',
+  buckets: [100, 500, 1000, 2500, 5000, 15000, 60000, 300000],
+  registers: [metricsRegistry],
+});
+
+export const queueWaitingCount = new Gauge({
+  name: 'queue_waiting_count',
+  help: 'BullMQ waiting job count by queue',
+  labelNames: ['queue'] as const,
+  registers: [metricsRegistry],
+});
+
+export const queueActiveCount = new Gauge({
+  name: 'queue_active_count',
+  help: 'BullMQ active job count by queue',
+  labelNames: ['queue'] as const,
+  registers: [metricsRegistry],
+});
+
+export const queueFailedCount = new Gauge({
+  name: 'queue_failed_count',
+  help: 'BullMQ failed job count by queue',
+  labelNames: ['queue'] as const,
+  registers: [metricsRegistry],
+});
+
+export const queueDelayedCount = new Gauge({
+  name: 'queue_delayed_count',
+  help: 'BullMQ delayed job count by queue',
+  labelNames: ['queue'] as const,
+  registers: [metricsRegistry],
+});
+
+export const dispatchJobFailuresTotal = new Counter({
+  name: 'dispatch_job_failures_total',
+  help: 'Scheduler dispatch job failures',
+  registers: [metricsRegistry],
+});
+
+export const dispatchJobLatencyMs = new Histogram({
+  name: 'dispatch_job_latency_ms',
+  help: 'Scheduler dispatch job processing latency',
+  buckets: [10, 50, 100, 250, 500, 1000, 5000, 15000, 60000],
+  registers: [metricsRegistry],
+});
+
+export const reclaimCandidatesScanned = new Counter({
+  name: 'reclaim_candidates_scanned_total',
+  help: 'Total reclaim candidates scanned',
+  registers: [metricsRegistry],
+});
+
+export const reclaimAttemptsTotal = new Counter({
+  name: 'reclaim_attempts_total',
+  help: 'Total reclaim attempts',
+  labelNames: ['outcome'] as const,
+  registers: [metricsRegistry],
+});
+
+export const dlqCount = new Gauge({
+  name: 'dlq_count',
+  help: 'Current execution DLQ count',
+  labelNames: ['reason'] as const,
+  registers: [metricsRegistry],
+});
+
+export const dlqReplayAttemptsTotal = new Counter({
+  name: 'dlq_replay_attempts_total',
+  help: 'DLQ replay attempts by outcome',
+  labelNames: ['outcome'] as const,
+  registers: [metricsRegistry],
+});
+
+export const litellmRequestsTotal = new Counter({
+  name: 'litellm_requests_total',
+  help: 'LiteLLM request count by outcome',
+  labelNames: ['outcome'] as const,
+  registers: [metricsRegistry],
+});
+
+export const litellmLatencyMs = new Histogram({
+  name: 'litellm_latency_ms',
+  help: 'LiteLLM request latency in milliseconds',
+  buckets: [50, 100, 250, 500, 1000, 2500, 5000, 15000, 60000],
+  registers: [metricsRegistry],
+});
+
+export const litellmFallbackTotal = new Counter({
+  name: 'litellm_fallback_total',
+  help: 'LiteLLM fallback model attempts',
+  registers: [metricsRegistry],
+});
+
+export const toolCallCount = new Counter({
+  name: 'tool_call_count',
+  help: 'Tool call count by outcome',
+  labelNames: ['outcome'] as const,
+  registers: [metricsRegistry],
+});
+
+export const checkpointCount = new Counter({
+  name: 'checkpoint_count',
+  help: 'Checkpoint writes by source/outcome',
+  labelNames: ['source', 'outcome'] as const,
+  registers: [metricsRegistry],
+});

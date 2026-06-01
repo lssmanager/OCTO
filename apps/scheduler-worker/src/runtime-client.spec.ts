@@ -7,6 +7,9 @@ const payload = {
   tenantId: 'tenant-1',
   agentId: 'agent-real',
   traceId: 'trace-1',
+  correlationId: 'corr-1',
+  runId: 'run-1',
+  queueJobId: 'job-1',
   leaseOwner: 'scheduler-test',
   leaseToken: 'lease-token-1',
   attempt: 1,
@@ -39,6 +42,9 @@ describe('invokeRuntimeHttp', () => {
       leaseOwner: 'scheduler-test',
       leaseToken: 'lease-token-1',
       attempt: 1,
+      correlationId: 'corr-1',
+      runId: 'run-1',
+      queueJobId: 'job-1',
     });
   });
 

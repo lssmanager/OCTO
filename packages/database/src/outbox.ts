@@ -12,6 +12,8 @@ export type InsertOutboxEventInput = {
   payloadJson: Record<string, unknown>;
   traceId?: string | null;
   spanId?: string | null;
+  correlationId?: string | null;
+  runId?: string | null;
   source: OutboxSource;
   schemaVersion?: '1.0';
   occurredAt?: Date;
@@ -44,6 +46,8 @@ export function normalizeOutboxPayload(input: InsertOutboxEventInput): Record<st
       ...existingMeta,
       traceId: input.traceId ?? existingMeta['traceId'] ?? 'unknown-trace',
       spanId: input.spanId ?? existingMeta['spanId'] ?? 'unknown-span',
+      correlationId: input.correlationId ?? existingMeta['correlationId'] ?? input.traceId ?? 'unknown-correlation',
+      runId: input.runId ?? existingMeta['runId'] ?? input.aggregateId,
       occurredAt: existingMeta['occurredAt'] ?? occurredAt.toISOString(),
       schemaVersion: input.schemaVersion ?? '1.0',
       source: input.source,

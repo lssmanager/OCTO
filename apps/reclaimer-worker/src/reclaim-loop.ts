@@ -40,6 +40,9 @@ type ReclaimDispatchPayload = {
   reason: 'reclaim_replay';
   mode: 'reclaim';
   attempt: number;
+  correlationId: string;
+  runId: string;
+  queueJobId: string;
 };
 
 let timer: NodeJS.Timeout | null = null;
@@ -51,6 +54,9 @@ function buildReclaimDispatchPayload(candidate: ReclaimCandidate): ReclaimDispat
     tenantId: candidate.tenantId,
     agentId: candidate.agentId,
     traceId: candidate.traceId ?? `reclaim-${candidate.id}`,
+    correlationId: candidate.traceId ?? `reclaim-${candidate.id}`,
+    runId: candidate.runId ?? candidate.id,
+    queueJobId: candidate.queueJobId ?? candidate.id,
     reason: 'reclaim_replay',
     mode: 'reclaim',
     attempt: nextAttempt,
@@ -120,6 +126,10 @@ async function failReclaimTerminally(
         executionId: candidate.id,
         tenantId: candidate.tenantId,
         agentId: candidate.agentId,
+        traceId: candidate.traceId,
+        correlationId: candidate.traceId,
+        runId: candidate.runId,
+        queueJobId: candidate.queueJobId ?? candidate.id,
       },
     });
 
@@ -134,6 +144,8 @@ async function failReclaimTerminally(
         errorMessage,
       },
       traceId: candidate.traceId,
+      correlationId: candidate.traceId,
+      runId: candidate.runId,
       source: 'reclaimer-worker',
     });
   });
@@ -146,6 +158,8 @@ export async function processReclaimCandidate(
   maxReclaimAttempts: number
 ): Promise<'requeued' | 'skipped' | 'failed_terminal'> {
   if (!candidate.tenantId) throw new Error('invalid_reclaim_payload');
+
+  console.log(JSON.stringify({ msg: 'reclaim_candidate_found', executionId: candidate.id, tenantId: candidate.tenantId, agentId: candidate.agentId, traceId: candidate.traceId, correlationId: candidate.traceId, runId: candidate.runId, queueJobId: candidate.queueJobId, attempt: candidate.attempt, reclaimCount: candidate.reclaimCount }));
 
   const current = await withTenantTx(candidate.tenantId, async (tx) => {
     return (
@@ -169,6 +183,7 @@ export async function processReclaimCandidate(
   });
   if (!current || current.agentId !== candidate.agentId) {
     skippedCounter.add(1, { executionId: candidate.id, outcome: 'tenant_mismatch' });
+    console.log(JSON.stringify({ msg: 'reclaim_candidate_skipped', executionId: candidate.id, tenantId: candidate.tenantId, traceId: candidate.traceId, correlationId: candidate.traceId, outcome: 'tenant_mismatch' }));
     return 'skipped';
   }
   candidate = { ...candidate, ...current };
@@ -209,6 +224,7 @@ export async function processReclaimCandidate(
     attempts: 1,
   });
 
+  console.log(JSON.stringify({ msg: 'execution_reclaim_requeued', executionId: candidate.id, tenantId: candidate.tenantId, agentId: candidate.agentId, traceId: payload.traceId, correlationId: payload.correlationId, runId: payload.runId, queueJobId: payload.queueJobId, attempt: payload.attempt }));
   requeuedCounter.add(1, { executionId: candidate.id, attempt: payload.attempt });
   return 'requeued';
 }
