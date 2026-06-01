@@ -6,6 +6,7 @@ COPY apps ./apps
 COPY packages ./packages
 RUN HUSKY=0 pnpm install --frozen-lockfile
 RUN pnpm turbo build --filter=@octo/api
+RUN pnpm --filter @octo/api --prod deploy /prod/api
 
 FROM node:22-alpine AS runtime
 ARG VERSION=0.0.0
@@ -23,10 +24,7 @@ RUN apk upgrade --no-cache \
   && adduser -S -u 1001 -G octo octo
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=builder --chown=octo:octo /app/apps/api/dist ./dist
-COPY --from=builder --chown=octo:octo /app/apps/api/package.json ./package.json
-COPY --from=builder --chown=octo:octo /app/node_modules ./node_modules
-COPY --from=builder --chown=octo:octo /app/packages ./packages
+COPY --from=builder --chown=octo:octo /prod/api ./
 USER octo
 EXPOSE 3001
 HEALTHCHECK --interval=15s --timeout=5s --retries=3 CMD wget -qO- http://localhost:3001/api/health/live || exit 1
