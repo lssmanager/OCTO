@@ -13,6 +13,7 @@ overrides:
   qs: 6.15.2
   multer: 2.1.1
   js-yaml: 4.1.1
+  ip-address: 10.1.1
   eslint>ajv: 6.14.0
   '@eslint/eslintrc>ajv': 6.14.0
   '@angular-devkit/core>ajv': 8.18.0
@@ -55,8 +56,8 @@ importers:
         specifier: 9.27.0
         version: 9.27.0(jiti@1.21.7)
       eslint-config-prettier:
-        specifier: 10.1.5
-        version: 10.1.5(eslint@9.27.0(jiti@1.21.7))
+        specifier: 10.1.8
+        version: 10.1.8(eslint@9.27.0(jiti@1.21.7))
       eslint-import-resolver-typescript:
         specifier: 4.4.4
         version: 4.4.4(eslint-plugin-import@2.32.0)(eslint@9.27.0(jiti@1.21.7))
@@ -3191,8 +3192,8 @@ packages:
     resolution: {integrity: sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==}
     engines: {node: '>=10'}
 
-  eslint-config-prettier@10.1.5:
-    resolution: {integrity: sha512-zc1UmCpNltmVY34vuLRV61r1K27sWuX39E+uyUnY8xS2Bex88VV9cugG+UZbRSRGtGyFboj+D8JODyme1plMpw==}
+  eslint-config-prettier@10.1.8:
+    resolution: {integrity: sha512-82GZUjRS0p/jganf6q1rEO25VSoHH0hKPCTrgillPjdI/3bgBhAE1QzHrHTizjpRvy6pGAvKjDJtk2pF9NDq8w==}
     hasBin: true
     peerDependencies:
       eslint: '>=7.0.0'
@@ -7619,7 +7620,7 @@ snapshots:
 
   escape-string-regexp@4.0.0: {}
 
-  eslint-config-prettier@10.1.5(eslint@9.27.0(jiti@1.21.7)):
+  eslint-config-prettier@10.1.8(eslint@9.27.0(jiti@1.21.7)):
     dependencies:
       eslint: 9.27.0(jiti@1.21.7)
 
