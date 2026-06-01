@@ -20,7 +20,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-octo}
       POSTGRES_USER: ${POSTGRES_USER:-octo}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-octo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - octo_postgres_data:/var/lib/postgresql/data
     networks:
@@ -46,13 +46,13 @@ services:
       --appendonly yes
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
-      --requirepass ${REDIS_PASSWORD:-octo}
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - octo_redis_data:/data
     networks:
       - octonet
     healthcheck:
-      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-octo}', '--no-auth-warning', 'ping']
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:?REDIS_PASSWORD is required}', '--no-auth-warning', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -70,7 +70,7 @@ services:
       context: .
       dockerfile: docker/migrate.Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://octo:octo@postgres:5432/octo}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-octo}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-octo}}
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,19 +94,19 @@ services:
       PORT: ${PORT:-3001}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Database
-      DATABASE_URL: ${DATABASE_URL:-postgresql://octo:octo@postgres:5432/octo}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-octo}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-octo}}
       DB_POOL_MAX: ${DB_POOL_MAX:-20}
       # Redis
-      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-octo}@redis:6379}
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379}
       # Auth
-      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       # LiteLLM
       LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-litellm-minimum-16}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       # Runtime Worker inter-service
       RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000}
-      RUNTIME_API_SECRET: ${RUNTIME_API_SECRET:-local-runtime-secret-minimum-32-chars}
+      RUNTIME_API_SECRET: ${RUNTIME_API_SECRET:?RUNTIME_API_SECRET is required}
       # OTEL
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-octo-api}
@@ -163,17 +163,17 @@ services:
     container_name: octo-runtime-worker
     environment:
       # Inter-service auth (debe coincidir con RUNTIME_API_SECRET de la API)
-      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET:-local-runtime-secret-minimum-32-chars}
+      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET:?RUNTIME_API_SECRET is required}
       API_URL: ${API_URL:-http://api:3001/api}
       # Database required for F1 execution durability, not only health checks.
       # Use a least-privilege runtime DB role scoped to the F1 write contract.
-      DATABASE_URL: ${DATABASE_URL:-postgresql://octo:octo@postgres:5432/octo}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-octo}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-octo}}
       # Redis
-      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-octo}@redis:6379}
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379}
       REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-10}
       # LiteLLM
       LITELLM_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
-      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:-sk-local-litellm-minimum-16}
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       # OTEL
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_WORKER:-octo-runtime-worker}
@@ -216,8 +216,8 @@ services:
       dockerfile: docker/outbox-publisher-worker.Dockerfile
     container_name: octo-outbox-publisher-worker
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://octo:octo@postgres:5432/octo}
-      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-octo}@redis:6379}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-octo}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-octo}}
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379}
       OUTBOX_STREAM_KEY: ${OUTBOX_STREAM_KEY:-octo.events}
       OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-100}
       OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-500}
@@ -248,9 +248,9 @@ services:
       dockerfile: docker/scheduler-worker.Dockerfile
     container_name: octo-scheduler-worker
     environment:
-      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-octo}@redis:6379}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://octo:octo@postgres:5432/octo}
-      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET:-local-runtime-secret-minimum-32-chars}
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-octo}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-octo}}
+      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET:?RUNTIME_API_SECRET is required}
       RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute}
       EXECUTION_LEASE_SECONDS: ${EXECUTION_LEASE_SECONDS:-90}
       WORKER_CONCURRENCY: ${SCHEDULER_WORKER_CONCURRENCY:-5}
@@ -279,8 +279,8 @@ services:
       dockerfile: docker/reclaimer-worker.Dockerfile
     container_name: octo-reclaimer-worker
     environment:
-      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-octo}@redis:6379}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://octo:octo@postgres:5432/octo}
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-octo}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-octo}}
       RECLAIM_INTERVAL_MS: ${RECLAIM_INTERVAL_MS:-15000}
       LEASE_TIMEOUT_MS: ${LEASE_TIMEOUT_MS:-30000}
     depends_on:
@@ -318,9 +318,9 @@ services:
     image: ghcr.io/berriai/litellm:main-latest
     container_name: octo-litellm
     environment:
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-litellm-minimum-16}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-local-fake-openai-key}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://octo:octo@postgres:5432/octo}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-octo}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-octo}}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     volumes:
       - ./docker/litellm/config.yaml:/app/config.yaml:ro
