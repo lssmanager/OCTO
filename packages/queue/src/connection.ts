@@ -1,3 +1,4 @@
+import type { ConnectionOptions } from 'bullmq';
 import { Redis } from 'ioredis';
 
 /**
@@ -19,4 +20,14 @@ export function createRedisConnection(redisUrl: string): Redis {
     enableReadyCheck: false,
     lazyConnect: false,
   });
+}
+
+/**
+ * BullMQ's public ConnectionOptions type can resolve against a different
+ * ioredis type instance under pnpm than the workspace-level Redis client.
+ * The runtime connection is still valid for BullMQ, so centralize the cast
+ * here to keep the queue package DTS build stable.
+ */
+export function createBullMqConnection(redisUrl: string): ConnectionOptions {
+  return createRedisConnection(redisUrl) as unknown as ConnectionOptions;
 }
