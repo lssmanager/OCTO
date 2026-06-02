@@ -54,10 +54,6 @@ export class DlqHandler {
     _prev: string | undefined
   ): Promise<void> {
     try {
-      // QueueEvents doesn't give us the full Job object directly.
-      // We retrieve it from the source queue to check attempt count.
-      // Note: by the time `failed` fires, the job is still in the
-      // source queue (in failed state) if removeOnFail > 0.
       const sourceQueue = new Queue(this.sourceQueueName, {
         connection: createBullMqConnection(this.redisUrl),
       });
@@ -67,12 +63,10 @@ export class DlqHandler {
 
       const maxAttempts = job.opts.attempts ?? 1;
       if (job.attemptsMade < maxAttempts) {
-        // Still has retries remaining — not yet dead
         await sourceQueue.close();
         return;
       }
 
-      // Job exhausted all retries — move to DLQ
       await this.dlq.add(
         job.name,
         {
@@ -85,7 +79,6 @@ export class DlqHandler {
           _dlq_attempts_made: job.attemptsMade,
         },
         {
-          // Preserve job ID for traceability
           jobId: `dlq:${jobId}`,
           removeOnComplete: false,
         }
