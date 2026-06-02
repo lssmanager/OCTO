@@ -16,7 +16,7 @@ export const OutboxEventSchema = z.object({
   aggregateId: z.string(),
   eventType: OutboxEventTypeSchema,
   sequence: z.number().int(),
-  payloadJson: z.record(z.unknown()),
+  payloadJson: z.object({}).catchall(z.unknown()),
   publishedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime(),
 });
