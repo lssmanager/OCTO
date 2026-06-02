@@ -10,27 +10,25 @@
  *   const dlq = createDlq(QUEUE_NAMES.EXECUTION, { redisUrl });
  */
 import { Queue } from 'bullmq';
-import { createRedisConnection } from './connection';
+import { createBullMqConnection } from './connection';
 import type { QueueConfig } from './create-queue';
 import type { QueueName } from './queue-names';
 import { getDlqName } from './dlq-names';
 
 export function createDlq<T = unknown>(sourceQueueName: QueueName, config: QueueConfig): Queue<T> {
   const dlqName = getDlqName(sourceQueueName);
-  const connection = createRedisConnection(config.redisUrl);
+  const connection = createBullMqConnection(config.redisUrl);
 
   return new Queue<T>(dlqName, {
     connection,
     defaultJobOptions: {
-      // DLQ jobs must NOT be retried — they are here for audit/replay only.
       attempts: 1,
       removeOnComplete: false,
       removeOnFail: {
-        // Retain up to 1000 failed jobs for 7 days for audit trails.
         count: 1_000,
-        age: 7 * 24 * 3600, // seconds
+        age: 7 * 24 * 3600,
       },
       ...config.defaultJobOptions,
     },
-  });
+  }) as Queue<T>;
 }
