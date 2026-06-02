@@ -1,10 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { z } from 'zod';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
+const contractsPackageJson = path.join(root, 'packages/contracts/package.json');
+const requireFromContracts = createRequire(contractsPackageJson);
+const { z } = requireFromContracts('zod');
 const contracts = await import(path.join(root, 'packages/contracts/dist/index.mjs'));
 const outDir = path.join(root, 'packages/contracts/generated/json-schema');
 const generatedDir = path.join(root, 'packages/contracts/generated');
@@ -51,11 +54,6 @@ function normalizeJsonSchema(value) {
   for (const [key, child] of Object.entries(value)) {
     if (key === 'optional') continue;
     normalized[key] = normalizeJsonSchema(child);
-  }
-
-  if (Array.isArray(normalized.$defs)) {
-    normalized.definitions = normalized.$defs;
-    delete normalized.$defs;
   }
 
   if (isObject(normalized.$defs)) {
