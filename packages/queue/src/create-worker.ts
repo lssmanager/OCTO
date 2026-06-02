@@ -1,5 +1,5 @@
 import { Worker, type Processor, type Queue } from 'bullmq';
-import { createRedisConnection } from './connection';
+import { createBullMqConnection } from './connection';
 import { DlqHandler } from './dlq-handler';
 import type { QueueName } from './queue-names';
 
@@ -42,7 +42,7 @@ export function createWorker<T = unknown, R = unknown>(
   processor: Processor<T, R>,
   config: WorkerConfig
 ): Worker<T, R> {
-  const connection = createRedisConnection(config.redisUrl);
+  const connection = createBullMqConnection(config.redisUrl);
   const concurrency = config.concurrency ?? 4;
 
   const worker = new Worker<T, R>(name, processor, {
