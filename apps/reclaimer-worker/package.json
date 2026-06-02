@@ -19,7 +19,7 @@
     "@octo/runtime-state": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "22.0.0",
+    "@types/node": "25.9.1",
     "tsx": "4.22.4",
     "typescript": "6.0.3",
     "tsup": "8.5.1"
