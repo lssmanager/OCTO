@@ -41,6 +41,29 @@ function isSimpleTypeSchema(value) {
   return keys.length === 1 && keys[0] === 'type';
 }
 
+function normalizeNullableUnion(normalized, unionKey) {
+  if (!Array.isArray(normalized[unionKey]) || normalized[unionKey].length !== 2) {
+    return;
+  }
+
+  const [left, right] = normalized[unionKey];
+  const nullableBranch = isNullSchema(left) ? left : isNullSchema(right) ? right : null;
+  const valueBranch = nullableBranch === left ? right : nullableBranch === right ? left : null;
+
+  if (!nullableBranch || !valueBranch) {
+    return;
+  }
+
+  delete normalized[unionKey];
+
+  if (isSimpleTypeSchema(valueBranch)) {
+    normalized.type = [valueBranch.type, 'null'];
+    return;
+  }
+
+  normalized.anyOf = [valueBranch, nullableBranch];
+}
+
 function normalizeJsonSchema(value) {
   if (Array.isArray(value)) {
     return value.map((item) => normalizeJsonSchema(item));
@@ -52,7 +75,7 @@ function normalizeJsonSchema(value) {
 
   const normalized = {};
   for (const [key, child] of Object.entries(value)) {
-    if (key === 'optional') continue;
+    if (key === 'optional' || key === '$schema') continue;
     normalized[key] = normalizeJsonSchema(child);
   }
 
@@ -61,20 +84,25 @@ function normalizeJsonSchema(value) {
     delete normalized.$defs;
   }
 
-  if (Array.isArray(normalized.oneOf) && normalized.oneOf.length === 2) {
-    const [left, right] = normalized.oneOf;
-    const nullableBranch = isNullSchema(left) ? left : isNullSchema(right) ? right : null;
-    const valueBranch = nullableBranch === left ? right : nullableBranch === right ? left : null;
+  normalizeNullableUnion(normalized, 'oneOf');
+  normalizeNullableUnion(normalized, 'anyOf');
 
-    if (nullableBranch && valueBranch) {
-      delete normalized.oneOf;
+  if (normalized.format === 'date-time') {
+    delete normalized.pattern;
+  }
 
-      if (isSimpleTypeSchema(valueBranch)) {
-        normalized.type = [valueBranch.type, 'null'];
-      } else {
-        normalized.anyOf = [valueBranch, nullableBranch];
-      }
-    }
+  if (normalized.type === 'integer') {
+    delete normalized.minimum;
+    delete normalized.maximum;
+  }
+
+  if (
+    normalized.type === 'object' &&
+    isObject(normalized.properties) &&
+    Object.keys(normalized.properties).length === 0 &&
+    'additionalProperties' in normalized
+  ) {
+    delete normalized.properties;
   }
 
   return normalized;
