@@ -1,5 +1,5 @@
 import { Queue, type JobsOptions } from 'bullmq';
-import { createRedisConnection } from './connection';
+import { createBullMqConnection } from './connection';
 import type { QueueName } from './queue-names';
 
 export interface QueueConfig {
@@ -18,7 +18,7 @@ export interface QueueConfig {
  * - removeOnFail: 500 (keep enough for debugging)
  */
 export function createQueue<T = unknown>(name: QueueName | string, config: QueueConfig): Queue<T> {
-  const connection = createRedisConnection(config.redisUrl);
+  const connection = createBullMqConnection(config.redisUrl);
 
   return new Queue<T>(name, {
     connection,
@@ -32,5 +32,5 @@ export function createQueue<T = unknown>(name: QueueName | string, config: Queue
       removeOnFail: 500,
       ...config.defaultJobOptions,
     },
-  });
+  }) as Queue<T>;
 }
