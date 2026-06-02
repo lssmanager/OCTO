@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z } from 'zod';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -24,13 +24,85 @@ for (const name of required) {
   if (!contracts[name]) throw new Error(`Missing required schema export: ${name}`);
 }
 
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isNullSchema(value) {
+  return isObject(value) && value.type === 'null';
+}
+
+function isSimpleTypeSchema(value) {
+  if (!isObject(value) || typeof value.type !== 'string') return false;
+  const keys = Object.keys(value).filter((key) => key !== 'optional');
+  return keys.length === 1 && keys[0] === 'type';
+}
+
+function normalizeJsonSchema(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeJsonSchema(item));
+  }
+
+  if (!isObject(value)) {
+    return value;
+  }
+
+  const normalized = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'optional') continue;
+    normalized[key] = normalizeJsonSchema(child);
+  }
+
+  if (Array.isArray(normalized.$defs)) {
+    normalized.definitions = normalized.$defs;
+    delete normalized.$defs;
+  }
+
+  if (isObject(normalized.$defs)) {
+    normalized.definitions = normalizeJsonSchema(normalized.$defs);
+    delete normalized.$defs;
+  }
+
+  if (Array.isArray(normalized.oneOf) && normalized.oneOf.length === 2) {
+    const [left, right] = normalized.oneOf;
+    const nullableBranch = isNullSchema(left) ? left : isNullSchema(right) ? right : null;
+    const valueBranch = nullableBranch === left ? right : nullableBranch === right ? left : null;
+
+    if (nullableBranch && valueBranch) {
+      delete normalized.oneOf;
+
+      if (isSimpleTypeSchema(valueBranch)) {
+        normalized.type = [valueBranch.type, 'null'];
+      } else {
+        normalized.anyOf = [valueBranch, nullableBranch];
+      }
+    }
+  }
+
+  return normalized;
+}
+
+function wrapNamedDefinition(name, schema) {
+  return {
+    $ref: `#/definitions/${name}`,
+    definitions: {
+      [name]: normalizeJsonSchema(
+        z.toJSONSchema(schema, {
+          target: 'draft-07',
+          unrepresentable: 'any',
+        })
+      ),
+    },
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  };
+}
+
 for (const name of [...required, ...optional]) {
   const schema = contracts[name];
   if (!schema) continue;
-  const json = zodToJsonSchema(schema, { name, target: 'jsonSchema7' });
+  const json = wrapNamedDefinition(name, schema);
   await fs.writeFile(path.join(outDir, `${name}.json`), JSON.stringify(json, null, 2) + '\n', 'utf8');
 }
-
 
 const executionFsm = {
   statuses: contracts.ExecutionStatusValues,
