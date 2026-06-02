@@ -1,5 +1,5 @@
 import { Worker, type Processor, type Queue } from 'bullmq';
-import { createRedisConnection } from './connection';
+import { createBullMqConnection } from './connection';
 import { DlqHandler } from './dlq-handler';
 import type { QueueName } from './queue-names';
 
@@ -42,7 +42,7 @@ export function createWorker<T = unknown, R = unknown>(
   processor: Processor<T, R>,
   config: WorkerConfig
 ): Worker<T, R> {
-  const connection = createRedisConnection(config.redisUrl);
+  const connection = createBullMqConnection(config.redisUrl);
   const concurrency = config.concurrency ?? 4;
 
   const worker = new Worker<T, R>(name, processor, {
@@ -51,7 +51,6 @@ export function createWorker<T = unknown, R = unknown>(
     autorun: true,
   });
 
-  // Activate DLQ handler if a dead letter queue was provided
   let dlqHandler: DlqHandler | undefined;
   if (config.deadLetterQueue) {
     dlqHandler = new DlqHandler(name, config.redisUrl, config.deadLetterQueue, {
@@ -59,7 +58,6 @@ export function createWorker<T = unknown, R = unknown>(
     });
   }
 
-  // Graceful shutdown — drain in-flight jobs before process exit
   const shutdown = async (signal: string): Promise<void> => {
     console.log(`[octo:queue] ${signal} received — closing worker '${name}'`);
     await worker.close();
