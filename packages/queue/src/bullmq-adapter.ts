@@ -27,7 +27,7 @@ import {
 } from 'bullmq';
 import { DlqReason } from '@octo/contracts';
 import { createLogger } from '@octo/observability';
-import { createRedisConnection } from './connection';
+import { createBullMqConnection } from './connection';
 import { injectTraceparent } from './traceparent';
 import type {
   IJob,
@@ -50,10 +50,6 @@ import type {
 type AnyData = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const logger = createLogger({ service: 'queue:bullmq-adapter' });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 function retryPolicyToJobOptions(policy: RetryPolicy): Partial<JobsOptions> {
   return {
@@ -88,24 +84,14 @@ function adaptJob<T>(bullJob: BullJob<AnyData>, meta: OctoJobMeta): IJob<T> {
     meta,
     attemptsMade: bullJob.attemptsMade,
     timestamp: bullJob.timestamp,
-    // BullMQ v5 changed updateProgress() return type to Promise<number>.
-    // IJob.updateProgress is typed as Promise<void>. Discard the value.
     updateProgress: (progress): Promise<void> =>
       bullJob.updateProgress(progress).then((): void => {
-        /* discard */
       }),
-    // BullMQ v5 Job.log() returns Promise<number> (log entry index).
-    // IJob.log is typed as Promise<void> — discard the numeric return value.
     log: (row): Promise<void> =>
       bullJob.log(row).then((): void => {
-        /* discard */
       }),
   };
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BullMQQueue
-// ─────────────────────────────────────────────────────────────────────────────
 
 export class BullMQQueue<T = AnyData> implements IQueue<T> {
   readonly name: string;
@@ -117,7 +103,7 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
     this.name = name;
     this.defaultPolicy = config.defaultRetryPolicy;
     this.workerId = crypto.randomUUID();
-    const connection = createRedisConnection(config.redisUrl);
+    const connection = createBullMqConnection(config.redisUrl);
     this.bull = new BullQueue<AnyData>(name, { connection });
   }
 
@@ -145,8 +131,6 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
     await this.bull.pause();
   }
 
-  // BullMQ v5 Queue.resume() returns Promise<number> (resumed-job count).
-  // IQueue<T>.resume() is typed as Promise<void> — discard the value.
   resume(): Promise<void> {
     return this.bull.resume().then(() => undefined);
   }
@@ -195,10 +179,6 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BullMQWorker
-// ─────────────────────────────────────────────────────────────────────────────
-
 export class BullMQWorker<T = AnyData> implements IWorker<T> {
   readonly name: string;
   readonly concurrency: number;
@@ -215,7 +195,7 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
     this.shutdownTimeoutMs = config.shutdownTimeoutMs ?? 30_000;
     this.emitter = new EventEmitter();
 
-    const connection = createRedisConnection(config.redisUrl);
+    const connection = createBullMqConnection(config.redisUrl);
 
     const workerOptions: WorkerOptions = {
       connection,
@@ -234,11 +214,7 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
     this._bindBullEvents();
   }
 
-  // ── IWorker implementation ───────────────────────────────────────────────
-
   async run(): Promise<void> {
-    // BullMQ Worker starts automatically on construction.
-    // run() is a no-op here but fulfills the IWorker contract.
   }
 
   async pause(): Promise<void> {
@@ -271,8 +247,6 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
     this.emitter.off(event, listener as (...args: unknown[]) => void);
     return this;
   }
-
-  // ── Internal ────────────────────────────────────────────────────────────────
 
   private async _process(bullJob: BullJob<AnyData>, handler: JobHandler<T>): Promise<void> {
     const meta: OctoJobMeta = {
@@ -356,10 +330,6 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
     });
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Factories
-// ─────────────────────────────────────────────────────────────────────────────
 
 export class BullMQQueueFactory implements IQueueFactory {
   create<T>(name: string, config: QueueConfig): IQueue<T> {
