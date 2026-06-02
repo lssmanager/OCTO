@@ -10,14 +10,14 @@
  *   const dlq = createDlq(QUEUE_NAMES.EXECUTION, { redisUrl });
  */
 import { Queue } from 'bullmq';
-import { createRedisConnection } from './connection';
+import { createBullMqConnection } from './connection';
 import type { QueueConfig } from './create-queue';
 import type { QueueName } from './queue-names';
 import { getDlqName } from './dlq-names';
 
 export function createDlq<T = unknown>(sourceQueueName: QueueName, config: QueueConfig): Queue<T> {
   const dlqName = getDlqName(sourceQueueName);
-  const connection = createRedisConnection(config.redisUrl);
+  const connection = createBullMqConnection(config.redisUrl);
 
   return new Queue<T>(dlqName, {
     connection,
@@ -32,5 +32,5 @@ export function createDlq<T = unknown>(sourceQueueName: QueueName, config: Queue
       },
       ...config.defaultJobOptions,
     },
-  });
+  }) as Queue<T>;
 }
