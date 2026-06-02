@@ -24,8 +24,8 @@ export const ExecutionJobDataSchema = z.object({
   task: z.object({
     id: z.string(),
     type: z.string(),
-    input: z.record(z.unknown()),
-    expectedOutputSchema: z.record(z.unknown()).optional(),
+    input: z.record(z.string(), z.unknown()),
+    expectedOutputSchema: z.record(z.string(), z.unknown()).optional(),
     timeout: z.number().int().positive().optional(),
   }),
   governance: z.object({
@@ -62,7 +62,7 @@ export const ToolJobDataSchema = z.object({
   agentId: z.string().uuid(),
   traceId: z.string(),
   traceparent: z.string().optional(),
-  input: z.record(z.unknown()),
+  input: z.record(z.string(), z.unknown()),
 });
 
 export type ToolJobDataV = z.infer<typeof ToolJobDataSchema>;
@@ -76,7 +76,7 @@ export const MemoryJobDataSchema = z.object({
   agentId: z.string().uuid(),
   traceId: z.string(),
   traceparent: z.string().optional(),
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
 });
 
 export type MemoryJobDataV = z.infer<typeof MemoryJobDataSchema>;
