@@ -18,7 +18,7 @@
  *   // handler is self-managed; call handler.close() on shutdown.
  */
 import { Queue, QueueEvents, type Job } from 'bullmq';
-import { createRedisConnection } from './connection';
+import { createBullMqConnection } from './connection';
 import type { QueueName } from './queue-names';
 
 export interface DlqHandlerOptions {
@@ -29,6 +29,7 @@ export interface DlqHandlerOptions {
 export class DlqHandler {
   private readonly events: QueueEvents;
   private readonly dlq: Queue;
+  private readonly redisUrl: string;
 
   constructor(
     private readonly sourceQueueName: QueueName | string,
@@ -37,8 +38,9 @@ export class DlqHandler {
     private readonly options: DlqHandlerOptions = {}
   ) {
     this.dlq = dlq;
+    this.redisUrl = redisUrl;
     this.events = new QueueEvents(sourceQueueName, {
-      connection: createRedisConnection(redisUrl),
+      connection: createBullMqConnection(redisUrl),
     });
 
     this.events.on('failed', ({ jobId, failedReason, prev }) => {
@@ -52,19 +54,8 @@ export class DlqHandler {
     _prev: string | undefined
   ): Promise<void> {
     try {
-      // QueueEvents doesn’t give us the full Job object directly.
-      // We retrieve it from the source queue to check attempt count.
-      // Note: by the time `failed` fires, the job is still in the
-      // source queue (in failed state) if removeOnFail > 0.
       const sourceQueue = new Queue(this.sourceQueueName, {
-        connection: createRedisConnection(
-          // Connection string comes from the QueueEvents connection config;
-          // we reconstruct from the stored redisUrl via closure.
-
-          (this.events as any).opts?.connection?.options?.url ??
-            (this.events as any).opts?.connection ??
-            {}
-        ),
+        connection: createBullMqConnection(this.redisUrl),
       });
 
       const job = await sourceQueue.getJob(jobId);
@@ -72,12 +63,10 @@ export class DlqHandler {
 
       const maxAttempts = job.opts.attempts ?? 1;
       if (job.attemptsMade < maxAttempts) {
-        // Still has retries remaining — not yet dead
         await sourceQueue.close();
         return;
       }
 
-      // Job exhausted all retries — move to DLQ
       await this.dlq.add(
         job.name,
         {
@@ -90,7 +79,6 @@ export class DlqHandler {
           _dlq_attempts_made: job.attemptsMade,
         },
         {
-          // Preserve job ID for traceability
           jobId: `dlq:${jobId}`,
           removeOnComplete: false,
         }
