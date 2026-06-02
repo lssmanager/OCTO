@@ -18,11 +18,11 @@ export const ApprovalSchema = z.object({
   status: ApprovalStatusSchema,
   title: z.string(),
   reason: z.string(),
-  payloadJson: z.record(z.string(), z.unknown()),
+  payloadJson: z.object({}).catchall(z.unknown()),
   timeoutAt: z.string().datetime().nullable().optional(),
   resolvedBy: z.string().nullable().optional(),
   resolvedAt: z.string().datetime().nullable().optional(),
-  resolutionJson: z.record(z.string(), z.unknown()).nullable().optional(),
+  resolutionJson: z.object({}).catchall(z.unknown()).nullable().optional(),
 });
 
 export type ApprovalKind = z.infer<typeof ApprovalKindSchema>;
