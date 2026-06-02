@@ -12,7 +12,7 @@ export const EventEnvelopeSchema = z.object({
   spanId: z.string().min(1),
   occurredAt: z.string().datetime(),
   schemaVersion: z.literal('1.0'),
-  payload: z.record(z.unknown()),
+  payload: z.object({}).catchall(z.unknown()),
 });
 
 export type EventEnvelope = z.infer<typeof EventEnvelopeSchema>;
