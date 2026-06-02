@@ -12,8 +12,8 @@ export { createDlq } from './create-dlq';
 export type { QueueConfig } from './create-queue';
 export type { WorkerConfig } from './create-worker';
 
-// Redis connection (used by health checks and standalone probe connections)
-export { createRedisConnection } from './connection';
+// Redis connection helpers
+export { createRedisConnection, createBullMqConnection } from './connection';
 
 // Domain job data types (contracts between producers and consumers)
 export type { HealthJobData } from './types';
