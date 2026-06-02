@@ -13,9 +13,8 @@
  *   Lives in the Control Plane (Principle 1).
  */
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { Queue } from 'bullmq';
-import { Redis } from 'ioredis';
-import { createRedisConnection, MONITORED_QUEUES, type QueueName } from '@octo/queue';
+import { Queue, type ConnectionOptions } from 'bullmq';
+import { createBullMqConnection, MONITORED_QUEUES, type QueueName } from '@octo/queue';
 
 export interface QueueMetricsSnapshot {
   queue: string;
@@ -30,17 +29,19 @@ export interface QueueMetricsSnapshot {
 
 @Injectable()
 export class QueueMetricsService implements OnModuleDestroy {
-  private readonly connection: Redis;
+  private readonly connection: ConnectionOptions & { quit?: () => Promise<string> };
   private readonly queues: Map<QueueName, Queue>;
 
   constructor() {
     // PATCH 9: single REDIS_URL — same source of truth as all workers.
-    // Uses createRedisConnection from @octo/queue for consistent config.
+    // Uses the shared BullMQ connection helper to avoid pnpm type drift.
     const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
-    this.connection = createRedisConnection(redisUrl);
+    this.connection = createBullMqConnection(redisUrl) as ConnectionOptions & {
+      quit?: () => Promise<string>;
+    };
 
     // PATCH 3: names from registry — no magic strings.
-    // All Queue instances share the same IORedis connection.
+    // All Queue instances share the same BullMQ-compatible connection.
     this.queues = new Map(
       MONITORED_QUEUES.map((name) => [name, new Queue(name, { connection: this.connection })])
     );
@@ -74,8 +75,10 @@ export class QueueMetricsService implements OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
-    // Close all Queue instances first, then the shared connection
+    // Close all Queue instances first, then the shared connection if available.
     await Promise.all([...this.queues.values()].map((q) => q.close()));
-    await this.connection.quit();
+    if (typeof this.connection.quit === 'function') {
+      await this.connection.quit();
+    }
   }
 }
