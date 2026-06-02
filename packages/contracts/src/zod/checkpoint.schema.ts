@@ -11,10 +11,10 @@ export const ExecutionCheckpointSchema = z.object({
   stepIndex: z.number().int(),
   source: CheckpointSourceSchema,
   parentCheckpointId: z.string().nullable().optional(),
-  stateJson: z.record(z.string(), z.unknown()),
-  channelVersions: z.record(z.string(), VersionValueSchema),
-  versionsSeen: z.record(z.string(), z.record(z.string(), VersionValueSchema)),
-  metadataJson: z.record(z.string(), z.unknown()),
+  stateJson: z.object({}).catchall(z.unknown()),
+  channelVersions: z.object({}).catchall(VersionValueSchema),
+  versionsSeen: z.object({}).catchall(z.object({}).catchall(VersionValueSchema)),
+  metadataJson: z.object({}).catchall(z.unknown()),
   createdAt: z.string().datetime(),
 });
 
