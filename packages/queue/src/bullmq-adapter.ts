@@ -27,7 +27,7 @@ import {
 } from 'bullmq';
 import { DlqReason } from '@octo/contracts';
 import { createLogger } from '@octo/observability';
-import { createRedisConnection } from './connection';
+import { createBullMqConnection } from './connection';
 import { injectTraceparent } from './traceparent';
 import type {
   IJob,
@@ -117,7 +117,7 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
     this.name = name;
     this.defaultPolicy = config.defaultRetryPolicy;
     this.workerId = crypto.randomUUID();
-    const connection = createRedisConnection(config.redisUrl);
+    const connection = createBullMqConnection(config.redisUrl);
     this.bull = new BullQueue<AnyData>(name, { connection });
   }
 
@@ -215,7 +215,7 @@ export class BullMQWorker<T = AnyData> implements IWorker<T> {
     this.shutdownTimeoutMs = config.shutdownTimeoutMs ?? 30_000;
     this.emitter = new EventEmitter();
 
-    const connection = createRedisConnection(config.redisUrl);
+    const connection = createBullMqConnection(config.redisUrl);
 
     const workerOptions: WorkerOptions = {
       connection,
