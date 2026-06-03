@@ -63,7 +63,7 @@ export function Header() {
               backgroundColor: 'rgba(79,152,163,0.1)',
             }}
           >
-            F2
+            F1
           </span>
         </div>
 

@@ -8,7 +8,7 @@ import { PostgresAgentRepo } from './postgres-agent.repo';
 
 const databaseUrl = process.env['TEST_DATABASE_URL'] ?? process.env['DATABASE_URL'];
 const describeIfDb = databaseUrl ? describe : describe.skip;
-const tenantId = `tenant-f2-graph-${randomUUID()}`;
+const tenantId = `tenant-f1-graph-${randomUUID()}`;
 
 async function cleanupTenant() {
   await withTenantTx(tenantId, async (tx) => {
@@ -18,7 +18,7 @@ async function cleanupTenant() {
   });
 }
 
-describeIfDb('F2 Agent Graph persisted hierarchy', () => {
+describeIfDb('F1 Agent Graph persisted hierarchy', () => {
   afterAll(async () => {
     await cleanupTenant();
   });
@@ -30,7 +30,7 @@ describeIfDb('F2 Agent Graph persisted hierarchy', () => {
 
     const agency = await service.createNode(tenantId, {
       level: 'agency',
-      name: 'F2 Test Agency',
+      name: 'F1 Test Agency',
       toolPolicy: { allow: ['builtin.echo'] },
     });
     const department = await service.createNode(tenantId, { level: 'department', name: 'Engineering', parentId: agency.id });
@@ -40,7 +40,7 @@ describeIfDb('F2 Agent Graph persisted hierarchy', () => {
       parentId: department.id,
       budgetPolicy: { maxUsdPerRun: '0.10' },
     });
-    const agent = await service.create(tenantId, 'user-f2', {
+    const agent = await service.create(tenantId, 'user-f1', {
       name: 'Graph Smoke Agent',
       role: 'operator',
       goal: 'prove graph persistence',

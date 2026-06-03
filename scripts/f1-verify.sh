@@ -31,7 +31,7 @@ run_common_checks() {
   log "F1 ${MODE}: API unit tests"
   pnpm -s --filter @octo/api test -- --runInBand
 
-  log "F2 ${MODE}: Agent Graph unit/integration contract"
+  log "F1 ${MODE}: Agent Graph unit/integration contract"
   pnpm -s --filter @octo/api test -- src/agents/agent-graph.integration.test.ts
 
   log "F1 ${MODE}: scheduler build"
@@ -101,6 +101,7 @@ export_close_defaults() {
   export DATABASE_URL="$F1_HOST_DATABASE_URL"
   export REDIS_URL="$F1_HOST_REDIS_URL"
   export JWT_SECRET="${JWT_SECRET:-dev-secret}"
+  export JWT_KID="${JWT_KID:-dev-hs256}"
   export JWT_SIGNING_KEYS="${JWT_SIGNING_KEYS:-[{\"kid\":\"dev-hs256\",\"algorithm\":\"HS256\",\"isActive\":true,\"secret\":\"dev-secret\"}]}"
   export RUNTIME_API_SECRET="${RUNTIME_API_SECRET:-test-runtime-secret-minimum-32-chars}"
   export LITELLM_MASTER_KEY="${LITELLM_MASTER_KEY:-sk-f1-close-gate-minimum-16}"
@@ -170,8 +171,8 @@ run_close_gate() {
   log "F1 close: strict end-to-end smoke"
   DATABASE_URL="$F1_COMPOSE_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" bash scripts/f1-smoke.sh --strict
 
-  log "F2 close: Agent Graph smoke"
-  API_URL="http://localhost:3001" JWT_SECRET="${JWT_SECRET}" JWT_KID="${JWT_KID}" bash scripts/f2-agent-graph-smoke.sh
+  log "F1 close: Agent Graph smoke"
+  API_URL="http://localhost:3001/api" JWT_SECRET="${JWT_SECRET}" JWT_KID="${JWT_KID}" bash scripts/f1-agent-graph-smoke.sh
 
   log "F1 close gate passed"
   trap - EXIT

@@ -1,7 +1,7 @@
 const PHASES = [
   { id: 'F0', label: 'F0 — Foundation Platform', progress: 100, done: true },
-  { id: 'F1', label: 'F1 — Agent Execution', progress: 0, done: false },
-  { id: 'F2', label: 'F2 — LangGraph Runtime', progress: 0, done: false },
+  { id: 'F1', label: 'F1 — Agent Graph System', progress: 100, done: true },
+  { id: 'F2', label: 'F2 — Runtime Execution', progress: 0, done: false },
   { id: 'F3', label: 'F3 — Tool System', progress: 0, done: false },
   { id: 'F4', label: 'F4 — Memory System', progress: 0, done: false },
   { id: 'F5', label: 'F5 — Multi-Agent', progress: 0, done: false },

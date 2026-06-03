@@ -1,4 +1,4 @@
-const API_URL = process.env['API_URL'] ?? 'http://localhost:3001';
+const API_URL = (process.env['API_URL'] ?? 'http://localhost:3001/api').replace(/\/+$/, '');
 
 export type AgentGraphNode = {
   id: string;
@@ -33,8 +33,8 @@ export type AgentGraphData = {
   fetchedAt: string;
 };
 
-export function getBrowserApiUrl() {
-  return process.env['NEXT_PUBLIC_API_URL'] ?? API_URL;
+export function writesConfigured() {
+  return Boolean(process.env['OCTO_WEB_CONSOLE_TOKEN'] && process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'] === 'true');
 }
 
 export async function getAgentGraph(): Promise<AgentGraphData> {
