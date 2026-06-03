@@ -167,7 +167,7 @@ run_close_gate() {
   DATABASE_URL="$F1_COMPOSE_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" bash scripts/f1-smoke.sh --strict
 
   log "F1 close: Agent Graph smoke"
-  API_URL="http://localhost:3001" JWT_SECRET="${JWT_SECRET}" JWT_KID="${JWT_KID}" bash scripts/f1-agent-graph-smoke.sh
+  API_URL="http://localhost:3001/api" JWT_SECRET="${JWT_SECRET}" JWT_KID="${JWT_KID}" bash scripts/f1-agent-graph-smoke.sh
 
   log "F1 close gate passed"
   trap - EXIT

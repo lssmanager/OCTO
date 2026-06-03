@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-API_URL="${API_URL:-http://localhost:3001}"
+API_URL="${API_URL:-http://localhost:3001/api}"
+API_URL="${API_URL%/}"
 JWT_SECRET="${JWT_SECRET:-dev-secret}"
 JWT_KID="${JWT_KID:-dev-hs256}"
 TENANT_ID="${F1_AGENT_GRAPH_SMOKE_TENANT_ID:-tenant-f1-agent-graph-smoke}"

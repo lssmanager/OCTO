@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_URL = process.env['API_URL'] ?? 'http://localhost:3001';
+export function normalizeAgentGraphApiUrl(value = process.env['API_URL'] ?? 'http://localhost:3001/api') {
+  return value.replace(/\/+$/, '');
+}
+
+export function agentGraphApiUrl(path: string, baseUrl = normalizeAgentGraphApiUrl()) {
+  const normalizedBaseUrl = normalizeAgentGraphApiUrl(baseUrl);
+  return `${normalizedBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+const API_URL = normalizeAgentGraphApiUrl();
 const CONSOLE_COOKIE = 'octo_console_token';
 
 type ConsoleAction = 'createNode' | 'createAgent';
@@ -30,7 +39,7 @@ function getWriteToken(req: NextRequest) {
 }
 
 async function forward(path: string, init: RequestInit) {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(agentGraphApiUrl(path, API_URL), {
     ...init,
     headers: {
       accept: 'application/json',

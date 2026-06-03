@@ -18,7 +18,7 @@ Each phase must close with a minimal verifiable GUI. For F1, `/` is the **F1 Age
 - environment validation, logs and smoke checks;
 - F1 Agent Graph CRUD and projection for `Agency → Department → Workspace → Agent`;
 - backend JWT/RBAC/tenant/hierarchy guards for graph reads and writes;
-- web-console writes through a server-side/session-aware route, never through `NEXT_PUBLIC_*` write secrets.
+- web-console writes through a server-side/session-aware route using an `API_URL` base with the global `/api` prefix, never through `NEXT_PUBLIC_*` write secrets.
 
 ## F1 no incluye
 
