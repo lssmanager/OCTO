@@ -20,6 +20,8 @@ Main-only release checks:
 - `pnpm contracts:build`
 - `pnpm contracts:python`
 - `pnpm contracts:check`
+- `pnpm contracts:conformance`
+- `pnpm contracts:validate`
 - `pnpm testunit --coverage`
 - `pnpm db:migrate`
 - `pnpm testintegration --reporter=verbose`

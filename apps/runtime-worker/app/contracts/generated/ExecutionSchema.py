@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class State(StrEnum):
@@ -34,13 +34,17 @@ class ExecutionSchema(BaseModel):
     agent_id: Annotated[str, Field(alias='agentId')]
     agent_version_id: Annotated[str, Field(alias='agentVersionId')]
     state: State
-    version: int
+    version: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
     input_json: Annotated[dict[str, Any], Field(alias='inputJson')]
     output_json: Annotated[dict[str, Any] | None, Field(alias='outputJson')] = None
     error_code: Annotated[str | None, Field(alias='errorCode')] = None
     error_message: Annotated[str | None, Field(alias='errorMessage')] = None
-    attempt_count: Annotated[int, Field(alias='attemptCount')]
-    reclaim_count: Annotated[int, Field(alias='reclaimCount')]
+    attempt_count: Annotated[
+        int, Field(alias='attemptCount', ge=-9007199254740991, le=9007199254740991)
+    ]
+    reclaim_count: Annotated[
+        int, Field(alias='reclaimCount', ge=-9007199254740991, le=9007199254740991)
+    ]
     lease_owner: Annotated[str | None, Field(alias='leaseOwner')] = None
     lease_expires_at: Annotated[AwareDatetime | None, Field(alias='leaseExpiresAt')] = (
         None
@@ -57,7 +61,3 @@ class ExecutionSchema(BaseModel):
     created_by: Annotated[str, Field(alias='createdBy')]
     created_at: Annotated[AwareDatetime, Field(alias='createdAt')]
     updated_at: Annotated[AwareDatetime, Field(alias='updatedAt')]
-
-
-class Model(RootModel[ExecutionSchema]):
-    root: ExecutionSchema

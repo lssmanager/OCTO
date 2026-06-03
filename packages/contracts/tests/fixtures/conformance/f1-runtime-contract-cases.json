@@ -1,0 +1,492 @@
+{
+  "ExecutionCheckpointSchema": {
+    "minimum": {
+      "id": "cp_min",
+      "executionId": "exec_1",
+      "tenantId": "tenant_1",
+      "stepIndex": 0,
+      "source": "input",
+      "stateJson": {},
+      "channelVersions": {},
+      "versionsSeen": {},
+      "metadataJson": {},
+      "createdAt": "2026-01-01T00:00:00Z"
+    },
+    "maximum": {
+      "id": "cp_max",
+      "executionId": "exec_1",
+      "tenantId": "tenant_1",
+      "stepIndex": 2,
+      "source": "tool",
+      "parentCheckpointId": "cp_min",
+      "stateJson": { "messages": [{ "role": "user", "content": "hi" }], "nested": { "ok": true } },
+      "channelVersions": { "messages": 2, "tools": "v1" },
+      "versionsSeen": { "node_a": { "messages": 1, "tools": "v0" } },
+      "metadataJson": { "worker": "worker_1", "traceId": "trace_1" },
+      "createdAt": "2026-01-01T00:00:02Z"
+    },
+    "nullable": {
+      "id": "cp_null",
+      "executionId": "exec_1",
+      "tenantId": "tenant_1",
+      "stepIndex": 1,
+      "source": "loop",
+      "parentCheckpointId": null,
+      "stateJson": {},
+      "channelVersions": { "messages": 1 },
+      "versionsSeen": { "node_a": { "messages": 1 } },
+      "metadataJson": {},
+      "createdAt": "2026-01-01T00:00:01Z"
+    }
+  },
+  "CheckpointWriteSchema": {
+    "minimum": {
+      "id": "write_min",
+      "tenantId": "tenant_1",
+      "checkpointId": "cp_min",
+      "taskId": "task_1",
+      "taskPath": "root.task_1",
+      "writeIndex": 0,
+      "channel": "messages",
+      "valueJson": "hello"
+    },
+    "maximum": {
+      "id": "write_max",
+      "tenantId": "tenant_1",
+      "checkpointId": "cp_max",
+      "taskId": "task_2",
+      "taskPath": "root.task_2",
+      "writeIndex": 1,
+      "channel": "state",
+      "type": "put",
+      "valueJson": { "delta": { "ok": true }, "items": [1, "two", null] }
+    },
+    "nullable": {
+      "id": "write_null",
+      "tenantId": "tenant_1",
+      "checkpointId": "cp_null",
+      "taskId": "task_3",
+      "taskPath": "root.task_3",
+      "writeIndex": 2,
+      "channel": "nullable",
+      "type": "append",
+      "valueJson": null
+    }
+  },
+  "CanonicalChatMessageSchema": {
+    "minimum": { "role": "user", "content": "hello" },
+    "maximum": {
+      "role": "tool",
+      "content": [{ "type": "text", "text": "tool output" }],
+      "name": "search",
+      "toolCallId": "call_1"
+    },
+    "nullable": { "role": "assistant", "content": "done", "name": null, "toolCallId": null }
+  },
+  "ChatCompletionRequestSchema": {
+    "minimum": {
+      "tenantId": "tenant_1",
+      "executionId": "exec_1",
+      "agentId": "agent_1",
+      "model": "openai/gpt-4.1-mini",
+      "messages": [{ "role": "user", "content": "hello" }]
+    },
+    "maximum": {
+      "tenantId": "tenant_1",
+      "executionId": "exec_1",
+      "agentId": "agent_1",
+      "model": "openai/gpt-4.1-mini",
+      "messages": [
+        { "role": "system", "content": "be concise" },
+        { "role": "user", "content": [{ "type": "text", "text": "hello" }] }
+      ],
+      "temperature": 0.3,
+      "maxOutputTokens": 1024,
+      "stream": true,
+      "timeoutMs": 120000,
+      "tools": [
+        {
+          "name": "sum",
+          "description": "add numbers",
+          "inputSchema": { "type": "object", "properties": { "a": { "type": "number" } } }
+        }
+      ],
+      "toolChoice": "auto",
+      "providerParams": { "top_p": 0.9 },
+      "metadata": { "trace_id": "trace_1" },
+      "promptCache": {
+        "enabled": true,
+        "strategy": "provider_then_semantic",
+        "cacheKey": "cache_1",
+        "providerBreakpoints": [0],
+        "semanticSimilarityThreshold": 0.95,
+        "ttlSeconds": 3600
+      },
+      "reasoningEffort": "medium",
+      "outputSchema": { "type": "object" },
+      "routingStrategy": "latency-based"
+    },
+    "nullable": {
+      "tenantId": "tenant_1",
+      "executionId": "exec_1",
+      "agentId": "agent_1",
+      "model": "openai/gpt-4.1-mini",
+      "messages": [{ "role": "user", "content": "hello" }],
+      "tools": null,
+      "providerParams": null,
+      "metadata": null,
+      "promptCache": null,
+      "outputSchema": null
+    }
+  },
+  "ChatCompletionResponseSchema": {
+    "minimum": {
+      "id": "chatcmpl_1",
+      "content": "hello",
+      "finishReason": "stop",
+      "usage": { "provider": "openai", "model": "openai/gpt-4.1-mini", "estimatedCostUsd": "0.01" },
+      "raw": {}
+    },
+    "maximum": {
+      "id": "chatcmpl_2",
+      "content": "",
+      "toolCalls": [{ "id": "call_1", "name": "sum", "arguments": { "a": 1 } }],
+      "finishReason": "tool_calls",
+      "usage": {
+        "inputTokens": 10,
+        "outputTokens": 5,
+        "totalTokens": 15,
+        "reasoningTokens": 2,
+        "cachedInputTokens": 3,
+        "provider": "openai",
+        "model": "openai/gpt-4.1-mini",
+        "estimatedCostUsd": "0.0123"
+      },
+      "raw": { "provider": "openai", "finish_reason": "tool_calls" }
+    },
+    "nullable": {
+      "id": "chatcmpl_3",
+      "content": "blocked",
+      "toolCalls": null,
+      "finishReason": "content_filter",
+      "usage": { "provider": "openai", "model": "openai/gpt-4.1-mini", "estimatedCostUsd": "0" },
+      "raw": {}
+    }
+  },
+  "ChatUsageSchema": {
+    "minimum": { "provider": "openai", "model": "openai/gpt-4.1-mini", "estimatedCostUsd": "0" },
+    "maximum": {
+      "inputTokens": 10,
+      "outputTokens": 5,
+      "totalTokens": 15,
+      "reasoningTokens": 2,
+      "cachedInputTokens": 3,
+      "provider": "openai",
+      "model": "openai/gpt-4.1-mini",
+      "estimatedCostUsd": "0.0123"
+    },
+    "nullable": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "totalTokens": 0,
+      "reasoningTokens": 0,
+      "cachedInputTokens": 0,
+      "provider": "openai",
+      "model": "openai/gpt-4.1-mini",
+      "estimatedCostUsd": "0"
+    }
+  },
+  "ToolDefinitionSchema": {
+    "minimum": {
+      "name": "json_transform",
+      "kind": "builtin_sync",
+      "description": "transform json",
+      "inputSchema": { "type": "object" },
+      "outputSchema": { "type": "object" }
+    },
+    "maximum": {
+      "name": "mcp.search",
+      "kind": "mcp_http",
+      "description": "search docs",
+      "inputSchema": { "type": "object", "required": ["q"] },
+      "outputSchema": { "type": "object" },
+      "timeoutMs": 45000,
+      "retryable": true,
+      "sideEffectLevel": "low",
+      "approvalPolicy": "always_require",
+      "requiresApproval": true,
+      "tenantScoped": false,
+      "allowedRoles": ["admin"],
+      "allowedScopes": ["tools:run"],
+      "sandboxProfile": "mcp-http",
+      "networkPolicy": "mcp_http_only",
+      "egressAllowlist": ["https://example.test"],
+      "compensationAction": "delete_created_resource",
+      "nonCompensatable": true,
+      "source": "mcp",
+      "sourceRef": "server_1",
+      "descriptorHash": "sha256:abc",
+      "version": 2,
+      "status": "APPROVED",
+      "enabled": true
+    },
+    "nullable": {
+      "name": "custom.noop",
+      "kind": "builtin_async",
+      "description": "noop",
+      "inputSchema": {},
+      "outputSchema": {},
+      "compensationAction": null,
+      "sourceRef": null,
+      "descriptorHash": null
+    }
+  },
+  "ToolExecutionRequestSchema": {
+    "minimum": { "toolName": "json_transform", "argumentsJson": {} },
+    "maximum": {
+      "toolName": "json_transform",
+      "argumentsJson": { "input": { "x": 2 }, "expression": "get:x" },
+      "rawToolCallId": "call_1",
+      "executionMode": "async"
+    },
+    "nullable": { "toolName": "json_transform", "argumentsJson": {}, "rawToolCallId": null }
+  },
+  "ToolExecutionResultSchema": {
+    "minimum": { "status": "SUCCEEDED" },
+    "maximum": {
+      "status": "FAILED",
+      "resultJson": { "ok": false },
+      "errorCode": "TOOL_FAILED",
+      "errorMessage": "failed",
+      "retryable": true,
+      "stdout": "out",
+      "stderr": "err",
+      "exitCode": 1,
+      "startedAt": "2026-01-01T00:00:00Z",
+      "completedAt": "2026-01-01T00:00:01Z",
+      "durationMs": 1000,
+      "outputSchemaValid": false,
+      "sanitized": true
+    },
+    "nullable": {
+      "status": "CANCELLED",
+      "resultJson": null,
+      "errorCode": null,
+      "errorMessage": null,
+      "stdout": null,
+      "stderr": null,
+      "exitCode": null,
+      "startedAt": null,
+      "completedAt": null,
+      "durationMs": null
+    }
+  },
+  "ToolInvocationSchema": {
+    "minimum": {
+      "id": "ti_min",
+      "tenantId": "tenant_1",
+      "executionId": "exec_1",
+      "stepId": "step_1",
+      "toolName": "search",
+      "toolKind": "builtin_sync",
+      "status": "PENDING",
+      "argsJson": {},
+      "requiresApproval": false,
+      "idempotencyKey": "idem_1",
+      "startedAt": "2026-01-01T00:00:00Z"
+    },
+    "maximum": {
+      "id": "ti_max",
+      "tenantId": "tenant_1",
+      "executionId": "exec_1",
+      "stepId": "step_1",
+      "toolName": "search",
+      "toolKind": "mcp_http",
+      "status": "SUCCEEDED",
+      "argsJson": { "q": "octo" },
+      "resultJson": { "hits": [] },
+      "errorCode": "NONE",
+      "errorMessage": "none",
+      "requiresApproval": true,
+      "approvalId": "approval_1",
+      "idempotencyKey": "idem_2",
+      "durationMs": 25,
+      "startedAt": "2026-01-01T00:00:00Z",
+      "endedAt": "2026-01-01T00:00:01Z"
+    },
+    "nullable": {
+      "id": "ti_null",
+      "tenantId": "tenant_1",
+      "executionId": "exec_1",
+      "stepId": "step_1",
+      "toolName": "search",
+      "toolKind": "builtin_async",
+      "status": "FAILED",
+      "argsJson": {},
+      "resultJson": null,
+      "errorCode": null,
+      "errorMessage": null,
+      "requiresApproval": true,
+      "approvalId": null,
+      "idempotencyKey": "idem_3",
+      "durationMs": null,
+      "startedAt": "2026-01-01T00:00:00Z",
+      "endedAt": null
+    }
+  },
+  "ApprovalSchema": {
+    "minimum": {
+      "id": "approval_min",
+      "tenantId": "tenant_1",
+      "executionId": "exec_1",
+      "stepId": "step_1",
+      "kind": "tool_execution",
+      "status": "PENDING",
+      "title": "Approve tool",
+      "reason": "tool needs approval",
+      "payloadJson": {}
+    },
+    "maximum": {
+      "id": "approval_max",
+      "tenantId": "tenant_1",
+      "executionId": "exec_1",
+      "stepId": "step_1",
+      "kind": "human_input",
+      "status": "APPROVED",
+      "title": "Need input",
+      "reason": "continue",
+      "payloadJson": { "question": "ok?" },
+      "timeoutAt": "2026-01-01T00:10:00Z",
+      "resolvedBy": "user_1",
+      "resolvedAt": "2026-01-01T00:01:00Z",
+      "resolutionJson": { "approved": true }
+    },
+    "nullable": {
+      "id": "approval_null",
+      "tenantId": "tenant_1",
+      "executionId": "exec_1",
+      "stepId": "step_1",
+      "kind": "external_validation",
+      "status": "CANCELLED",
+      "title": "Validate",
+      "reason": "policy",
+      "payloadJson": {},
+      "timeoutAt": null,
+      "resolvedBy": null,
+      "resolvedAt": null,
+      "resolutionJson": null
+    }
+  },
+  "OutboxEventSchema": {
+    "minimum": {
+      "id": "outbox_min",
+      "tenantId": "tenant_1",
+      "aggregateType": "execution",
+      "aggregateId": "exec_1",
+      "eventType": "ExecutionQueued",
+      "sequence": 1,
+      "payloadJson": {},
+      "createdAt": "2026-01-01T00:00:00Z"
+    },
+    "maximum": {
+      "id": "outbox_max",
+      "tenantId": "tenant_1",
+      "aggregateType": "tool_invocation",
+      "aggregateId": "ti_1",
+      "eventType": "ToolInvocationSucceeded",
+      "sequence": 2,
+      "payloadJson": { "tool": "search" },
+      "publishedAt": "2026-01-01T00:00:02Z",
+      "createdAt": "2026-01-01T00:00:01Z"
+    },
+    "nullable": {
+      "id": "outbox_null",
+      "tenantId": "tenant_1",
+      "aggregateType": "approval",
+      "aggregateId": "approval_1",
+      "eventType": "ApprovalExpired",
+      "sequence": 3,
+      "payloadJson": {},
+      "publishedAt": null,
+      "createdAt": "2026-01-01T00:00:03Z"
+    }
+  },
+  "AgentVersionSchema": {
+    "minimum": {
+      "id": "agent_version_min",
+      "tenantId": "tenant_1",
+      "agentId": "agent_1",
+      "version": 1,
+      "configJson": {
+        "name": "Agent",
+        "instructions": "Help",
+        "workspaceId": "workspace_1",
+        "modelPolicy": { "primaryModel": "openai/gpt-4.1-mini" },
+        "toolPolicy": { "allow": [] },
+        "budgetPolicy": { "maxUsdPerRun": "1.00", "maxUsdPerDay": "5.00" }
+      },
+      "createdAt": "2026-01-01T00:00:00Z"
+    },
+    "maximum": {
+      "id": "agent_version_max",
+      "tenantId": "tenant_1",
+      "agentId": "agent_1",
+      "version": 2,
+      "configJson": {
+        "name": "Agent Max",
+        "instructions": "Help a lot",
+        "workspaceId": "workspace_1",
+        "modelPolicy": {
+          "primaryModel": "openai/gpt-4.1-mini",
+          "fallbackModels": ["openai/gpt-4.1-nano"],
+          "fallbackChain": ["openai/gpt-4.1-mini", "openai/gpt-4.1-nano"],
+          "allowedModels": ["openai/gpt-4.1-mini"],
+          "registeredModels": ["openai/gpt-4.1-mini"],
+          "temperature": 0.4,
+          "maxOutputTokens": 4096
+        },
+        "toolPolicy": { "allow": ["search"], "deny": ["delete"], "requireApprovalFor": ["write"] },
+        "budgetPolicy": {
+          "maxUsdPerRun": "10.00",
+          "maxUsdPerDay": "50.00",
+          "minReservedCostUsd": "0.001",
+          "currentSpendUsd": "1.23",
+          "onExhaust": "require_approval",
+          "hardStop": false
+        },
+        "executionTimeoutMs": 600000
+      },
+      "createdAt": "2026-01-01T00:00:00Z"
+    },
+    "nullable": {
+      "id": "agent_version_null",
+      "tenantId": "tenant_1",
+      "agentId": "agent_1",
+      "version": 3,
+      "configJson": {
+        "name": "Agent Null",
+        "instructions": "No nullable fields in this contract; default-bearing fields are exercised here.",
+        "workspaceId": "workspace_1",
+        "modelPolicy": { "primaryModel": "openai/gpt-4.1-mini" },
+        "toolPolicy": { "allow": ["search"] },
+        "budgetPolicy": { "maxUsdPerRun": "1.00", "maxUsdPerDay": "5.00" }
+      },
+      "createdAt": "2026-01-01T00:00:00Z"
+    }
+  },
+  "ExecutionContextSchema": {
+    "minimum": { "delegationChain": [], "memoryScope": "exec_1", "variables": {} },
+    "maximum": {
+      "parentExecutionId": "exec_parent",
+      "delegationChain": ["agent_root", "agent_child"],
+      "memoryScope": "tenant_1/exec_1",
+      "variables": { "locale": "es", "limits": { "steps": 3 } }
+    },
+    "nullable": {
+      "parentExecutionId": null,
+      "delegationChain": [],
+      "memoryScope": "exec_1",
+      "variables": {}
+    }
+  }
+}

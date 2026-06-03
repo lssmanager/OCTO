@@ -1,103 +1,105 @@
 {
-  "$ref": "#/definitions/ApprovalSchema",
-  "definitions": {
-    "ApprovalSchema": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "tenantId": {
+      "type": "string"
+    },
+    "executionId": {
+      "type": "string"
+    },
+    "stepId": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "tool_execution",
+        "budget_override",
+        "human_input",
+        "external_validation"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "EXPIRED",
+        "CANCELLED"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "payloadJson": {
       "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "tenantId": {
-          "type": "string"
-        },
-        "executionId": {
-          "type": "string"
-        },
-        "stepId": {
-          "type": "string"
-        },
-        "kind": {
+      "properties": {},
+      "additionalProperties": {}
+    },
+    "timeoutAt": {
+      "anyOf": [
+        {
           "type": "string",
-          "enum": [
-            "tool_execution",
-            "budget_override",
-            "human_input",
-            "external_validation"
-          ]
+          "format": "date-time"
         },
-        "status": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "resolvedBy": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "resolvedAt": {
+      "anyOf": [
+        {
           "type": "string",
-          "enum": [
-            "PENDING",
-            "APPROVED",
-            "REJECTED",
-            "EXPIRED",
-            "CANCELLED"
-          ]
+          "format": "date-time"
         },
-        "title": {
-          "type": "string"
-        },
-        "reason": {
-          "type": "string"
-        },
-        "payloadJson": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "resolutionJson": {
+      "anyOf": [
+        {
           "type": "object",
+          "properties": {},
           "additionalProperties": {}
         },
-        "timeoutAt": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "resolvedBy": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "resolvedAt": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "resolutionJson": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": {}
-            },
-            {
-              "type": "null"
-            }
-          ]
+        {
+          "type": "null"
         }
-      },
-      "required": [
-        "id",
-        "tenantId",
-        "executionId",
-        "stepId",
-        "kind",
-        "status",
-        "title",
-        "reason",
-        "payloadJson"
-      ],
-      "additionalProperties": false
+      ]
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#"
+  "required": [
+    "id",
+    "tenantId",
+    "executionId",
+    "stepId",
+    "kind",
+    "status",
+    "title",
+    "reason",
+    "payloadJson"
+  ],
+  "additionalProperties": false,
+  "title": "ApprovalSchema"
 }

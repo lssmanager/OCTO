@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class Status(StrEnum):
@@ -26,7 +26,9 @@ class ExecutionStepSchema(BaseModel):
     id: str
     tenant_id: Annotated[str, Field(alias='tenantId')]
     execution_id: Annotated[str, Field(alias='executionId')]
-    step_index: Annotated[int, Field(alias='stepIndex')]
+    step_index: Annotated[
+        int, Field(alias='stepIndex', ge=-9007199254740991, le=9007199254740991)
+    ]
     step_type: Annotated[str, Field(alias='stepType')]
     state_from: Annotated[str | None, Field(alias='stateFrom')] = None
     state_to: Annotated[str | None, Field(alias='stateTo')] = None
@@ -37,7 +39,3 @@ class ExecutionStepSchema(BaseModel):
     error_message: Annotated[str | None, Field(alias='errorMessage')] = None
     started_at: Annotated[AwareDatetime, Field(alias='startedAt')]
     ended_at: Annotated[AwareDatetime | None, Field(alias='endedAt')] = None
-
-
-class Model(RootModel[ExecutionStepSchema]):
-    root: ExecutionStepSchema

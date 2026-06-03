@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class AggregateType(StrEnum):
@@ -55,11 +55,7 @@ class OutboxEventSchema(BaseModel):
     aggregate_type: Annotated[AggregateType, Field(alias='aggregateType')]
     aggregate_id: Annotated[str, Field(alias='aggregateId')]
     event_type: Annotated[EventType, Field(alias='eventType')]
-    sequence: int
+    sequence: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
     payload_json: Annotated[dict[str, Any], Field(alias='payloadJson')]
     published_at: Annotated[AwareDatetime | None, Field(alias='publishedAt')] = None
     created_at: Annotated[AwareDatetime, Field(alias='createdAt')]
-
-
-class Model(RootModel[OutboxEventSchema]):
-    root: OutboxEventSchema

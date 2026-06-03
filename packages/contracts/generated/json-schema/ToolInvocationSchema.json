@@ -1,125 +1,137 @@
 {
-  "$ref": "#/definitions/ToolInvocationSchema",
-  "definitions": {
-    "ToolInvocationSchema": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "tenantId": {
+      "type": "string"
+    },
+    "executionId": {
+      "type": "string"
+    },
+    "stepId": {
+      "type": "string"
+    },
+    "toolName": {
+      "type": "string"
+    },
+    "toolKind": {
+      "type": "string",
+      "enum": [
+        "builtin_sync",
+        "builtin_async",
+        "mcp_stdio",
+        "mcp_http"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "EXECUTING",
+        "SUCCEEDED",
+        "FAILED",
+        "TIMED_OUT",
+        "PENDING_ASYNC",
+        "CANCELLED"
+      ]
+    },
+    "argsJson": {
       "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "tenantId": {
-          "type": "string"
-        },
-        "executionId": {
-          "type": "string"
-        },
-        "stepId": {
-          "type": "string"
-        },
-        "toolName": {
-          "type": "string"
-        },
-        "toolKind": {
-          "type": "string",
-          "enum": [
-            "builtin_sync",
-            "builtin_async",
-            "mcp_stdio",
-            "mcp_http"
-          ]
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "PENDING",
-            "EXECUTING",
-            "SUCCEEDED",
-            "FAILED",
-            "TIMED_OUT",
-            "PENDING_ASYNC",
-            "CANCELLED"
-          ]
-        },
-        "argsJson": {
+      "properties": {},
+      "additionalProperties": {}
+    },
+    "resultJson": {
+      "anyOf": [
+        {
           "type": "object",
+          "properties": {},
           "additionalProperties": {}
         },
-        "resultJson": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": {}
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "errorCode": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "errorMessage": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "requiresApproval": {
-          "type": "boolean"
-        },
-        "approvalId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "idempotencyKey": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorCode": {
+      "anyOf": [
+        {
           "type": "string"
         },
-        "durationMs": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorMessage": {
+      "anyOf": [
+        {
+          "type": "string"
         },
-        "startedAt": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requiresApproval": {
+      "type": "boolean"
+    },
+    "approvalId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "idempotencyKey": {
+      "type": "string"
+    },
+    "durationMs": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endedAt": {
+      "anyOf": [
+        {
           "type": "string",
           "format": "date-time"
         },
-        "endedAt": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        {
+          "type": "null"
         }
-      },
-      "required": [
-        "id",
-        "tenantId",
-        "executionId",
-        "stepId",
-        "toolName",
-        "toolKind",
-        "status",
-        "argsJson",
-        "requiresApproval",
-        "idempotencyKey",
-        "startedAt"
-      ],
-      "additionalProperties": false
+      ]
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#"
+  "required": [
+    "id",
+    "tenantId",
+    "executionId",
+    "stepId",
+    "toolName",
+    "toolKind",
+    "status",
+    "argsJson",
+    "requiresApproval",
+    "idempotencyKey",
+    "startedAt"
+  ],
+  "additionalProperties": false,
+  "title": "ToolInvocationSchema"
 }

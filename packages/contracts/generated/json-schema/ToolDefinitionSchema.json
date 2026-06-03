@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "builtin_sync",
+        "builtin_async",
+        "mcp_stdio",
+        "mcp_http"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": {}
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": {}
+    },
+    "timeoutMs": {
+      "default": 30000,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "retryable": {
+      "default": false,
+      "type": "boolean"
+    },
+    "sideEffectLevel": {
+      "default": "none",
+      "type": "string",
+      "enum": [
+        "none",
+        "low",
+        "high"
+      ]
+    },
+    "approvalPolicy": {
+      "default": "policy_based",
+      "type": "string",
+      "enum": [
+        "never_require",
+        "always_require",
+        "policy_based"
+      ]
+    },
+    "requiresApproval": {
+      "default": false,
+      "type": "boolean"
+    },
+    "tenantScoped": {
+      "default": true,
+      "type": "boolean"
+    },
+    "allowedRoles": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowedScopes": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sandboxProfile": {
+      "default": "builtin-default",
+      "type": "string"
+    },
+    "networkPolicy": {
+      "default": "none",
+      "type": "string",
+      "enum": [
+        "none",
+        "egress_allowlist",
+        "mcp_http_only"
+      ]
+    },
+    "egressAllowlist": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "compensationAction": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nonCompensatable": {
+      "default": false,
+      "type": "boolean"
+    },
+    "source": {
+      "default": "builtin",
+      "type": "string",
+      "enum": [
+        "builtin",
+        "mcp",
+        "hub",
+        "custom"
+      ]
+    },
+    "sourceRef": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "descriptorHash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "version": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "status": {
+      "default": "ENABLED",
+      "type": "string",
+      "enum": [
+        "DISCOVERED",
+        "PENDING_REVIEW",
+        "APPROVED",
+        "ENABLED",
+        "DISABLED",
+        "DEPRECATED",
+        "REVOKED",
+        "NEEDS_REVIEW"
+      ]
+    },
+    "enabled": {
+      "default": true,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "name",
+    "kind",
+    "description",
+    "inputSchema",
+    "outputSchema"
+  ],
+  "additionalProperties": false,
+  "title": "ToolDefinitionSchema"
+}
