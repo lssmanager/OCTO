@@ -101,6 +101,7 @@ export_close_defaults() {
   export DATABASE_URL="$F1_HOST_DATABASE_URL"
   export REDIS_URL="$F1_HOST_REDIS_URL"
   export JWT_SECRET="${JWT_SECRET:-dev-secret}"
+  export JWT_KID="${JWT_KID:-dev-hs256}"
   export JWT_SIGNING_KEYS="${JWT_SIGNING_KEYS:-[{\"kid\":\"dev-hs256\",\"algorithm\":\"HS256\",\"isActive\":true,\"secret\":\"dev-secret\"}]}"
   export RUNTIME_API_SECRET="${RUNTIME_API_SECRET:-test-runtime-secret-minimum-32-chars}"
   export LITELLM_MASTER_KEY="${LITELLM_MASTER_KEY:-sk-f1-close-gate-minimum-16}"

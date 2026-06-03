@@ -63,7 +63,7 @@ export async function GET() {
     return await forward('/v1/agents/graph', {
       method: 'GET',
       headers: { authorization: `Bearer ${token}` },
-      next: { revalidate: 15 },
+      cache: 'no-store',
     });
   } catch (err) {
     return jsonError(502, err instanceof Error ? err.message : 'Unable to fetch F1 Agent Graph projection.');

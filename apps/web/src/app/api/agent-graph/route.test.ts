@@ -21,6 +21,11 @@ describe('F1 Agent Graph route URL contract', () => {
     expect(agentGraphApiUrl('/v1/agents', base)).toBe('http://localhost:3001/api/v1/agents');
   });
 
+  it('keeps the graph projection uncached so writes are visible immediately', () => {
+    expect(routeSource).toContain("cache: 'no-store'");
+    expect(routeSource).not.toContain('revalidate: 15');
+  });
+
   it('does not reference browser-public console write secrets', () => {
     expect(routeSource).not.toContain('NEXT_PUBLIC_OCTO_CONSOLE_TOKEN');
     expect(routeSource).not.toMatch(/NEXT_PUBLIC_[A-Z0-9_]*TOKEN/);
