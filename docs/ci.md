@@ -31,3 +31,28 @@ Main-only release checks:
 - `pytest apps/runtime-worker/tests/ -v --tb=short`
 
 Use real Postgres/Redis for integration checks.
+
+## F1 public deployment smoke
+
+The F1 smoke gate validates that the API is not merely reachable under `/api`, but
+also visible as an operational phase surface at the public root URL. `scripts/f1-smoke.sh`
+now checks:
+
+- `GET /` returns HTTP 200, contains `OCTO`, and does not contain the Nest fallback
+  `Cannot GET /`.
+- `GET /api/health/live`, `/api/health/ready`, and `/api/health/version` all respond.
+- In strict/close mode, `/api/health/version` reports `phase=F1` and non-`unknown`
+  `version`, `commit`, and `built_at` values.
+
+Useful commands:
+
+```bash
+API_URL=http://localhost:3001/api bash scripts/f1-smoke.sh --health
+F1_PUBLIC_URL=https://agents.socialstudies.cloud bash scripts/f1-smoke.sh --health
+pnpm f1:close-gate
+```
+
+For issue #263, the public F1 resource is API-only. Coolify/Traefik must route
+`https://agents.socialstudies.cloud/` to API container port `3001`; a `3100`
+service-port label is stale/incorrect for the API container. See
+[`docs/ops/coolify-routing.md`](ops/coolify-routing.md).

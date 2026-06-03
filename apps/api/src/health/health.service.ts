@@ -1,6 +1,12 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { createQueue, createRedisConnection, QUEUE_NAMES, QUEUES, type HealthJobData } from '@octo/queue';
+import {
+  createQueue,
+  createRedisConnection,
+  QUEUE_NAMES,
+  QUEUES,
+  type HealthJobData,
+} from '@octo/queue';
 import postgres from 'postgres';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -104,9 +110,9 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
 
   async check(): Promise<HealthStatus> {
     const timestamp = new Date().toISOString();
-    const version = process.env['BUILD_VERSION'] ?? '0.0.1-f0';
-    const commit = process.env['BUILD_COMMIT'] ?? 'unknown';
-    const phase = process.env['BUILD_PHASE'] ?? 'F0';
+    const version = process.env['BUILD_VERSION'] ?? '0.1.0-f1';
+    const commit = process.env['BUILD_COMMIT'] ?? 'local';
+    const phase = process.env['BUILD_PHASE'] ?? 'F1';
 
     const checks = await this.runChecks();
     const allOk = Object.values(checks).every((c) => c.status === 'ok');
@@ -162,11 +168,7 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const [waiting, active, failed] = await withTimeout(
-        Promise.all([
-          queue.getWaitingCount(),
-          queue.getActiveCount(),
-          queue.getFailedCount(),
-        ]),
+        Promise.all([queue.getWaitingCount(), queue.getActiveCount(), queue.getFailedCount()]),
         CHECK_TIMEOUT_MS
       );
       return {

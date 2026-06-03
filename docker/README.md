@@ -6,7 +6,8 @@ Every OCTO service runs as an **independent container** with its own restart dom
 
 | Service | Package | Port | Dockerfile | Coolify |
 |---|---|---|---|---|
-| `api` | `@octo/api` | `3001` | `Dockerfile` (root) | ✅ Deployed |
+| `api` | `@octo/api` | `3001` | `Dockerfile` (root) | ✅ Deployed / public F1 surface |
+| `web` | `@octo/web` | `3000` | `apps/web/Dockerfile` | ⚪ Separate resource only; not part of issue #263 API deployment |
 | `runtime-worker` | `@octo/runtime-worker` | `3002` | `docker/runtime-worker/Dockerfile` | 🔴 Register |
 | `scheduler-worker` | `@octo/scheduler-worker` | `3003` | `docker/scheduler-worker/Dockerfile` | 🔴 Register |
 | `embedding-worker` | `@octo/embedding-worker` | `3004` | `docker/embedding-worker/Dockerfile` | 🔴 Register |
@@ -62,9 +63,9 @@ Every service exposes two endpoints:
 | `GET /health/live` | Process is alive | Coolify `HEALTHCHECK` |
 | `GET /health/ready` | Queue + DB connections verified | Readiness probe |
 
-The `api` service prefixes with `/api/`: `GET /api/health/live`.
+The `api` service prefixes health endpoints with `/api/`: `GET /api/health/live`. The public API root `GET /` is intentionally excluded from the prefix and renders the OCTO F1 status surface.
 
-Coolify's HEALTHCHECK polls `/health/live`. If it fails, the container restarts. A healthy `/health/live` with a broken queue connection will NOT trigger a restart — that's what `/health/ready` is for.
+Coolify's API container HEALTHCHECK polls `/api/health/live`. If it fails, the container restarts. A healthy `/api/health/live` with a broken queue connection will NOT trigger a restart — that's what `/api/health/ready` is for.
 
 ## Dockerfile Build Pattern
 
@@ -103,7 +104,7 @@ The only differences between Dockerfiles:
             └──────────────────────────────┘
 ```
 
-Workers communicate with the API **only through the queue** (Redis/BullMQ). They never call the API over HTTP. The API is the only process that faces the internet.
+Workers communicate with the API **only through the queue** (Redis/BullMQ). They never call the API over HTTP. For the F1 issue #263 deployment, the API is the only process that faces the internet at `agents.socialstudies.cloud` and Coolify/Traefik must route that resource to port `3001`, not `3100`. The Next.js web console requires a separate Coolify resource if/when it is deployed.
 
 ## Environment Variables Reference
 

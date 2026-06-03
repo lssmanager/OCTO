@@ -123,3 +123,52 @@ Estas variables se graban intencionalmente en la imagen para trazabilidad
 - [Coolify Environment Variables](https://coolify.io/docs/knowledge-base/environment-variables)
 - [Docker ARG vs ENV](https://docs.docker.com/engine/reference/builder/#arg)
 - ADR F0-016 (env config), ADR F0-014 (Dockerfile strategy)
+
+---
+
+## F1 Public Surface and Build Metadata
+
+> Routing decision: `https://agents.socialstudies.cloud/` is the API-only F1
+> resource and must route to container port `3001`. See
+> [`docs/ops/coolify-routing.md`](./coolify-routing.md) for the complete
+> API-vs-web decision and post-deploy checks.
+
+For issue #263/F1 closeout, the public Coolify route must point to the API
+container port `3001`. The OCTO API listens on `PORT=3001`, exposes
+`EXPOSE 3001`, and serves these public verification URLs:
+
+- `https://agents.socialstudies.cloud/` — lightweight OCTO F1 operational surface.
+- `https://agents.socialstudies.cloud/api/health/live` — container/process liveness.
+- `https://agents.socialstudies.cloud/api/health/ready` — strict dependency readiness
+  (PostgreSQL/Redis/LiteLLM/queue checks; returns 503 when dependencies are unhealthy).
+- `https://agents.socialstudies.cloud/api/health/version` — build metadata used by the
+  F1 close gate.
+
+If Coolify/Traefik is configured with an application port, use `3001` for the API
+service. Port `3100` is reserved for a separate web console deployment and should not
+be used for the API-only Coolify application unless a distinct `apps/web` service is
+being deployed and routed intentionally.
+
+Configure these non-secret build metadata variables in Coolify for F1 close deploys:
+
+| Variable | Recommended F1 value | Notes |
+|----------|----------------------|-------|
+| `BUILD_PHASE` | `F1` | Required for `/api/health/version` to prove F1 closure. |
+| `BUILD_VERSION` | release/tag value, for example `0.1.0-f1` | Must not be `unknown` in close-gate deploys. |
+| `BUILD_COMMIT` | `${SOURCE_COMMIT}` when Coolify exposes it, otherwise the Git SHA | Must not be `unknown` in close-gate deploys. |
+| `SOURCE_COMMIT` | Coolify-provided Git SHA when available | The Dockerfiles default `BUILD_COMMIT` from this value when explicit `BUILD_COMMIT` is absent. |
+| `BUILD_TIME` | ISO-8601 UTC timestamp from the deployment | Must not be `unknown` in close-gate deploys. |
+
+These values are safe as Build Variables because they are metadata, not secrets. Do
+not place `DATABASE_URL`, `REDIS_URL`, JWT secrets, LiteLLM keys, or inter-service
+secrets in Build Variables.
+
+Local/public smoke examples:
+
+```bash
+curl -i http://localhost:3001/
+curl -i http://localhost:3001/api/health/live
+curl -i http://localhost:3001/api/health/ready
+curl -s http://localhost:3001/api/health/version
+F1_PUBLIC_URL=https://agents.socialstudies.cloud bash scripts/f1-smoke.sh --health
+```
