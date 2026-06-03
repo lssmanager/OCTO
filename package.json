@@ -19,6 +19,8 @@
     "contracts:build": "pnpm --filter @octo/contracts build && node scripts/generate-json-schema.mjs",
     "contracts:python": "python3 scripts/generate_pydantic_models.py",
     "contracts:check": "pnpm contracts:build && pnpm contracts:python && git diff --exit-code -- packages/contracts/generated apps/runtime-worker/app/contracts/generated",
+    "contracts:schema:validate": "pnpm contracts:build && pnpm exec tsx scripts/validate-contract-json-schema.ts",
+    "contracts:conformance": "vitest run packages/contracts/tests/conformance && PYTHONPATH=apps/runtime-worker pytest apps/runtime-worker/tests/contracts -v",
     "contracts:validate": "pnpm contracts:build && pnpm contracts:python && pnpm exec tsx scripts/validate-contract-json-schema.ts && pnpm contracts:conformance && pnpm contracts:check",
     "observability:check-rules": "promtool check rules infra/prometheus/rules/octo-f1.yml",
     "observability:test-rules": "promtool test rules infra/prometheus/rules/octo-f1-test.yml",
@@ -41,9 +43,7 @@
     "f1:tenant-isolation": "pnpm test:tenant-isolation",
     "test:observability": "vitest run apps/api/src/ops/f1-observability.integration.test.ts apps/api/src/ops/ops-v1.service.spec.ts",
     "f1:observability": "pnpm test:observability",
-    "security:vitest": "node scripts/verify-vitest-security.mjs",
-    "contracts:schema:validate": "pnpm contracts:build && pnpm exec tsx scripts/validate-contract-json-schema.ts",
-    "contracts:conformance": "vitest run packages/contracts/tests/conformance && PYTHONPATH=apps/runtime-worker pytest apps/runtime-worker/tests/contracts -v"
+    "security:vitest": "node scripts/verify-vitest-security.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.60.1",
