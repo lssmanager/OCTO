@@ -55,6 +55,7 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
   const [selected, setSelected] = useState<AgentGraphNode | null>(firstNode(initialNodes));
   const [error, setError] = useState(initialError ?? '');
   const [loading, setLoading] = useState(false);
+  const [inFlight, setInFlight] = useState(false);
   const [agentName, setAgentName] = useState('');
   const [agentRole, setAgentRole] = useState('executor');
   const [agentGoal, setAgentGoal] = useState('Operate inside this workspace.');
@@ -82,11 +83,13 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
   }
 
   async function submit(action: 'createNode' | 'createAgent', body: Record<string, unknown>) {
+    if (inFlight) return;
     if (!writesConfigured) {
       setError('Authenticated F1 Agent Graph console writes are not configured; reads remain available through the server projection.');
       return;
     }
     setLoading(true);
+    setInFlight(true);
     setError('');
     try {
       const res = await fetch('/api/agent-graph', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, body }) });
@@ -99,6 +102,8 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Write failed');
       setLoading(false);
+    } finally {
+      setInFlight(false);
     }
   }
 
@@ -115,7 +120,7 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
         <button type="button" onClick={() => refresh()} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }}>{loading ? 'Refreshing…' : 'Refresh graph'}</button>
       </div>
 
-      {(error || initialError) && <div className="rounded-lg border p-3 text-sm" style={{ borderColor: 'var(--color-error)', backgroundColor: 'rgba(248,81,73,0.08)', color: 'var(--color-error)' }}>{error || initialError}</div>}
+      {error && <div className="rounded-lg border p-3 text-sm" style={{ borderColor: 'var(--color-error)', backgroundColor: 'rgba(248,81,73,0.08)', color: 'var(--color-error)' }}>{error}</div>}
 
       {nodes.length === 0 ? (
         <div className="rounded-xl border p-8 text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
@@ -151,7 +156,7 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
             <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>{selectedParent && childLevel ? `Parent: ${selectedParent.name} → ${labels[childLevel]}` : 'Select a valid parent, or create a root Agency.'}</p>
             <input value={nodeName} onChange={(e) => setNodeName(e.target.value)} placeholder="Node name" className="mt-3 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
             <div className="mt-2 flex gap-2">
-              <button type="button" onClick={() => nodeName && submit('createNode', { name: nodeName, level: selectedParent && childLevel ? childLevel : 'agency', parentId: selectedParent && childLevel ? selectedParent.id : null })} className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>Create node</button>
+              <button type="button" onClick={() => nodeName && submit('createNode', { name: nodeName, level: selectedParent && childLevel ? childLevel : 'agency', parentId: selectedParent && childLevel ? selectedParent.id : null })} disabled={inFlight} className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>Create node</button>
             </div>
           </section>
 
@@ -164,7 +169,7 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
             <input value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="Agent name" className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
             <input value={agentRole} onChange={(e) => setAgentRole(e.target.value)} placeholder="Role" className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
             <textarea value={agentGoal} onChange={(e) => setAgentGoal(e.target.value)} placeholder="Goal" className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
-            <button type="button" onClick={() => agentName && workspaceNodes[0] && submit('createAgent', { name: agentName, role: agentRole, goal: agentGoal, hierarchyLevel: 'agent', hierarchyParentId: (selectedParent?.level === 'workspace' ? selectedParent.id : workspaceNodes[0]?.id), capabilities: [] })} className="mt-2 rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>Create agent</button>
+            <button type="button" onClick={() => agentName && workspaceNodes[0] && submit('createAgent', { name: agentName, role: agentRole, goal: agentGoal, hierarchyLevel: 'agent', hierarchyParentId: (selectedParent?.level === 'workspace' ? selectedParent.id : workspaceNodes[0]?.id), capabilities: [] })} disabled={inFlight} className="mt-2 rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>Create agent</button>
           </section>
         </aside>
       </div>
