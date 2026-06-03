@@ -24,6 +24,133 @@ const RETRY_DELAY_MS = 3_000;
 // to this file's compiled location (packages/database/dist/migrate.js).
 const MIGRATIONS_FOLDER = path.join(__dirname, '..', 'migrations');
 
+const F1_RUNTIME_TABLES = [
+  'approvals',
+  'execution_checkpoint_writes',
+  'execution_checkpoints',
+  'execution_steps',
+  'executions',
+  'outbox_events',
+  'tool_invocations',
+  'worker_heartbeats',
+] as const;
+
+function assertIdentifier(value: string, label: string): void {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`${label} must be a PostgreSQL identifier (got ${value})`);
+  }
+}
+
+async function bootstrapRuntimeRole(sql: ReturnType<typeof postgres>): Promise<void> {
+  const runtimeRole = process.env['RUNTIME_POSTGRES_USER'] ?? 'octo_runtime';
+  const runtimePassword = process.env['RUNTIME_POSTGRES_PASSWORD'];
+  const schemaName = process.env['RUNTIME_POSTGRES_SCHEMA'] ?? 'public';
+
+  if (!runtimePassword) {
+    log('warn', 'runtime_role_bootstrap_skipped', {
+      reason: 'RUNTIME_POSTGRES_PASSWORD is not set',
+      runtimeRole,
+    });
+    return;
+  }
+
+  assertIdentifier(runtimeRole, 'RUNTIME_POSTGRES_USER');
+  assertIdentifier(schemaName, 'RUNTIME_POSTGRES_SCHEMA');
+
+  await sql.begin(async (tx) => {
+    await tx`SELECT set_config('octo.runtime_role', ${runtimeRole}, true)`;
+    await tx`SELECT set_config('octo.runtime_password', ${runtimePassword}, true)`;
+    await tx`SELECT set_config('octo.runtime_schema', ${schemaName}, true)`;
+    await tx.unsafe(`
+DO $$
+DECLARE
+  runtime_role text := current_setting('octo.runtime_role');
+  runtime_password text := current_setting('octo.runtime_password');
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = runtime_role) THEN
+    EXECUTE format(
+      'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS',
+      runtime_role,
+      runtime_password
+    );
+  ELSE
+    EXECUTE format(
+      'ALTER ROLE %I WITH LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS',
+      runtime_role,
+      runtime_password
+    );
+  END IF;
+END $$`);
+    await tx.unsafe(`
+DO $$
+DECLARE
+  runtime_role text := current_setting('octo.runtime_role');
+  schema_name text := current_setting('octo.runtime_schema');
+BEGIN
+  EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
+  EXECUTE format('REVOKE ALL PRIVILEGES ON DATABASE %I FROM %I', current_database(), runtime_role);
+  EXECUTE format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM %I', current_database(), runtime_role);
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), runtime_role);
+  EXECUTE format('REVOKE CREATE ON SCHEMA %I FROM PUBLIC', schema_name);
+  EXECUTE format('REVOKE ALL PRIVILEGES ON SCHEMA %I FROM %I', schema_name, runtime_role);
+  EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I', schema_name, runtime_role);
+  EXECUTE format('REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA %I FROM %I', schema_name, runtime_role);
+  EXECUTE format('REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA %I FROM %I', schema_name, runtime_role);
+END $$`);
+    await tx.unsafe(
+      `GRANT SELECT, INSERT, UPDATE ON TABLE ${F1_RUNTIME_TABLES.map((table) => `"${schemaName}"."${table}"`).join(', ')} TO "${runtimeRole}"`
+    );
+    await tx.unsafe(`
+DO $$
+DECLARE
+  runtime_role text := current_setting('octo.runtime_role');
+  schema_name text := current_setting('octo.runtime_schema');
+  allowed_tables CONSTANT text[] := ARRAY[${F1_RUNTIME_TABLES.map((table) => `'${table}'`).join(', ')}];
+  role_record record;
+  unexpected_table_grants text;
+  unexpected_privileges text;
+BEGIN
+  SELECT * INTO role_record FROM pg_roles WHERE rolname = runtime_role;
+  IF role_record IS NULL OR NOT role_record.rolcanlogin THEN
+    RAISE EXCEPTION 'Runtime DB role % must exist with LOGIN', runtime_role;
+  END IF;
+  IF role_record.rolsuper OR role_record.rolbypassrls OR role_record.rolcreatedb OR role_record.rolcreaterole OR role_record.rolreplication THEN
+    RAISE EXCEPTION 'Runtime DB role % has administrative attributes', runtime_role;
+  END IF;
+  IF has_schema_privilege(runtime_role, schema_name, 'CREATE') THEN
+    RAISE EXCEPTION 'Runtime DB role % must not have CREATE on schema %', runtime_role, schema_name;
+  END IF;
+  IF has_database_privilege(runtime_role, current_database(), 'CREATE') THEN
+    RAISE EXCEPTION 'Runtime DB role % must not have CREATE on database %', runtime_role, current_database();
+  END IF;
+  IF has_database_privilege(runtime_role, current_database(), 'TEMPORARY') THEN
+    RAISE EXCEPTION 'Runtime DB role % must not have TEMPORARY on database %', runtime_role, current_database();
+  END IF;
+  SELECT string_agg(table_name || ':' || privilege_type, ', ' ORDER BY table_name, privilege_type)
+  INTO unexpected_table_grants
+  FROM information_schema.role_table_grants
+  WHERE grantee = runtime_role
+    AND table_schema = schema_name
+    AND NOT (table_name = ANY (allowed_tables));
+  IF unexpected_table_grants IS NOT NULL THEN
+    RAISE EXCEPTION 'Runtime DB role % has table grants outside F1 contract: %', runtime_role, unexpected_table_grants;
+  END IF;
+  SELECT string_agg(table_name || ':' || privilege_type, ', ' ORDER BY table_name, privilege_type)
+  INTO unexpected_privileges
+  FROM information_schema.role_table_grants
+  WHERE grantee = runtime_role
+    AND table_schema = schema_name
+    AND table_name = ANY (allowed_tables)
+    AND privilege_type NOT IN ('SELECT', 'INSERT', 'UPDATE');
+  IF unexpected_privileges IS NOT NULL THEN
+    RAISE EXCEPTION 'Runtime DB role % has disallowed privileges on F1 tables: %', runtime_role, unexpected_privileges;
+  END IF;
+END $$`);
+  });
+
+  log('info', 'runtime_role_bootstrap_complete', { runtimeRole, schemaName });
+}
+
 // ─── structured JSON log helpers ─────────────────────────────────────────────
 
 function log(level: 'info' | 'warn' | 'error', msg: string, extra?: Record<string, unknown>): void {
@@ -105,6 +232,7 @@ async function run(): Promise<void> {
     const db = drizzle(sql);
     await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
     log('info', 'migrations_complete', { migrationsFolder: MIGRATIONS_FOLDER });
+    await bootstrapRuntimeRole(sql);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log('error', 'migration_failed', { error: message });

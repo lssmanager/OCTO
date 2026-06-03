@@ -5,8 +5,8 @@
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'octo_runtime_worker') THEN
-    CREATE ROLE octo_runtime_worker
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'octo_runtime') THEN
+    CREATE ROLE octo_runtime
       LOGIN
       NOSUPERUSER
       NOCREATEDB
@@ -15,7 +15,7 @@ BEGIN
       NOREPLICATION
       NOBYPASSRLS;
   ELSE
-    ALTER ROLE octo_runtime_worker
+    ALTER ROLE octo_runtime
       LOGIN
       NOSUPERUSER
       NOCREATEDB
@@ -26,23 +26,26 @@ BEGIN
   END IF;
 END $$;
 --> statement-breakpoint
-REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM octo_runtime_worker;
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM octo_runtime;
 --> statement-breakpoint
-REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM octo_runtime_worker;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM octo_runtime;
 --> statement-breakpoint
-REVOKE ALL PRIVILEGES ON SCHEMA public FROM octo_runtime_worker;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON SCHEMA public FROM octo_runtime;
 --> statement-breakpoint
 DO $$
 BEGIN
-  EXECUTE format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM octo_runtime_worker', current_database());
+  EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
+  EXECUTE format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM octo_runtime', current_database());
 END $$;
 --> statement-breakpoint
 DO $$
 BEGIN
-  EXECUTE format('GRANT CONNECT ON DATABASE %I TO octo_runtime_worker', current_database());
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO octo_runtime', current_database());
 END $$;
 --> statement-breakpoint
-GRANT USAGE ON SCHEMA public TO octo_runtime_worker;
+GRANT USAGE ON SCHEMA public TO octo_runtime;
 --> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON TABLE
   approvals,
@@ -53,11 +56,11 @@ GRANT SELECT, INSERT, UPDATE ON TABLE
   outbox_events,
   tool_invocations,
   worker_heartbeats
-TO octo_runtime_worker;
+TO octo_runtime;
 --> statement-breakpoint
 DO $$
 DECLARE
-  runtime_role CONSTANT text := 'octo_runtime_worker';
+  runtime_role CONSTANT text := 'octo_runtime';
   allowed_tables CONSTANT text[] := ARRAY[
     'approvals',
     'execution_checkpoint_writes',
@@ -98,6 +101,9 @@ BEGIN
   END IF;
   IF has_database_privilege(runtime_role, current_database(), 'CREATE') THEN
     RAISE EXCEPTION 'Runtime DB role % must not have CREATE on database %', runtime_role, current_database();
+  END IF;
+  IF has_database_privilege(runtime_role, current_database(), 'TEMPORARY') THEN
+    RAISE EXCEPTION 'Runtime DB role % must not have TEMPORARY on database %', runtime_role, current_database();
   END IF;
 
   SELECT string_agg(table_name || ':' || privilege_type, ', ' ORDER BY table_name, privilege_type)

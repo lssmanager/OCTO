@@ -20,9 +20,12 @@ def _utc_now() -> dt.datetime:
 async def _write_heartbeat(started_at: dt.datetime, instance_id: str) -> None:
     import asyncpg  # type: ignore[import-untyped]
 
-    db_url = os.environ.get("DATABASE_URL", "")
+    db_url = os.environ.get("RUNTIME_DATABASE_URL")
+    if not db_url and (os.environ.get("F1_CLOSE_GATE") == "1" or os.environ.get("NODE_ENV") == "production"):
+        raise RuntimeError("RUNTIME_DATABASE_URL not configured for F1 close/production runtime-worker")
+    db_url = db_url or os.environ.get("DATABASE_URL", "")
     if not db_url:
-        raise RuntimeError("DATABASE_URL not configured")
+        raise RuntimeError("RUNTIME_DATABASE_URL not configured")
 
     conn = await asyncpg.connect(db_url, timeout=3)
     try:

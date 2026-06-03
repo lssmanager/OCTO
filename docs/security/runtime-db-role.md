@@ -1,10 +1,10 @@
 # F1 Runtime Worker Database Role
 
-`octo_runtime_worker` is the PostgreSQL role used by the F1 Runtime Worker when it writes durable execution progress. The role is enforced by `packages/database/migrations/202605300002_f1_runtime_db_role.sql` and verified by `scripts/check-f1-runtime-contract.py`.
+`octo_runtime` is the PostgreSQL role used by the F1 Runtime Worker when it writes durable execution progress. The role is enforced by `packages/database/migrations/202605300002_f1_runtime_db_role.sql` and verified by `scripts/check-f1-runtime-contract.py` and `scripts/f1-runtime-db-role-smoke.sh`.
 
 ## Role invariants
 
-The role must always be:
+The role is configured via `RUNTIME_POSTGRES_USER` (default `octo_runtime`) and `RUNTIME_POSTGRES_PASSWORD`; `runtime-worker` connects through `RUNTIME_DATABASE_URL`. `DATABASE_URL` remains reserved for API/migrations/admin bootstrap. The role must always be:
 
 - `LOGIN` only for runtime-worker database connections.
 - `NOSUPERUSER`.

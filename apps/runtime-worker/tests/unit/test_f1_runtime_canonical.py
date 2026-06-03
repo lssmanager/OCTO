@@ -29,6 +29,22 @@ from src.fsm_contract import InvalidExecutionTransitionError, validate_transitio
 from src.llm_provider import LLMCallResult
 
 
+def test_runtime_database_url_prefers_runtime_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgres://wide")
+    monkeypatch.setenv("RUNTIME_DATABASE_URL", "postgres://runtime")
+
+    assert f1_runtime.runtime_database_url() == "postgres://runtime"
+
+
+def test_runtime_database_url_requires_runtime_url_in_close_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgres://wide")
+    monkeypatch.delenv("RUNTIME_DATABASE_URL", raising=False)
+    monkeypatch.setenv("F1_CLOSE_GATE", "1")
+
+    with pytest.raises(RuntimeError, match="RUNTIME_DATABASE_URL required"):
+        f1_runtime.runtime_database_url()
+
+
 class _Tx:
     async def __aenter__(self):
         return self

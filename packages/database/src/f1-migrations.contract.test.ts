@@ -138,9 +138,9 @@ describe('F1 database migrations contract', () => {
     for (const attribute of contract.forbiddenRoleAttributes) {
       expect(sql.toUpperCase()).toContain(`NO${attribute}`);
     }
-    expect(sql).toContain('REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM octo_runtime_worker');
-    expect(sql).toContain('REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM octo_runtime_worker');
-    expect(sql).toContain('REVOKE ALL PRIVILEGES ON SCHEMA public FROM octo_runtime_worker');
+    expect(sql).toContain(`REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM ${contract.runtimeRole}`);
+    expect(sql).toContain(`REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM ${contract.runtimeRole}`);
+    expect(sql).toContain(`REVOKE ALL PRIVILEGES ON SCHEMA public FROM ${contract.runtimeRole}`);
     expect(sql).toContain('GRANT SELECT, INSERT, UPDATE ON TABLE');
     expect(sql).toContain('information_schema.role_table_grants');
     expect(sql).toContain('has_schema_privilege');
