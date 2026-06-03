@@ -14,6 +14,7 @@ Main-only release checks:
 - docker-scan
 
 ## Local commands
+- `pnpm f1:workspace-type-gate` — reproducible F1/F2 handoff gate for `@octo/events`, `@octo/database`, `@octo/api`, then full workspace `build` and `typecheck`.
 - `pnpm formatcheck`
 - `pnpm lint`
 - `pnpm typecheck`

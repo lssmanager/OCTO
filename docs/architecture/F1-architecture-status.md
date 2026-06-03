@@ -65,6 +65,7 @@ Minimum criteria:
 - Ops/runtime status exposes real operational metrics (not placeholders).
 - Docker/CI/deployment paths are consistent.
 - TS/Python contracts are synchronized or guarded against drift.
+- The F1 TypeScript package chain has reproducible filtered and workspace build/typecheck gates (`@octo/contracts -> @octo/events -> @octo/database -> @octo/api`).
 - Documentation matches code behavior.
 - Legacy contradictory F0/F2 narratives are removed from active docs/comments.
 

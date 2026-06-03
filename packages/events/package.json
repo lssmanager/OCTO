@@ -5,8 +5,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "pnpm --filter @octo/contracts build && tsup src/index.ts --format cjs --dts --external @octo/contracts",
-    "dev": "tsup src/index.ts --format cjs --watch --external @octo/contracts",
+    "build": "pnpm --filter @octo/contracts build && tsup src/index.ts --format cjs,esm --dts --external @octo/contracts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch --external @octo/contracts",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist",
     "test": "vitest run"
@@ -25,7 +25,9 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "require": "./dist/index.js"
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
     }
-  }
+  },
+  "module": "./dist/index.mjs"
 }

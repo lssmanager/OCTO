@@ -22,11 +22,11 @@ log() { printf '\n==> %s\n' "$*"; }
 warn() { printf '\n!! %s\n' "$*"; }
 
 run_common_checks() {
+  log "F1 ${MODE}: reproducible workspace build/typecheck gate"
+  pnpm f1:workspace-type-gate
+
   log "F1 ${MODE}: lint"
   pnpm lint
-
-  log "F1 ${MODE}: typecheck"
-  pnpm typecheck
 
   log "F1 ${MODE}: API unit tests"
   pnpm -s --filter @octo/api test -- --runInBand
