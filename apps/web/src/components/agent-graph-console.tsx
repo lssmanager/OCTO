@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { AgentGraphNode } from '@/lib/agent-graph';
 
-type Props = { initialNodes: AgentGraphNode[]; apiUrl: string; tokenConfigured: boolean; initialError?: string | undefined };
+type Props = { initialNodes: AgentGraphNode[]; writesConfigured: boolean; initialError?: string | undefined };
 type Level = AgentGraphNode['level'];
 
 const nextLevel: Record<Level, Level | null> = { agency: 'department', department: 'workspace', workspace: 'agent', agent: null };
@@ -50,7 +50,7 @@ function TreeNode({ node, selectedId, onSelect, depth = 0 }: { node: AgentGraphN
   );
 }
 
-export function AgentGraphConsole({ initialNodes, apiUrl, tokenConfigured, initialError }: Props) {
+export function AgentGraphConsole({ initialNodes, writesConfigured, initialError }: Props) {
   const [nodes, setNodes] = useState(initialNodes);
   const [selected, setSelected] = useState<AgentGraphNode | null>(firstNode(initialNodes));
   const [error, setError] = useState(initialError ?? '');
@@ -68,7 +68,7 @@ export function AgentGraphConsole({ initialNodes, apiUrl, tokenConfigured, initi
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${apiUrl}/v1/agents/graph`, { headers: tokenConfigured ? { authorization: `Bearer ${process.env['NEXT_PUBLIC_OCTO_CONSOLE_TOKEN'] ?? ''}` } : {} });
+      const res = await fetch('/api/agent-graph');
       if (!res.ok) throw new Error(`Graph refresh failed with HTTP ${res.status}`);
       const fresh = (await res.json()) as AgentGraphNode[];
       setNodes(fresh);
@@ -81,21 +81,19 @@ export function AgentGraphConsole({ initialNodes, apiUrl, tokenConfigured, initi
     }
   }
 
-  async function submit(path: string, body: Record<string, unknown>) {
-    if (!tokenConfigured) {
-      setError('Authenticated console token is not configured; writes are disabled.');
-      return;
-    }
-    const token = process.env['NEXT_PUBLIC_OCTO_CONSOLE_TOKEN'];
-    if (!token) {
-      setError('NEXT_PUBLIC_OCTO_CONSOLE_TOKEN is required for browser writes in this deployment.');
+  async function submit(action: 'createNode' | 'createAgent', body: Record<string, unknown>) {
+    if (!writesConfigured) {
+      setError('Authenticated F1 Agent Graph console writes are not configured; reads remain available through the server projection.');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${apiUrl}${path}`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error(`Write failed with HTTP ${res.status}`);
+      const res = await fetch('/api/agent-graph', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, body }) });
+      if (!res.ok) {
+        const failure = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+        throw new Error(failure.error ?? failure.message ?? `Write failed with HTTP ${res.status}`);
+      }
       const created = (await res.json()) as { id?: string; hierarchyNodeId?: string };
       await refresh(created.hierarchyNodeId ?? created.id);
     } catch (err) {
@@ -110,9 +108,9 @@ export function AgentGraphConsole({ initialNodes, apiUrl, tokenConfigured, initi
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-mono uppercase" style={{ color: 'var(--color-primary)' }}>F2 · Agent Registry & Hierarchy</p>
+          <p className="text-xs font-mono uppercase" style={{ color: 'var(--color-primary)' }}>F1 · Agent Graph System</p>
           <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Agent Graph Console</h1>
-          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Operational hierarchy projection: Agency → Department → Workspace → Agent. UI projects state; control plane validates and persists transitions.</p>
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Operational F1 graph projection: Agency → Department → Workspace → Agent. UI projects hierarchy/state only; Control Plane validates and persists transitions, while runtime execution and streaming remain outside F1.</p>
         </div>
         <button type="button" onClick={() => refresh()} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }}>{loading ? 'Refreshing…' : 'Refresh graph'}</button>
       </div>
@@ -122,7 +120,7 @@ export function AgentGraphConsole({ initialNodes, apiUrl, tokenConfigured, initi
       {nodes.length === 0 ? (
         <div className="rounded-xl border p-8 text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
           <h2 className="font-semibold">No hierarchy persisted yet</h2>
-          <p className="mt-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>Create an Agency below, then Department, Workspace and Agent. Runtime status will remain explicitly unavailable until F3+ runtime projections exist.</p>
+          <p className="mt-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>Create an Agency below, then Department, Workspace and Agent. Runtime status remains explicitly unavailable in F1; real execution and streaming projections are deferred to F2/F3+.</p>
         </div>
       ) : null}
 
@@ -153,7 +151,7 @@ export function AgentGraphConsole({ initialNodes, apiUrl, tokenConfigured, initi
             <p className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>{selectedParent && childLevel ? `Parent: ${selectedParent.name} → ${labels[childLevel]}` : 'Select a valid parent, or create a root Agency.'}</p>
             <input value={nodeName} onChange={(e) => setNodeName(e.target.value)} placeholder="Node name" className="mt-3 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
             <div className="mt-2 flex gap-2">
-              <button type="button" onClick={() => nodeName && submit('/v1/agents/nodes', { name: nodeName, level: selectedParent && childLevel ? childLevel : 'agency', parentId: selectedParent && childLevel ? selectedParent.id : null })} className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>Create node</button>
+              <button type="button" onClick={() => nodeName && submit('createNode', { name: nodeName, level: selectedParent && childLevel ? childLevel : 'agency', parentId: selectedParent && childLevel ? selectedParent.id : null })} className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>Create node</button>
             </div>
           </section>
 
@@ -166,7 +164,7 @@ export function AgentGraphConsole({ initialNodes, apiUrl, tokenConfigured, initi
             <input value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="Agent name" className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
             <input value={agentRole} onChange={(e) => setAgentRole(e.target.value)} placeholder="Role" className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
             <textarea value={agentGoal} onChange={(e) => setAgentGoal(e.target.value)} placeholder="Goal" className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
-            <button type="button" onClick={() => agentName && workspaceNodes[0] && submit('/v1/agents', { name: agentName, role: agentRole, goal: agentGoal, hierarchyLevel: 'agent', hierarchyParentId: (selectedParent?.level === 'workspace' ? selectedParent.id : workspaceNodes[0]?.id), capabilities: [] })} className="mt-2 rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>Create agent</button>
+            <button type="button" onClick={() => agentName && workspaceNodes[0] && submit('createAgent', { name: agentName, role: agentRole, goal: agentGoal, hierarchyLevel: 'agent', hierarchyParentId: (selectedParent?.level === 'workspace' ? selectedParent.id : workspaceNodes[0]?.id), capabilities: [] })} className="mt-2 rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>Create agent</button>
           </section>
         </aside>
       </div>

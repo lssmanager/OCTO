@@ -6,7 +6,7 @@ import { validateHierarchyRelation, type HierarchyPolicyNode } from './agent-pol
 import type { AgentGraphNode, HierarchyNodeDto, PatchAgentDto, PatchHierarchyNodeDto, ReparentHierarchyNodeDto } from './agent.service';
 
 const DEFAULT_HIERARCHY_LEVEL: HierarchyLevel = 'agent';
-const F2_LEVELS = new Set<HierarchyLevel>(['agency', 'department', 'workspace', 'agent']);
+const F1_AGENT_GRAPH_LEVELS = new Set<HierarchyLevel>(['agency', 'department', 'workspace', 'agent']);
 
 function slugify(value: string): string {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || randomUUID();
@@ -361,7 +361,7 @@ export class PostgresAgentRepo {
 
     const byId = new Map<string, AgentGraphNode>();
     for (const row of nodeRows) {
-      if (!F2_LEVELS.has(row.level as HierarchyLevel)) continue;
+      if (!F1_AGENT_GRAPH_LEVELS.has(row.level as HierarchyLevel)) continue;
       const agent = agentByNode.get(row.id) as any | undefined;
       const node: AgentGraphNode = {
         id: row.id,
