@@ -63,7 +63,7 @@ export function Header() {
               backgroundColor: 'rgba(79,152,163,0.1)',
             }}
           >
-            F0
+            F2
           </span>
         </div>
 
@@ -71,7 +71,8 @@ export function Header() {
         <nav className="hidden sm:flex items-center gap-6">
           {(
             [
-              ['/', 'Status'],
+              ['/', 'Agent Graph'],
+              ['/status', 'Status'],
               ['/health', 'Health'],
               ['/version', 'Version'],
             ] as const
