@@ -12,7 +12,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { AgentService, type CreateAgentDto, type PatchAgentDto } from './agent.service';
+import { AgentService, type CreateAgentDto, type HierarchyNodeDto, type PatchAgentDto, type PatchHierarchyNodeDto, type ReparentHierarchyNodeDto } from './agent.service';
 import type { Principal } from '../auth/types/principal';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantScopeGuard } from '../auth/guards/tenant-scope.guard';
@@ -47,6 +47,41 @@ export class AgentController {
   create(@Body() body: CreateAgentDto, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.create(p.tenantId, p.sub, body);
+  }
+
+  @Get('graph')
+  @RequireScopes('agents:read')
+  graph(@Req() req: OctoRequest & { user?: Principal }) {
+    const p = mustPrincipal(req);
+    return this.service.graph(p.tenantId);
+  }
+
+  @Get('nodes/:nodeId')
+  @RequireScopes('agents:read')
+  nodeDetail(@Param('nodeId') nodeId: string, @Req() req: OctoRequest & { user?: Principal }) {
+    const p = mustPrincipal(req);
+    return this.service.nodeDetail(p.tenantId, nodeId);
+  }
+
+  @Post('nodes')
+  @RequireScopes('agents:write')
+  createNode(@Body() body: HierarchyNodeDto, @Req() req: OctoRequest & { user?: Principal }) {
+    const p = mustPrincipal(req);
+    return this.service.createNode(p.tenantId, body);
+  }
+
+  @Patch('nodes/:nodeId')
+  @RequireScopes('agents:write')
+  patchNode(@Param('nodeId') nodeId: string, @Body() body: PatchHierarchyNodeDto, @Req() req: OctoRequest & { user?: Principal }) {
+    const p = mustPrincipal(req);
+    return this.service.patchNode(p.tenantId, nodeId, body);
+  }
+
+  @Patch('nodes/:nodeId/parent')
+  @RequireScopes('agents:write')
+  reparentNode(@Param('nodeId') nodeId: string, @Body() body: ReparentHierarchyNodeDto, @Req() req: OctoRequest & { user?: Principal }) {
+    const p = mustPrincipal(req);
+    return this.service.reparentNode(p.tenantId, nodeId, body);
   }
 
   @Get()

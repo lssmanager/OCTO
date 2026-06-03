@@ -12,6 +12,11 @@ function build(overrides?: Partial<any>) {
     listAgentVersions: vi.fn(async () => [{ id: 'v1', version: 1 }]),
     getLatestAgentVersion: vi.fn(async () => ({ id: 'v1' })),
     resolveEffectivePolicySnapshot: vi.fn(async () => ({ maxSteps: 10 })),
+    getAgentGraph: vi.fn(async () => [{ id: 'n1' }]),
+    getHierarchyNodeDetail: vi.fn(async () => ({ id: 'n1' })),
+    createHierarchyNodeTx: vi.fn(async () => ({ id: 'n2' })),
+    patchHierarchyNodeTx: vi.fn(async () => ({ id: 'n1' })),
+    reparentHierarchyNodeTx: vi.fn(async () => ({ id: 'n1' })),
     ...overrides,
   };
   const policy = { resolveEffectivePolicies: vi.fn(async () => ({ agentId: "a1" })) };
@@ -27,6 +32,11 @@ describe('AgentService', () => {
     await expect(svc.patch('t1','a1',{name:'x'},'u1')).resolves.toEqual({ id: 'a1' });
     await expect(svc.delete('t1','a1','u1')).resolves.toEqual({ deleted: true });
     await expect(svc.versions('t1','a1')).resolves.toHaveLength(1);
+    await expect(svc.graph('t1')).resolves.toHaveLength(1);
+    await expect(svc.nodeDetail('t1','n1')).resolves.toEqual({ id: 'n1' });
+    await expect(svc.createNode('t1',{ name: 'Agency', level: 'agency' })).resolves.toEqual({ id: 'n2' });
+    await expect(svc.patchNode('t1','n1',{ name: 'Agency 2' })).resolves.toEqual({ id: 'n1' });
+    await expect(svc.reparentNode('t1','n1',{ parentId: null })).resolves.toEqual({ id: 'n1' });
   });
 
   it('returns 404 semantics', async () => {

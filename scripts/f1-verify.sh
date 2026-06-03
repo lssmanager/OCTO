@@ -31,6 +31,9 @@ run_common_checks() {
   log "F1 ${MODE}: API unit tests"
   pnpm -s --filter @octo/api test -- --runInBand
 
+  log "F2 ${MODE}: Agent Graph unit/integration contract"
+  pnpm -s --filter @octo/api test -- src/agents/agent-graph.integration.test.ts
+
   log "F1 ${MODE}: scheduler build"
   pnpm --filter @octo/scheduler-worker build
 
@@ -162,6 +165,9 @@ run_close_gate() {
 
   log "F1 close: strict end-to-end smoke"
   DATABASE_URL="$F1_COMPOSE_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" bash scripts/f1-smoke.sh --strict
+
+  log "F2 close: Agent Graph smoke"
+  API_URL="http://localhost:3001" JWT_SECRET="${JWT_SECRET}" JWT_KID="${JWT_KID}" bash scripts/f2-agent-graph-smoke.sh
 
   log "F1 close gate passed"
   trap - EXIT

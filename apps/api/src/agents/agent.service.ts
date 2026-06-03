@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AgentPolicyResolverService } from './agent-policy-resolver.service';
 
 export type AgentRecord = {
@@ -27,6 +27,43 @@ export type AgentVersionRecord = {
   createdAt: Date;
 };
 
+export type HierarchyLevelDto = 'agency' | 'department' | 'workspace' | 'agent';
+
+export type HierarchyNodeDto = {
+  name: string;
+  slug?: string;
+  level: HierarchyLevelDto;
+  parentId?: string | null;
+  activationState?: 'active' | 'inactive' | 'suspended' | 'archived';
+  modelPolicy?: Record<string, unknown>;
+  toolPolicy?: Record<string, unknown>;
+  budgetPolicy?: Record<string, unknown>;
+  governance?: Record<string, unknown>;
+  coreFiles?: unknown[];
+  memoryPolicy?: Record<string, unknown>;
+};
+
+export type PatchHierarchyNodeDto = Partial<Omit<HierarchyNodeDto, 'level'>>;
+export type ReparentHierarchyNodeDto = { parentId: string | null };
+
+export type AgentGraphNode = {
+  id: string;
+  tenantId: string;
+  level: HierarchyLevelDto;
+  name: string;
+  slug: string;
+  parentId: string | null;
+  activationState: string;
+  runtimeStatus: string | null;
+  agent: Pick<AgentRecord, 'id' | 'name' | 'role' | 'goal' | 'status' | 'capabilities' | 'governancePolicy' | 'metadata'> | null;
+  localPolicies: Record<string, unknown>;
+  effectivePolicies: Record<string, unknown>;
+  effectiveCapabilities: unknown[];
+  children: AgentGraphNode[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type CreateAgentDto = {
   name: string;
   description?: string;
@@ -36,7 +73,7 @@ export type CreateAgentDto = {
   capabilities?: unknown;
   governancePolicy?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
-  hierarchyLevel?: 'agent' | 'subagent';
+  hierarchyLevel?: 'agent';
   hierarchyParentId?: string | null;
   activationState?: 'active' | 'inactive' | 'suspended' | 'archived';
   modelPolicy?: Record<string, unknown>;
@@ -61,6 +98,11 @@ export class AgentService {
       listAgentVersions: (tenantId: string, agentId: string, limit: number) => Promise<AgentVersionRecord[]>;
       getLatestAgentVersion: (tenantId: string, agentId: string) => Promise<AgentVersionRecord | null>;
       resolveEffectivePolicySnapshot: (tenantId: string, agentId: string) => Promise<Record<string, unknown> | null>;
+      getAgentGraph: (tenantId: string) => Promise<AgentGraphNode[]>;
+      getHierarchyNodeDetail: (tenantId: string, nodeId: string) => Promise<AgentGraphNode | null>;
+      createHierarchyNodeTx: (tenantId: string, input: HierarchyNodeDto) => Promise<AgentGraphNode>;
+      patchHierarchyNodeTx: (tenantId: string, nodeId: string, input: PatchHierarchyNodeDto) => Promise<AgentGraphNode | null>;
+      reparentHierarchyNodeTx: (tenantId: string, nodeId: string, input: ReparentHierarchyNodeDto) => Promise<AgentGraphNode | null>;
     },
     private readonly policyResolver: AgentPolicyResolverService
   ) {}
@@ -77,4 +119,30 @@ export class AgentService {
     return this.policyResolver.resolveEffectivePolicies(tenantId, id);
   }
   async getLatestVersionSnapshot(tenantId: string, id: string) { const v = await this.repo.getLatestAgentVersion(tenantId, id); if (!v) throw new NotFoundException('agent_not_found'); return v; }
+  graph(tenantId: string) { return this.repo.getAgentGraph(tenantId); }
+
+  async nodeDetail(tenantId: string, nodeId: string) {
+    const node = await this.repo.getHierarchyNodeDetail(tenantId, nodeId);
+    if (!node) throw new NotFoundException('hierarchy_node_not_found');
+    return node;
+  }
+
+  createNode(tenantId: string, input: HierarchyNodeDto) {
+    if (input.level === 'agent') {
+      throw new BadRequestException('agent_nodes_are_created_with_agents_endpoint');
+    }
+    return this.repo.createHierarchyNodeTx(tenantId, input);
+  }
+
+  async patchNode(tenantId: string, nodeId: string, input: PatchHierarchyNodeDto) {
+    const node = await this.repo.patchHierarchyNodeTx(tenantId, nodeId, input);
+    if (!node) throw new NotFoundException('hierarchy_node_not_found');
+    return node;
+  }
+
+  async reparentNode(tenantId: string, nodeId: string, input: ReparentHierarchyNodeDto) {
+    const node = await this.repo.reparentHierarchyNodeTx(tenantId, nodeId, input);
+    if (!node) throw new NotFoundException('hierarchy_node_not_found');
+    return node;
+  }
 }
