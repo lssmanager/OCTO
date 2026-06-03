@@ -94,10 +94,10 @@ export class HealthController {
   version(): Record<string, string> {
     return {
       service: 'octo-api',
-      version: process.env['BUILD_VERSION'] ?? 'unknown',
-      commit: process.env['BUILD_COMMIT'] ?? 'unknown',
-      phase: process.env['BUILD_PHASE'] ?? 'F0',
-      built_at: process.env['BUILD_TIME'] ?? 'unknown',
+      version: process.env['BUILD_VERSION'] ?? '0.1.0-f1',
+      commit: process.env['BUILD_COMMIT'] ?? 'local',
+      phase: process.env['BUILD_PHASE'] ?? 'F1',
+      built_at: process.env['BUILD_TIME'] ?? 'local',
       node: process.version,
     };
   }

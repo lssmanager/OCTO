@@ -3,6 +3,8 @@
 #
 # Coolify: apunta a este archivo como "Docker Compose" source.
 # Todas las variables con ${VAR} se inyectan desde Coolify → Environment Variables.
+# F1 issue #263: this stack exposes the API on container port 3001 and
+# intentionally does not define an apps/web service.
 #
 # ADR F0-014 (Dockerfile strategy), F0-016 (env config), F0-004 (database)
 # Principios Arquitectónicos OCTO: #1 (Control/Execution plane separation),
@@ -83,10 +85,11 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
       args:
-        BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f0}
-        BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
-        BUILD_PHASE: ${BUILD_PHASE:-F0}
-        BUILD_TIME: ${BUILD_TIME:-unknown}
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-local}
+        BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f1}
+        BUILD_COMMIT: ${BUILD_COMMIT:-${SOURCE_COMMIT:-local}}
+        BUILD_PHASE: ${BUILD_PHASE:-F1}
+        BUILD_TIME: ${BUILD_TIME:-local}
     container_name: octo-api
     environment:
       # Server
@@ -113,10 +116,10 @@ services:
       # CORS
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       # Build info
-      BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f0}
-      BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
-      BUILD_PHASE: ${BUILD_PHASE:-F0}
-      BUILD_TIME: ${BUILD_TIME:-unknown}
+      BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f1}
+      BUILD_COMMIT: ${BUILD_COMMIT:-${SOURCE_COMMIT:-local}}
+      BUILD_PHASE: ${BUILD_PHASE:-F1}
+      BUILD_TIME: ${BUILD_TIME:-local}
     ports:
       - '${PORT:-3001}:3001'
     depends_on:
@@ -157,9 +160,10 @@ services:
       context: .
       dockerfile: docker/runtime-worker.Dockerfile
       args:
-        BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f0}
-        BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
-        BUILD_PHASE: ${BUILD_PHASE:-F0}
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-local}
+        BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f1}
+        BUILD_COMMIT: ${BUILD_COMMIT:-${SOURCE_COMMIT:-local}}
+        BUILD_PHASE: ${BUILD_PHASE:-F1}
     container_name: octo-runtime-worker
     environment:
       # Inter-service auth (debe coincidir con RUNTIME_API_SECRET de la API)
@@ -177,7 +181,7 @@ services:
       # OTEL
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME_WORKER:-octo-runtime-worker}
-      OTEL_SERVICE_VERSION: ${BUILD_VERSION:-0.1.0-f0}
+      OTEL_SERVICE_VERSION: ${BUILD_VERSION:-0.1.0-f1}
       OTEL_ENABLED: ${OTEL_ENABLED:-true}
       OCTO_TEST_LLM_FAKE: ${OCTO_TEST_LLM_FAKE:-false}
       # Logging
@@ -188,9 +192,9 @@ services:
       EXECUTION_TIMEOUT_SECS: ${EXECUTION_TIMEOUT_SECS:-300}
       MAX_EXECUTION_TIMEOUT_MS: ${MAX_EXECUTION_TIMEOUT_MS:-300000}
       # Build info
-      BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f0}
-      BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
-      BUILD_PHASE: ${BUILD_PHASE:-F0}
+      BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f1}
+      BUILD_COMMIT: ${BUILD_COMMIT:-${SOURCE_COMMIT:-local}}
+      BUILD_PHASE: ${BUILD_PHASE:-F1}
     ports:
       - '${WORKER_PORT:-8000}:8000'
     depends_on:

@@ -43,9 +43,10 @@ export const apiConfigSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
 
   // Build info — injected by CI, safe defaults for local
-  BUILD_VERSION: z.string().default('0.0.1-f0'),
-  BUILD_COMMIT: z.string().default('unknown'),
-  BUILD_PHASE: z.string().default('F0'),
+  BUILD_VERSION: z.string().default('0.1.0-f1'),
+  BUILD_COMMIT: z.string().default('local'),
+  BUILD_PHASE: z.string().default('F1'),
+  BUILD_TIME: z.string().default('local'),
 });
 
 export type ApiConfig = z.infer<typeof apiConfigSchema>;

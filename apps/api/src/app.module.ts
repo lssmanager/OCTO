@@ -19,6 +19,7 @@ import { BullBoardModule } from './admin/bullboard.module';
 import { HealthModule } from './health/health.module';
 import { OpsModule } from './ops/ops.module';
 import { MetricsController } from './metrics.controller';
+import { PublicStatusController } from './public-status.controller';
 import { ExecutionModule } from './execution/execution.module';
 import { AgentModule } from './agents/agent.module';
 import { JwtAuthModule } from './auth/jwt-auth.module';
@@ -28,8 +29,17 @@ import { RuntimeModule } from './runtime/runtime.module';
 export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
 
 @Module({
-  imports: [SecurityModule, HealthModule, OpsModule, BullBoardModule, ExecutionModule, AgentModule, JwtAuthModule, RuntimeModule],
-  controllers: [MetricsController],
+  imports: [
+    SecurityModule,
+    HealthModule,
+    OpsModule,
+    BullBoardModule,
+    ExecutionModule,
+    AgentModule,
+    JwtAuthModule,
+    RuntimeModule,
+  ],
+  controllers: [PublicStatusController, MetricsController],
   providers: [
     {
       provide: CONFIG_TOKEN,

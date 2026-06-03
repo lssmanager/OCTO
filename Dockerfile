@@ -7,7 +7,7 @@
 # turbo prune requires pnpm-lock.yaml and all workspace package.json
 # files to be present — they live at the repo root, not in apps/api/.
 #
-# SOURCE OF TRUTH: apps/api/Dockerfile (canonical for the API)
+# SOURCE OF TRUTH: docker/api.Dockerfile (canonical for docker-compose API builds)
 # Worker Dockerfiles live in docker/<service-name>/Dockerfile.
 #
 # SECURITY: Runtime secrets (DATABASE_URL, REDIS_URL, JWT_SECRET, etc.)
@@ -60,10 +60,11 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 
 COPY --from=pruner /app/out/full/ .
 
-ARG BUILD_VERSION=unknown
-ARG BUILD_COMMIT=unknown
-ARG BUILD_PHASE=F0
-ARG BUILD_TIME=unknown
+ARG SOURCE_COMMIT=local
+ARG BUILD_VERSION=0.1.0-f1
+ARG BUILD_COMMIT=${SOURCE_COMMIT}
+ARG BUILD_PHASE=F1
+ARG BUILD_TIME=local
 
 # The guard now lives in apps/api/src/admin/internal-secret.guard.ts —
 # compiled directly into apps/api dist/. No pnpm store indirection.
@@ -105,15 +106,14 @@ USER octo
 
 EXPOSE 3001
 
-# HEALTHCHECK temporarily disabled until /api/health/live confirms 200.
-# Re-enable after this deploy is verified.
-# HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-#   CMD curl -f http://localhost:3001/api/health/live || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:3001/api/health/live || exit 1
 
-ARG BUILD_VERSION=unknown
-ARG BUILD_COMMIT=unknown
-ARG BUILD_PHASE=F0
-ARG BUILD_TIME=unknown
+ARG SOURCE_COMMIT=local
+ARG BUILD_VERSION=0.1.0-f1
+ARG BUILD_COMMIT=${SOURCE_COMMIT}
+ARG BUILD_PHASE=F1
+ARG BUILD_TIME=local
 
 ENV BUILD_VERSION=${BUILD_VERSION} \
     BUILD_COMMIT=${BUILD_COMMIT} \

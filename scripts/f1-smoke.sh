@@ -12,6 +12,8 @@ else
 fi
 
 API_URL="${API_URL:-http://localhost:3001/api}"
+API_ROOT_URL="${API_ROOT_URL:-${API_URL%/api}}"
+F1_PUBLIC_URL="${F1_PUBLIC_URL:-}"
 RUNTIME_URL="${RUNTIME_PUBLIC_URL:-http://localhost:8000}"
 SCHEDULER_URL="${SCHEDULER_PUBLIC_URL:-http://localhost:3003}"
 OUTBOX_URL="${OUTBOX_PUBLIC_URL:-http://localhost:3010}"
@@ -31,7 +33,7 @@ docker_compose_available() { command -v docker >/dev/null 2>&1 && docker compose
 
 diagnostics() {
   echo "--- endpoint diagnostics ---"
-  for url in "$API_URL/health/ready" "$RUNTIME_URL/health/ready" "$SCHEDULER_URL/health/status" "$OUTBOX_URL/status" "$RECLAIMER_URL/health/status"; do
+  for url in "$API_ROOT_URL/" "$API_URL/health/live" "$API_URL/health/ready" "$API_URL/health/version" "$RUNTIME_URL/health/ready" "$SCHEDULER_URL/health/status" "$OUTBOX_URL/status" "$RECLAIMER_URL/health/status"; do
     echo "# $url"
     curl -fsS "$url" || true
     echo
@@ -42,6 +44,47 @@ diagnostics() {
     echo "--- recent worker logs ---"
     docker compose logs --tail=120 api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker postgres redis || true
   fi
+}
+
+assert_root_surface() {
+  local name="$1" url="$2" body_file status
+  body_file="$(mktemp)"
+  log "checking ${name}: ${url}"
+  status="$(curl -sS -o "$body_file" -w '%{http_code}' "$url" || true)"
+  if [[ "$status" != "200" ]]; then
+    cat "$body_file" >&2 || true
+    rm -f "$body_file"
+    fail "${name} must return HTTP 200 (got ${status:-curl-error})"
+  fi
+  if grep -qi 'Cannot GET /' "$body_file"; then
+    cat "$body_file" >&2 || true
+    rm -f "$body_file"
+    fail "${name} returned the NestJS missing-root response"
+  fi
+  if ! grep -qi 'OCTO' "$body_file"; then
+    cat "$body_file" >&2 || true
+    rm -f "$body_file"
+    fail "${name} does not expose the OCTO operational surface"
+  fi
+  rm -f "$body_file"
+}
+
+assert_version_metadata() {
+  local file phase version commit built_at
+  file="$(mktemp)"
+  log "checking API version metadata: $API_URL/health/version"
+  curl -fsS "$API_URL/health/version" -o "$file"
+  phase="$(json_field "$file" phase)"
+  version="$(json_field "$file" version)"
+  commit="$(json_field "$file" commit)"
+  built_at="$(json_field "$file" built_at)"
+  if [[ "$MODE" == "strict" || "${F1_CLOSE_GATE:-0}" == "1" ]]; then
+    [[ "$phase" == "F1" ]] || { rm -f "$file"; fail "strict F1 smoke requires phase=F1 (got ${phase})"; }
+    [[ "$version" != "unknown" && -n "$version" ]] || { rm -f "$file"; fail "strict F1 smoke requires non-unknown version"; }
+    [[ "$commit" != "unknown" && -n "$commit" ]] || { rm -f "$file"; fail "strict F1 smoke requires non-unknown commit"; }
+    [[ "$built_at" != "unknown" && -n "$built_at" ]] || { rm -f "$file"; fail "strict F1 smoke requires non-unknown built_at"; }
+  fi
+  rm -f "$file"
 }
 
 wait_http() {
@@ -285,9 +328,15 @@ wait_reclaim_completed() {
 }
 
 run_health_smoke() {
-  log "F1 smoke: health endpoints"
+  log "F1 smoke: public surface and health endpoints"
+  assert_root_surface "API root surface" "$API_ROOT_URL/"
+  if [[ -n "$F1_PUBLIC_URL" ]]; then
+    assert_root_surface "public root surface" "$F1_PUBLIC_URL"
+  fi
   wait_http "API live" "$API_URL/health/live"
   wait_http "API ready" "$API_URL/health/ready"
+  wait_http "API version" "$API_URL/health/version"
+  assert_version_metadata
   wait_http "runtime live" "$RUNTIME_URL/health/live"
   wait_http "scheduler live" "$SCHEDULER_URL/health/live"
   wait_http "scheduler ready" "$SCHEDULER_URL/health/ready"
