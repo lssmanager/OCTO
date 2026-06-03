@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class ModelPolicy(BaseModel):
@@ -19,7 +19,9 @@ class ModelPolicy(BaseModel):
     allowed_models: Annotated[list[str], Field(alias='allowedModels')] = []
     registered_models: Annotated[list[str], Field(alias='registeredModels')] = []
     temperature: Annotated[float, Field(ge=0.0, le=2.0)] = 0.2
-    max_output_tokens: Annotated[int, Field(alias='maxOutputTokens')] = 2048
+    max_output_tokens: Annotated[
+        int, Field(alias='maxOutputTokens', ge=-9007199254740991, le=9007199254740991)
+    ] = 2048
 
 
 class ToolPolicy(BaseModel):
@@ -68,7 +70,10 @@ class ConfigJson(BaseModel):
     model_policy: Annotated[ModelPolicy, Field(alias='modelPolicy')]
     tool_policy: Annotated[ToolPolicy, Field(alias='toolPolicy')]
     budget_policy: Annotated[BudgetPolicy, Field(alias='budgetPolicy')]
-    execution_timeout_ms: Annotated[int, Field(alias='executionTimeoutMs')] = 900000
+    execution_timeout_ms: Annotated[
+        int,
+        Field(alias='executionTimeoutMs', ge=-9007199254740991, le=9007199254740991),
+    ] = 900000
 
 
 class AgentVersionSchema(BaseModel):
@@ -78,10 +83,6 @@ class AgentVersionSchema(BaseModel):
     id: str
     tenant_id: Annotated[str, Field(alias='tenantId')]
     agent_id: Annotated[str, Field(alias='agentId')]
-    version: int
+    version: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
     config_json: Annotated[ConfigJson, Field(alias='configJson')]
     created_at: Annotated[AwareDatetime, Field(alias='createdAt')]
-
-
-class Model(RootModel[AgentVersionSchema]):
-    root: AgentVersionSchema

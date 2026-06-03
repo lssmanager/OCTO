@@ -1,109 +1,125 @@
 {
-  "$ref": "#/definitions/ExecutionStepSchema",
-  "definitions": {
-    "ExecutionStepSchema": {
-      "type": "object",
-      "properties": {
-        "id": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "tenantId": {
+      "type": "string"
+    },
+    "executionId": {
+      "type": "string"
+    },
+    "stepIndex": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "stepType": {
+      "type": "string"
+    },
+    "stateFrom": {
+      "anyOf": [
+        {
           "type": "string"
         },
-        "tenantId": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stateTo": {
+      "anyOf": [
+        {
           "type": "string"
         },
-        "executionId": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED",
+        "TIMED_OUT",
+        "CANCELLED",
+        "SKIPPED"
+      ]
+    },
+    "inputJson": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {}
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "outputJson": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {}
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorCode": {
+      "anyOf": [
+        {
           "type": "string"
         },
-        "stepIndex": {
-          "type": "integer"
-        },
-        "stepType": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorMessage": {
+      "anyOf": [
+        {
           "type": "string"
         },
-        "stateFrom": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "stateTo": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "PENDING",
-            "RUNNING",
-            "SUCCEEDED",
-            "FAILED",
-            "TIMED_OUT",
-            "CANCELLED",
-            "SKIPPED"
-          ]
-        },
-        "inputJson": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": {}
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "outputJson": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": {}
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "errorCode": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "errorMessage": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "startedAt": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endedAt": {
+      "anyOf": [
+        {
           "type": "string",
           "format": "date-time"
         },
-        "endedAt": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        {
+          "type": "null"
         }
-      },
-      "required": [
-        "id",
-        "tenantId",
-        "executionId",
-        "stepIndex",
-        "stepType",
-        "status",
-        "startedAt"
-      ],
-      "additionalProperties": false
+      ]
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#"
+  "required": [
+    "id",
+    "tenantId",
+    "executionId",
+    "stepIndex",
+    "stepType",
+    "status",
+    "startedAt"
+  ],
+  "additionalProperties": false,
+  "title": "ExecutionStepSchema"
 }

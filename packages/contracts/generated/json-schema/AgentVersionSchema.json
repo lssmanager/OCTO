@@ -1,186 +1,188 @@
 {
-  "$ref": "#/definitions/AgentVersionSchema",
-  "definitions": {
-    "AgentVersionSchema": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "tenantId": {
+      "type": "string"
+    },
+    "agentId": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "configJson": {
       "type": "object",
       "properties": {
-        "id": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "instructions": {
           "type": "string"
         },
-        "tenantId": {
+        "workspaceId": {
           "type": "string"
         },
-        "agentId": {
-          "type": "string"
-        },
-        "version": {
-          "type": "integer"
-        },
-        "configJson": {
+        "modelPolicy": {
           "type": "object",
           "properties": {
-            "name": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            },
-            "instructions": {
+            "primaryModel": {
               "type": "string"
             },
-            "workspaceId": {
-              "type": "string"
+            "fallbackModels": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
-            "modelPolicy": {
-              "type": "object",
-              "properties": {
-                "primaryModel": {
-                  "type": "string"
-                },
-                "fallbackModels": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "default": []
-                },
-                "fallbackChain": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "default": []
-                },
-                "allowedModels": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "default": []
-                },
-                "registeredModels": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "default": []
-                },
-                "temperature": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 2,
-                  "default": 0.2
-                },
-                "maxOutputTokens": {
-                  "type": "integer",
-                  "default": 2048
-                }
-              },
-              "required": [
-                "primaryModel"
-              ],
-              "additionalProperties": false
+            "fallbackChain": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
-            "toolPolicy": {
-              "type": "object",
-              "properties": {
-                "allow": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "deny": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "default": []
-                },
-                "requireApprovalFor": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "default": []
-                }
-              },
-              "required": [
-                "allow"
-              ],
-              "additionalProperties": false
+            "allowedModels": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
-            "budgetPolicy": {
-              "type": "object",
-              "properties": {
-                "maxUsdPerRun": {
-                  "type": "string",
-                  "pattern": "^\\d+\\.\\d{2}$"
-                },
-                "maxUsdPerDay": {
-                  "type": "string",
-                  "pattern": "^\\d+\\.\\d{2}$"
-                },
-                "minReservedCostUsd": {
-                  "type": "string",
-                  "pattern": "^\\d+(\\.\\d+)?$",
-                  "default": "0.000001"
-                },
-                "currentSpendUsd": {
-                  "type": "string",
-                  "pattern": "^\\d+(\\.\\d+)?$",
-                  "default": "0"
-                },
-                "onExhaust": {
-                  "type": "string",
-                  "enum": [
-                    "fail",
-                    "block",
-                    "warn",
-                    "require_approval"
-                  ],
-                  "default": "fail"
-                },
-                "hardStop": {
-                  "type": "boolean",
-                  "default": true
-                }
-              },
-              "required": [
-                "maxUsdPerRun",
-                "maxUsdPerDay"
-              ],
-              "additionalProperties": false
+            "registeredModels": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
-            "executionTimeoutMs": {
+            "temperature": {
+              "default": 0.2,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "maxOutputTokens": {
+              "default": 2048,
               "type": "integer",
-              "default": 900000
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "required": [
-            "name",
-            "instructions",
-            "workspaceId",
-            "modelPolicy",
-            "toolPolicy",
-            "budgetPolicy"
+            "primaryModel"
           ],
           "additionalProperties": false
         },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
+        "toolPolicy": {
+          "type": "object",
+          "properties": {
+            "allow": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "deny": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "requireApprovalFor": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "allow"
+          ],
+          "additionalProperties": false
+        },
+        "budgetPolicy": {
+          "type": "object",
+          "properties": {
+            "maxUsdPerRun": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d{2}$"
+            },
+            "maxUsdPerDay": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d{2}$"
+            },
+            "minReservedCostUsd": {
+              "default": "0.000001",
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?$"
+            },
+            "currentSpendUsd": {
+              "default": "0",
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?$"
+            },
+            "onExhaust": {
+              "default": "fail",
+              "type": "string",
+              "enum": [
+                "fail",
+                "block",
+                "warn",
+                "require_approval"
+              ]
+            },
+            "hardStop": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "maxUsdPerRun",
+            "maxUsdPerDay"
+          ],
+          "additionalProperties": false
+        },
+        "executionTimeoutMs": {
+          "default": 900000,
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         }
       },
       "required": [
-        "id",
-        "tenantId",
-        "agentId",
-        "version",
-        "configJson",
-        "createdAt"
+        "name",
+        "instructions",
+        "workspaceId",
+        "modelPolicy",
+        "toolPolicy",
+        "budgetPolicy"
       ],
       "additionalProperties": false
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#"
+  "required": [
+    "id",
+    "tenantId",
+    "agentId",
+    "version",
+    "configJson",
+    "createdAt"
+  ],
+  "additionalProperties": false,
+  "title": "AgentVersionSchema"
 }

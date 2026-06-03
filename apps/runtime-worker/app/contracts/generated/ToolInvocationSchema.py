@@ -26,6 +26,10 @@ class Status(StrEnum):
     cancelled = 'CANCELLED'
 
 
+class DurationMs(RootModel[int]):
+    root: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
+
+
 class ToolInvocationSchema(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -44,10 +48,6 @@ class ToolInvocationSchema(BaseModel):
     requires_approval: Annotated[bool, Field(alias='requiresApproval')]
     approval_id: Annotated[str | None, Field(alias='approvalId')] = None
     idempotency_key: Annotated[str, Field(alias='idempotencyKey')]
-    duration_ms: Annotated[int | None, Field(alias='durationMs')] = None
+    duration_ms: Annotated[DurationMs | None, Field(alias='durationMs')] = None
     started_at: Annotated[AwareDatetime, Field(alias='startedAt')]
     ended_at: Annotated[AwareDatetime | None, Field(alias='endedAt')] = None
-
-
-class Model(RootModel[ToolInvocationSchema]):
-    root: ToolInvocationSchema

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CheckpointWriteSchema(BaseModel):
@@ -17,11 +17,9 @@ class CheckpointWriteSchema(BaseModel):
     checkpoint_id: Annotated[str, Field(alias='checkpointId')]
     task_id: Annotated[str, Field(alias='taskId')]
     task_path: Annotated[str, Field(alias='taskPath')]
-    write_index: Annotated[int, Field(alias='writeIndex')]
+    write_index: Annotated[
+        int, Field(alias='writeIndex', ge=-9007199254740991, le=9007199254740991)
+    ]
     channel: str
     type: str | None = None
-    value_json: Annotated[Any | None, Field(alias='valueJson')] = None
-
-
-class Model(RootModel[CheckpointWriteSchema]):
-    root: CheckpointWriteSchema
+    value_json: Annotated[Any, Field(alias='valueJson')]

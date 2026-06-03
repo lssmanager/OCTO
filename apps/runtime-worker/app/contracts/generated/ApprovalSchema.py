@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class Kind(StrEnum):
@@ -43,7 +43,3 @@ class ApprovalSchema(BaseModel):
     resolution_json: Annotated[dict[str, Any] | None, Field(alias='resolutionJson')] = (
         None
     )
-
-
-class Model(RootModel[ApprovalSchema]):
-    root: ApprovalSchema

@@ -170,7 +170,6 @@ export * from './events';
 export * from './hierarchy';
 export * from './memory';
 
-
 // F1-CTR-001 — Execution/checkpoint Zod contracts
 export {
   ExecutionStateSchema,
@@ -192,7 +191,6 @@ export type {
   CheckpointWrite,
 } from './zod';
 
-
 export {
   ToolKindSchema,
   ToolInvocationStatusSchema,
@@ -209,6 +207,16 @@ export {
   BudgetPolicySchema,
   AgentConfigSchema,
   AgentVersionSchema,
+  CanonicalChatMessageSchema,
+  CanonicalToolDefinitionSchema,
+  PromptCachePolicySchema,
+  ChatCompletionRequestSchema,
+  ChatCompletionResponseSchema,
+  ChatUsageSchema,
+  ToolDefinitionSchema,
+  ToolExecutionRequestSchema,
+  ToolExecutionResultSchema,
+  ExecutionContextSchema,
 } from './zod';
 
 export type {
@@ -227,6 +235,16 @@ export type {
   BudgetPolicy,
   AgentConfig,
   AgentVersion as ZodAgentVersion,
+  CanonicalChatMessage,
+  CanonicalToolDefinition,
+  PromptCachePolicy,
+  ChatCompletionRequest as ZodChatCompletionRequest,
+  ChatCompletionResponse as ZodChatCompletionResponse,
+  ChatUsage,
+  ToolDefinition as ZodToolDefinition,
+  ToolExecutionRequest,
+  ToolExecutionResult,
+  ZodExecutionContext,
 } from './zod';
 
 // F1 EventEnvelope contracts

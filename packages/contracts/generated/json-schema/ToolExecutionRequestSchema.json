@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "toolName": {
+      "type": "string"
+    },
+    "argumentsJson": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": {}
+    },
+    "rawToolCallId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "executionMode": {
+      "default": "sync",
+      "type": "string",
+      "enum": [
+        "sync",
+        "async"
+      ]
+    }
+  },
+  "required": [
+    "toolName",
+    "argumentsJson"
+  ],
+  "additionalProperties": false,
+  "title": "ToolExecutionRequestSchema"
+}

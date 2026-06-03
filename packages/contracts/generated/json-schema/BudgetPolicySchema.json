@@ -1,48 +1,44 @@
 {
-  "$ref": "#/definitions/BudgetPolicySchema",
-  "definitions": {
-    "BudgetPolicySchema": {
-      "type": "object",
-      "properties": {
-        "maxUsdPerRun": {
-          "type": "string",
-          "pattern": "^\\d+\\.\\d{2}$"
-        },
-        "maxUsdPerDay": {
-          "type": "string",
-          "pattern": "^\\d+\\.\\d{2}$"
-        },
-        "minReservedCostUsd": {
-          "type": "string",
-          "pattern": "^\\d+(\\.\\d+)?$",
-          "default": "0.000001"
-        },
-        "currentSpendUsd": {
-          "type": "string",
-          "pattern": "^\\d+(\\.\\d+)?$",
-          "default": "0"
-        },
-        "onExhaust": {
-          "type": "string",
-          "enum": [
-            "fail",
-            "block",
-            "warn",
-            "require_approval"
-          ],
-          "default": "fail"
-        },
-        "hardStop": {
-          "type": "boolean",
-          "default": true
-        }
-      },
-      "required": [
-        "maxUsdPerRun",
-        "maxUsdPerDay"
-      ],
-      "additionalProperties": false
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "maxUsdPerRun": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d{2}$"
+    },
+    "maxUsdPerDay": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d{2}$"
+    },
+    "minReservedCostUsd": {
+      "default": "0.000001",
+      "type": "string",
+      "pattern": "^\\d+(\\.\\d+)?$"
+    },
+    "currentSpendUsd": {
+      "default": "0",
+      "type": "string",
+      "pattern": "^\\d+(\\.\\d+)?$"
+    },
+    "onExhaust": {
+      "default": "fail",
+      "type": "string",
+      "enum": [
+        "fail",
+        "block",
+        "warn",
+        "require_approval"
+      ]
+    },
+    "hardStop": {
+      "default": true,
+      "type": "boolean"
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#"
+  "required": [
+    "maxUsdPerRun",
+    "maxUsdPerDay"
+  ],
+  "additionalProperties": false,
+  "title": "BudgetPolicySchema"
 }

@@ -9,7 +9,7 @@ jobs:
   contracts:
     runs-on: ubuntu-latest
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
       - uses: actions/checkout@v6
       # pnpm 11.2.2 requires Node >= 22.13 during action bootstrap.
@@ -32,5 +32,5 @@ jobs:
         run: pnpm contracts:python
       - name: Drift check
         run: pnpm contracts:check
-      - name: Python roundtrip tests
-        run: PYTHONPATH=apps/runtime-worker pytest apps/runtime-worker/tests/contracts -v
+      - name: Contract conformance (TS/Python roundtrip)
+        run: pnpm contracts:conformance

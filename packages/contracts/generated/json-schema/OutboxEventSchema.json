@@ -1,94 +1,93 @@
 {
-  "$ref": "#/definitions/OutboxEventSchema",
-  "definitions": {
-    "OutboxEventSchema": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "tenantId": {
+      "type": "string"
+    },
+    "aggregateType": {
+      "type": "string",
+      "enum": [
+        "execution",
+        "agent",
+        "tool_invocation",
+        "approval"
+      ]
+    },
+    "aggregateId": {
+      "type": "string"
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "ExecutionQueued",
+        "ExecutionDispatched",
+        "ExecutionStarted",
+        "ExecutionStepCompleted",
+        "ExecutionPaused",
+        "ExecutionResumed",
+        "ExecutionReclaiming",
+        "ExecutionReclaimed",
+        "ExecutionRetryScheduled",
+        "ExecutionSucceeded",
+        "ExecutionFailed",
+        "ExecutionCancelled",
+        "ExecutionTimedOut",
+        "ExecutionDLQ",
+        "ToolInvocationStarted",
+        "ToolInvocationSucceeded",
+        "ToolInvocationFailed",
+        "ToolInvocationTimedOut",
+        "ToolApprovalRequested",
+        "LLMCallStarted",
+        "LLMCallCompleted",
+        "LLMCallFailed",
+        "LLMBudgetExceeded",
+        "ApprovalRequested",
+        "ApprovalGranted",
+        "ApprovalDenied",
+        "ApprovalExpired"
+      ]
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "payloadJson": {
       "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "tenantId": {
-          "type": "string"
-        },
-        "aggregateType": {
-          "type": "string",
-          "enum": [
-            "execution",
-            "agent",
-            "tool_invocation",
-            "approval"
-          ]
-        },
-        "aggregateId": {
-          "type": "string"
-        },
-        "eventType": {
-          "type": "string",
-          "enum": [
-            "ExecutionQueued",
-            "ExecutionDispatched",
-            "ExecutionStarted",
-            "ExecutionStepCompleted",
-            "ExecutionPaused",
-            "ExecutionResumed",
-            "ExecutionReclaiming",
-            "ExecutionReclaimed",
-            "ExecutionRetryScheduled",
-            "ExecutionSucceeded",
-            "ExecutionFailed",
-            "ExecutionCancelled",
-            "ExecutionTimedOut",
-            "ExecutionDLQ",
-            "ToolInvocationStarted",
-            "ToolInvocationSucceeded",
-            "ToolInvocationFailed",
-            "ToolInvocationTimedOut",
-            "ToolApprovalRequested",
-            "LLMCallStarted",
-            "LLMCallCompleted",
-            "LLMCallFailed",
-            "LLMBudgetExceeded",
-            "ApprovalRequested",
-            "ApprovalGranted",
-            "ApprovalDenied",
-            "ApprovalExpired"
-          ]
-        },
-        "sequence": {
-          "type": "integer"
-        },
-        "payloadJson": {
-          "type": "object",
-          "additionalProperties": {}
-        },
-        "publishedAt": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "createdAt": {
+      "properties": {},
+      "additionalProperties": {}
+    },
+    "publishedAt": {
+      "anyOf": [
+        {
           "type": "string",
           "format": "date-time"
+        },
+        {
+          "type": "null"
         }
-      },
-      "required": [
-        "id",
-        "tenantId",
-        "aggregateType",
-        "aggregateId",
-        "eventType",
-        "sequence",
-        "payloadJson",
-        "createdAt"
-      ],
-      "additionalProperties": false
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#"
+  "required": [
+    "id",
+    "tenantId",
+    "aggregateType",
+    "aggregateId",
+    "eventType",
+    "sequence",
+    "payloadJson",
+    "createdAt"
+  ],
+  "additionalProperties": false,
+  "title": "OutboxEventSchema"
 }

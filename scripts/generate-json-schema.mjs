@@ -1,24 +1,61 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const contracts = await import(path.join(root, 'packages/contracts/dist/index.mjs'));
+const { z } = await import(path.join(root, 'packages/contracts/node_modules/zod/index.js'));
 const outDir = path.join(root, 'packages/contracts/generated/json-schema');
 const generatedDir = path.join(root, 'packages/contracts/generated');
 
 const required = [
-  'ExecutionSchema','ExecutionStepSchema','ExecutionCheckpointSchema','CheckpointWriteSchema',
-  'AgentVersionSchema','ToolInvocationSchema','ApprovalSchema','OutboxEventSchema','BudgetPolicySchema',
+  'ExecutionSchema',
+  'ExecutionStepSchema',
+  'ExecutionCheckpointSchema',
+  'CheckpointWriteSchema',
+  'AgentVersionSchema',
+  'ToolInvocationSchema',
+  'ApprovalSchema',
+  'OutboxEventSchema',
+  'BudgetPolicySchema',
+  'CanonicalChatMessageSchema',
+  'ChatCompletionRequestSchema',
+  'ChatCompletionResponseSchema',
+  'ChatUsageSchema',
+  'ToolDefinitionSchema',
+  'ToolExecutionRequestSchema',
+  'ToolExecutionResultSchema',
+  'ExecutionContextSchema',
 ];
-const optional = [
-  'ChatCompletionRequestSchema','ChatCompletionResponseSchema','ChatUsageSchema','ToolDefinitionSchema','ToolExecutionRequestSchema','ToolExecutionResultSchema','RetryPolicySchema',
-];
+const optional = ['RetryPolicySchema'];
 
 await fs.mkdir(outDir, { recursive: true });
 await fs.mkdir(generatedDir, { recursive: true });
+
+function removeDefaultedPropertiesFromRequired(value) {
+  if (!value || typeof value !== 'object') return;
+  if (Array.isArray(value.required) && value.properties && typeof value.properties === 'object') {
+    value.required = value.required.filter((propertyName) => {
+      const propertySchema = value.properties[propertyName];
+      return !(propertySchema && typeof propertySchema === 'object' && 'default' in propertySchema);
+    });
+    if (value.required.length === 0) delete value.required;
+  }
+  for (const child of Object.values(value)) {
+    if (Array.isArray(child)) child.forEach(removeDefaultedPropertiesFromRequired);
+    else removeDefaultedPropertiesFromRequired(child);
+  }
+}
+
+function stripDateTimePatterns(value) {
+  if (!value || typeof value !== 'object') return;
+  if (value.format === 'date-time') delete value.pattern;
+  for (const child of Object.values(value)) {
+    if (Array.isArray(child)) child.forEach(stripDateTimePatterns);
+    else stripDateTimePatterns(child);
+  }
+}
 
 for (const name of required) {
   if (!contracts[name]) throw new Error(`Missing required schema export: ${name}`);
@@ -27,10 +64,16 @@ for (const name of required) {
 for (const name of [...required, ...optional]) {
   const schema = contracts[name];
   if (!schema) continue;
-  const json = zodToJsonSchema(schema, { name, target: 'jsonSchema7' });
-  await fs.writeFile(path.join(outDir, `${name}.json`), JSON.stringify(json, null, 2) + '\n', 'utf8');
+  const json = z.toJSONSchema(schema);
+  json.title = name;
+  stripDateTimePatterns(json);
+  removeDefaultedPropertiesFromRequired(json);
+  await fs.writeFile(
+    path.join(outDir, `${name}.json`),
+    JSON.stringify(json, null, 2) + '\n',
+    'utf8'
+  );
 }
-
 
 const executionFsm = {
   statuses: contracts.ExecutionStatusValues,

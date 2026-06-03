@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OnExhaust(StrEnum):
@@ -34,7 +34,3 @@ class BudgetPolicySchema(BaseModel):
     ] = '0'
     on_exhaust: Annotated[OnExhaust, Field(alias='onExhaust')] = 'fail'
     hard_stop: Annotated[bool, Field(alias='hardStop')] = True
-
-
-class Model(RootModel[BudgetPolicySchema]):
-    root: BudgetPolicySchema

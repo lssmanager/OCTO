@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class Source(StrEnum):
@@ -18,10 +18,6 @@ class Source(StrEnum):
     final = 'final'
 
 
-class AdditionalProperties(RootModel[float | str]):
-    root: float | str
-
-
 class ExecutionCheckpointSchema(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
@@ -29,7 +25,9 @@ class ExecutionCheckpointSchema(BaseModel):
     id: str
     execution_id: Annotated[str, Field(alias='executionId')]
     tenant_id: Annotated[str, Field(alias='tenantId')]
-    step_index: Annotated[int, Field(alias='stepIndex')]
+    step_index: Annotated[
+        int, Field(alias='stepIndex', ge=-9007199254740991, le=9007199254740991)
+    ]
     source: Source
     parent_checkpoint_id: Annotated[str | None, Field(alias='parentCheckpointId')] = (
         None
@@ -37,11 +35,7 @@ class ExecutionCheckpointSchema(BaseModel):
     state_json: Annotated[dict[str, Any], Field(alias='stateJson')]
     channel_versions: Annotated[dict[str, float | str], Field(alias='channelVersions')]
     versions_seen: Annotated[
-        dict[str, dict[str, AdditionalProperties]], Field(alias='versionsSeen')
+        dict[str, dict[str, float | str]], Field(alias='versionsSeen')
     ]
     metadata_json: Annotated[dict[str, Any], Field(alias='metadataJson')]
     created_at: Annotated[AwareDatetime, Field(alias='createdAt')]
-
-
-class Model(RootModel[ExecutionCheckpointSchema]):
-    root: ExecutionCheckpointSchema

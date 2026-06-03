@@ -12,25 +12,27 @@ export const ToolInvocationStatusSchema = z.enum([
   'CANCELLED',
 ]);
 
-export const ToolInvocationSchema = z.object({
-  id: z.string(),
-  tenantId: z.string(),
-  executionId: z.string(),
-  stepId: z.string(),
-  toolName: z.string(),
-  toolKind: ToolKindSchema,
-  status: ToolInvocationStatusSchema,
-  argsJson: z.object({}).catchall(z.unknown()),
-  resultJson: z.object({}).catchall(z.unknown()).nullable().optional(),
-  errorCode: z.string().nullable().optional(),
-  errorMessage: z.string().nullable().optional(),
-  requiresApproval: z.boolean(),
-  approvalId: z.string().nullable().optional(),
-  idempotencyKey: z.string(),
-  durationMs: z.number().int().nullable().optional(),
-  startedAt: z.string().datetime(),
-  endedAt: z.string().datetime().nullable().optional(),
-});
+export const ToolInvocationSchema = z
+  .object({
+    id: z.string(),
+    tenantId: z.string(),
+    executionId: z.string(),
+    stepId: z.string(),
+    toolName: z.string(),
+    toolKind: ToolKindSchema,
+    status: ToolInvocationStatusSchema,
+    argsJson: z.object({}).catchall(z.unknown()),
+    resultJson: z.object({}).catchall(z.unknown()).nullable().optional(),
+    errorCode: z.string().nullable().optional(),
+    errorMessage: z.string().nullable().optional(),
+    requiresApproval: z.boolean(),
+    approvalId: z.string().nullable().optional(),
+    idempotencyKey: z.string(),
+    durationMs: z.number().int().nullable().optional(),
+    startedAt: z.string().datetime(),
+    endedAt: z.string().datetime().nullable().optional(),
+  })
+  .strict();
 
 export type ToolKind = z.infer<typeof ToolKindSchema>;
 export type ToolInvocationStatus = z.infer<typeof ToolInvocationStatusSchema>;

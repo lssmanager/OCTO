@@ -1,153 +1,171 @@
 {
-  "$ref": "#/definitions/ExecutionSchema",
-  "definitions": {
-    "ExecutionSchema": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "tenantId": {
+      "type": "string"
+    },
+    "agentId": {
+      "type": "string"
+    },
+    "agentVersionId": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "queued",
+        "dispatched",
+        "running",
+        "waiting_tool",
+        "waiting_human",
+        "retrying",
+        "retry_scheduled",
+        "suspended",
+        "reclaimable",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "inputJson": {
       "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "tenantId": {
-          "type": "string"
-        },
-        "agentId": {
-          "type": "string"
-        },
-        "agentVersionId": {
-          "type": "string"
-        },
-        "state": {
-          "type": "string",
-          "enum": [
-            "pending",
-            "queued",
-            "dispatched",
-            "running",
-            "waiting_tool",
-            "waiting_human",
-            "retrying",
-            "retry_scheduled",
-            "suspended",
-            "reclaimable",
-            "completed",
-            "failed",
-            "cancelled"
-          ]
-        },
-        "version": {
-          "type": "integer"
-        },
-        "inputJson": {
+      "properties": {},
+      "additionalProperties": {}
+    },
+    "outputJson": {
+      "anyOf": [
+        {
           "type": "object",
+          "properties": {},
           "additionalProperties": {}
         },
-        "outputJson": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": {}
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "errorCode": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "errorMessage": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "attemptCount": {
-          "type": "integer"
-        },
-        "reclaimCount": {
-          "type": "integer"
-        },
-        "leaseOwner": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "leaseExpiresAt": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "cancellationRequestedAt": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "date-time"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "budgetSnapshotJson": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": {}
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "contextSnapshotJson": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": {}
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "createdBy": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorCode": {
+      "anyOf": [
+        {
           "type": "string"
         },
-        "createdAt": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errorMessage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "attemptCount": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "reclaimCount": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "leaseOwner": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "leaseExpiresAt": {
+      "anyOf": [
+        {
           "type": "string",
           "format": "date-time"
         },
-        "updatedAt": {
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cancellationRequestedAt": {
+      "anyOf": [
+        {
           "type": "string",
           "format": "date-time"
+        },
+        {
+          "type": "null"
         }
-      },
-      "required": [
-        "id",
-        "tenantId",
-        "agentId",
-        "agentVersionId",
-        "state",
-        "version",
-        "inputJson",
-        "attemptCount",
-        "reclaimCount",
-        "createdBy",
-        "createdAt",
-        "updatedAt"
-      ],
-      "additionalProperties": false
+      ]
+    },
+    "budgetSnapshotJson": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {}
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "contextSnapshotJson": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {}
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdBy": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#"
+  "required": [
+    "id",
+    "tenantId",
+    "agentId",
+    "agentVersionId",
+    "state",
+    "version",
+    "inputJson",
+    "attemptCount",
+    "reclaimCount",
+    "createdBy",
+    "createdAt",
+    "updatedAt"
+  ],
+  "additionalProperties": false,
+  "title": "ExecutionSchema"
 }
