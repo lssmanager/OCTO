@@ -21,37 +21,152 @@ fi
 log() { printf '\n==> %s\n' "$*"; }
 warn() { printf '\n!! %s\n' "$*"; }
 
+REPORT_PATH="${F1_CLOSE_REPORT_PATH:-docs/reports/f1-close-report.md}"
+REPORT_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+REPORT_DECISION="NOT_RUN"
+REPORT_FAILURE_REASON=""
+REPORT_CHECK_NAMES=()
+REPORT_CHECK_RESULTS=()
+REPORT_CHECK_DETAILS=()
+REPORT_URLS=()
+
+append_report_check() {
+  REPORT_CHECK_NAMES+=("$1")
+  REPORT_CHECK_RESULTS+=("$2")
+  REPORT_CHECK_DETAILS+=("$3")
+}
+
+report_escape() {
+  printf '%s' "$1" | sed 's/|/\\|/g'
+}
+
+write_close_report() {
+  [[ "$MODE" == "close" ]] || return 0
+  local ended_at commit branch environment build_version build_commit build_time build_phase report_dir
+  ended_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  commit="$(git rev-parse HEAD 2>/dev/null || printf unknown)"
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf unknown)"
+  environment="node=${NODE_ENV:-unset}; docker=$(docker --version 2>/dev/null || printf unavailable); compose=$(docker compose version 2>/dev/null || printf unavailable)"
+  build_version="${BUILD_VERSION:-unset}"
+  build_commit="${BUILD_COMMIT:-unset}"
+  build_time="${BUILD_TIME:-unset}"
+  build_phase="${BUILD_PHASE:-unset}"
+  report_dir="$(dirname "$REPORT_PATH")"
+  mkdir -p "$report_dir"
+
+  {
+    echo "# F1 Close Gate Report"
+    echo
+    echo "- Started at (UTC): ${REPORT_STARTED_AT}"
+    echo "- Finished at (UTC): ${ended_at}"
+    echo "- Commit SHA: ${commit}"
+    echo "- Branch: ${branch}"
+    echo "- Environment: ${environment}"
+    echo "- Build phase: ${build_phase}"
+    echo "- Build version: ${build_version}"
+    echo "- Build commit: ${build_commit}"
+    echo "- Build time: ${build_time}"
+    echo
+    echo "## Verified public URLs"
+    if (( ${#REPORT_URLS[@]} == 0 )); then
+      echo
+      echo "No public URLs were verified before the gate stopped."
+    else
+      echo
+      for url in "${REPORT_URLS[@]}"; do
+        echo "- ${url}"
+      done
+    fi
+    echo
+    echo "## Check results"
+    echo
+    echo "| Check | Result | Detail |"
+    echo "|---|---|---|"
+    if (( ${#REPORT_CHECK_NAMES[@]} == 0 )); then
+      echo "| close gate bootstrap | NOT_RUN | no checks recorded |"
+    else
+      local i
+      for i in "${!REPORT_CHECK_NAMES[@]}"; do
+        echo "| $(report_escape "${REPORT_CHECK_NAMES[$i]}") | ${REPORT_CHECK_RESULTS[$i]} | $(report_escape "${REPORT_CHECK_DETAILS[$i]}") |"
+      done
+    fi
+    echo
+    echo "## Skip policy"
+    echo
+    echo "Close mode allows no silent skips. Any required check that cannot run is recorded as FAIL and stops the gate."
+    echo
+    echo "## Final decision"
+    echo
+    echo "${REPORT_DECISION}"
+    if [[ -n "$REPORT_FAILURE_REASON" ]]; then
+      echo
+      echo "Failure reason: ${REPORT_FAILURE_REASON}"
+    fi
+  } > "$REPORT_PATH"
+}
+
+run_close_check() {
+  local name="$1"
+  shift
+  log "F1 CLOSE: ${name}"
+  set +e
+  "$@"
+  local status=$?
+  set -e
+  if [[ $status -eq 0 ]]; then
+    append_report_check "$name" "PASS" "$*"
+    return 0
+  fi
+  append_report_check "$name" "FAIL" "$* (exit ${status})"
+  REPORT_DECISION="FAIL"
+  REPORT_FAILURE_REASON="${name} failed with exit ${status}"
+  write_close_report
+  exit "$status"
+}
+
+run_fast_check() {
+  local name="$1"
+  shift
+  log "F1 FAST: ${name}"
+  "$@"
+}
+
+run_mode_check() {
+  if [[ "$MODE" == "close" ]]; then
+    run_close_check "$@"
+  else
+    run_fast_check "$@"
+  fi
+}
+
 run_common_checks() {
-  log "F1 ${MODE}: reproducible workspace build/typecheck gate"
-  pnpm f1:workspace-type-gate
+  run_mode_check "workspace build/typecheck gate" pnpm f1:workspace-type-gate
+  run_mode_check "workspace lint" pnpm lint
+  run_mode_check "API unit tests" pnpm -s --filter @octo/api test -- --runInBand
+  run_mode_check "Agent Graph F1 unit/integration contract" pnpm -s --filter @octo/api test -- src/agents/agent-graph.integration.test.ts
+  run_mode_check "scheduler build" pnpm --filter @octo/scheduler-worker build
+  run_mode_check "runtime-worker unit checks" bash -c 'cd apps/runtime-worker && python -m compileall src && python -m pytest tests/unit/test_llm_provider.py tests/unit/test_tool_registry.py tests/unit/test_tool_executor.py tests/unit/test_tool_policy.py tests/unit/test_reclaim_lineage.py -q'
 
-  log "F1 ${MODE}: lint"
-  pnpm lint
+  run_mode_check "F1 naming guard (no F2 labels in F1 gate scripts)" bash -c 'matches="$(rg -n "F2 close|f2:agent-graph-smoke|f2-agent-graph-smoke" scripts/f1-verify.sh scripts/f1-agent-graph-smoke.sh scripts/f1-smoke.sh || true)"; matches="$(printf "%s\n" "$matches" | rg -v "F1 naming guard" || true)"; test -z "$matches"'
 
-  log "F1 ${MODE}: API unit tests"
-  pnpm -s --filter @octo/api test -- --runInBand
-
-  log "F1 ${MODE}: Agent Graph unit/integration contract"
-  pnpm -s --filter @octo/api test -- src/agents/agent-graph.integration.test.ts
-
-  log "F1 ${MODE}: scheduler build"
-  pnpm --filter @octo/scheduler-worker build
-
-  log "F1 ${MODE}: runtime-worker unit checks"
-  pushd apps/runtime-worker >/dev/null
-  python -m compileall src
-  python -m pytest tests/unit/test_llm_provider.py tests/unit/test_tool_registry.py tests/unit/test_tool_executor.py tests/unit/test_tool_policy.py tests/unit/test_reclaim_lineage.py -q
-  popd >/dev/null
-
-  log "F1 ${MODE}: anti-stub gate"
+  log "F1 ${MODE^^}: anti-stub gate"
   PATTERNS=("not yet implemented" "F0 stub" "stub response" "Execution engine not yet wired" "hardcoded healthy" "TODO F1" "status unknown" "queues: \[\]" "workers: \[\]" "healthy: true")
   TARGETS=(apps/api/src apps/runtime-worker/src apps/scheduler-worker/src apps/reclaimer-worker/src packages)
   for p in "${PATTERNS[@]}"; do
     if rg -n "$p" "${TARGETS[@]}" -g '!**/*.md' -g '!**/tests/**' -g '!apps/runtime-worker/src/routers/execution.py' -g '!apps/runtime-worker/src/execution/engine.py' ; then
       echo "Anti-stub gate failed on pattern: $p"
+      if [[ "$MODE" == "close" ]]; then
+        append_report_check "anti-stub gate" "FAIL" "pattern: $p"
+        REPORT_DECISION="FAIL"
+        REPORT_FAILURE_REASON="anti-stub gate failed on pattern: $p"
+        write_close_report
+      fi
       exit 1
     fi
   done
+  if [[ "$MODE" == "close" ]]; then
+    append_report_check "anti-stub gate" "PASS" "stub/placeholder patterns absent from F1 runtime sources"
+  fi
 }
 
 run_fast_integration_if_available() {
@@ -83,8 +198,8 @@ run_fast_integration_if_available() {
 }
 
 require_close_tooling() {
-  command -v docker >/dev/null 2>&1 || { echo "F1 close gate requires docker" >&2; exit 1; }
-  docker compose version >/dev/null 2>&1 || { echo "F1 close gate requires docker compose" >&2; exit 1; }
+  command -v docker >/dev/null 2>&1 || { echo "F1 close gate requires docker" >&2; return 1; }
+  docker compose version >/dev/null 2>&1 || { echo "F1 close gate requires docker compose" >&2; return 1; }
 }
 
 export_close_defaults() {
@@ -137,8 +252,7 @@ compose_down_clean() {
 }
 
 run_close_gate() {
-  require_close_tooling
-  export_close_defaults
+  REPORT_DECISION="FAIL"
 
   cleanup() {
     local status=$?
@@ -146,46 +260,46 @@ run_close_gate() {
       echo "F1 close gate failed; recent compose status/logs follow" >&2
       compose ps >&2 || true
       compose logs --tail=200 api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker postgres redis litellm >&2 || true
+      if [[ -z "$REPORT_FAILURE_REASON" ]]; then
+        REPORT_FAILURE_REASON="close gate exited with status ${status}"
+      fi
+      REPORT_DECISION="FAIL"
+      write_close_report
     fi
     compose_down_clean
   }
   trap cleanup EXIT
 
-  log "F1 close: reset compose stack and volumes for reproducibility"
-  compose_down_clean
+  run_close_check "reset compose stack and volumes for reproducibility" compose_down_clean
+  run_close_check "start Postgres/Redis for migrations and integration tests" compose up -d postgres redis
+  run_close_check "database migrations via compose migrate service" compose run --rm migrate
+  run_close_check "runtime-worker least-privilege database role smoke" bash scripts/f1-runtime-db-role-smoke.sh --strict
+  run_close_check "integration tests with mandatory DB/Redis" pnpm testintegration
+  run_close_check "tenant isolation gate (API, DB/RLS, queue, scheduler, reclaimer, outbox)" pnpm test:tenant-isolation
+  run_close_check "observability gate (executionId/traceId reconstruction)" pnpm test:observability
+  run_close_check "compose build for full F1 stack" compose build api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker
+  run_close_check "compose up for full F1 stack" compose up -d api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker litellm
 
-  log "F1 close: start Postgres/Redis for migrations and integration tests"
-  compose up -d postgres redis
-  compose run --rm migrate
+  REPORT_URLS+=("${API_ROOT_URL:-http://localhost:3001/}")
+  REPORT_URLS+=("${API_URL:-http://localhost:3001/api}/health/live")
+  REPORT_URLS+=("${API_URL:-http://localhost:3001/api}/health/ready")
+  REPORT_URLS+=("${API_URL:-http://localhost:3001/api}/health/version")
+  run_close_check "strict public/API smoke (root, health, metadata, execution, outbox, workers)" env DATABASE_URL="$F1_COMPOSE_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" bash scripts/f1-smoke.sh --strict
+  run_close_check "Agent Graph F1 smoke" env API_URL="http://localhost:3001/api" JWT_SECRET="${JWT_SECRET}" JWT_KID="${JWT_KID}" bash scripts/f1-agent-graph-smoke.sh
 
-  log "F1 close: runtime-worker least-privilege database role smoke"
-  bash scripts/f1-runtime-db-role-smoke.sh --strict
-
-  log "F1 close: integration tests (DATABASE_URL/REDIS_URL are mandatory in close mode)"
-  pnpm testintegration
-
-  log "F1 close: tenant isolation gate (API, DB/RLS, queue, scheduler, reclaimer, outbox)"
-  pnpm test:tenant-isolation
-
-  log "F1 close: observability gate (executionId/traceId reconstruction)"
-  pnpm test:observability
-
-  log "F1 close: build full compose stack"
-  compose build api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker
-
-  log "F1 close: start full F1 stack"
-  compose up -d api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker litellm
-
-  log "F1 close: strict end-to-end smoke"
-  DATABASE_URL="$F1_COMPOSE_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" bash scripts/f1-smoke.sh --strict
-
-  log "F1 close: Agent Graph smoke"
-  API_URL="http://localhost:3001/api" JWT_SECRET="${JWT_SECRET}" JWT_KID="${JWT_KID}" bash scripts/f1-agent-graph-smoke.sh
-
-  log "F1 close gate passed"
+  REPORT_DECISION="PASS"
+  REPORT_FAILURE_REASON=""
+  write_close_report
+  log "F1 CLOSE: close gate passed; report written to ${REPORT_PATH}"
   trap - EXIT
   compose_down_clean
 }
+
+if [[ "$MODE" == "close" ]]; then
+  export_close_defaults
+  REPORT_DECISION="FAIL"
+  run_close_check "close tooling available (docker and docker compose)" require_close_tooling
+fi
 
 run_common_checks
 if [[ "$MODE" == "close" ]]; then

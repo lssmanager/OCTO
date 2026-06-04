@@ -83,8 +83,27 @@ assert_version_metadata() {
     [[ "$version" != "unknown" && -n "$version" ]] || { rm -f "$file"; fail "strict F1 smoke requires non-unknown version"; }
     [[ "$commit" != "unknown" && -n "$commit" ]] || { rm -f "$file"; fail "strict F1 smoke requires non-unknown commit"; }
     [[ "$built_at" != "unknown" && -n "$built_at" ]] || { rm -f "$file"; fail "strict F1 smoke requires non-unknown built_at"; }
+    assert_root_metadata_matches_version "$file" "$phase" "$version" "$commit" "$built_at"
   fi
   rm -f "$file"
+}
+
+assert_root_metadata_matches_version() {
+  local version_file="$1" phase="$2" version="$3" commit="$4" built_at="$5" root_file commit_short
+  root_file="$(mktemp)"
+  commit_short="$commit"
+  if (( ${#commit_short} > 12 )); then
+    commit_short="${commit_short:0:12}"
+  fi
+  log "checking root public status metadata coherence: $API_ROOT_URL/"
+  curl -fsS "$API_ROOT_URL/" -o "$root_file"
+  grep -qi 'OCTO' "$root_file" || { rm -f "$root_file"; fail "root public status surface is missing OCTO marker"; }
+  grep -q "Phase</dt><dd><code>${phase}</code>" "$root_file" || { rm -f "$root_file"; fail "root public status surface does not report phase ${phase}"; }
+  grep -q "Version</dt><dd><code>${version}</code>" "$root_file" || { rm -f "$root_file"; fail "root public status surface does not report version ${version}"; }
+  grep -q "Commit</dt><dd><code>${commit_short}</code>" "$root_file" || { rm -f "$root_file"; fail "root public status surface does not report commit ${commit_short}"; }
+  grep -q "Built at</dt><dd><code>${built_at}</code>" "$root_file" || { rm -f "$root_file"; fail "root public status surface does not report build time ${built_at}"; }
+  node -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); for (const key of ["phase","version","commit","built_at"]) if (!data[key]) process.exit(1);' "$version_file" || { rm -f "$root_file"; fail "version endpoint metadata is incomplete"; }
+  rm -f "$root_file"
 }
 
 wait_http() {
