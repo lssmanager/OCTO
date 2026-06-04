@@ -172,3 +172,36 @@ curl -i http://localhost:3001/api/health/ready
 curl -s http://localhost:3001/api/health/version
 F1_PUBLIC_URL=https://agents.socialstudies.cloud bash scripts/f1-smoke.sh --health
 ```
+
+## F1 Runtime Worker PostgreSQL role
+
+For issue #266/F1 closeout, Coolify must configure a separate PostgreSQL credential for the `runtime-worker` service. `DATABASE_URL` remains the API/migration/admin DSN; `runtime-worker` uses `RUNTIME_DATABASE_URL`.
+
+Add these as **Environment Variables** (not Build Variables):
+
+| Variable | Example / guidance |
+|---|---|
+| `RUNTIME_POSTGRES_USER` | `octo_runtime` |
+| `RUNTIME_POSTGRES_PASSWORD` | Strong generated secret, different from `POSTGRES_PASSWORD`. |
+| `RUNTIME_DATABASE_URL` | `postgresql://${RUNTIME_POSTGRES_USER}:${RUNTIME_POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}` or the equivalent Coolify internal PostgreSQL host. |
+
+Canonical Coolify flow: the `migrate` service receives `DATABASE_URL`, `RUNTIME_POSTGRES_USER` and `RUNTIME_POSTGRES_PASSWORD`. After schema migrations, `packages/database/src/migrate.ts` bootstraps/validates the runtime role and sets the password from the environment. The SQL migration remains secret-free; it only records the role/grant contract.
+
+If migrations were run outside the Coolify compose `migrate` service, bootstrap the role manually once per database (safe to rerun and useful for password rotation):
+
+```bash
+DATABASE_URL=postgresql://octo:<admin-password>@postgres:5432/octo \
+RUNTIME_POSTGRES_USER=octo_runtime \
+RUNTIME_POSTGRES_PASSWORD=<runtime-password> \
+bash scripts/bootstrap-runtime-db-role.sh
+```
+
+Then verify the production contract:
+
+```bash
+DATABASE_URL=postgresql://octo:<admin-password>@postgres:5432/octo \
+RUNTIME_DATABASE_URL=postgresql://octo_runtime:<runtime-password>@postgres:5432/octo \
+bash scripts/f1-runtime-db-role-smoke.sh --strict
+```
+
+The smoke fails if the runtime DSN is missing, if it reuses the API/migration username, if grants exist outside the F1 runtime table allowlist, if DDL succeeds, or if the role has `BYPASSRLS`/administrative attributes.

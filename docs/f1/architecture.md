@@ -63,4 +63,4 @@ The machine-readable source of truth is `docs/f1/runtime-write-contract.json`; t
 - `worker_heartbeats`
 <!-- runtime-write-contract:end -->
 
-No Runtime Worker code may write to Control Plane owned tables such as `agents`, `agent_versions`, `hierarchy_nodes`, `tenant_memberships`, `audit_log`, `idempotency_keys` or `execution_dlq`. F2+ may move this persistence behind event-sourcing, a Control Plane persistence API or a persistence adapter, but F1 keeps the direct writer under the least-privilege `octo_runtime_worker` role.
+No Runtime Worker code may write to Control Plane owned tables such as `agents`, `agent_versions`, `hierarchy_nodes`, `tenant_memberships`, `audit_log`, `idempotency_keys` or `execution_dlq`. F2+ may move this persistence behind event-sourcing, a Control Plane persistence API or a persistence adapter, but F1 keeps the direct writer under the least-privilege `octo_runtime` role.

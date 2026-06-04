@@ -25,3 +25,45 @@ F1 stops at persisted graph hierarchy and state projection. Runtime execution, s
 - `scripts/f1-verify.sh` labels Agent Graph checks as F1.
 - `scripts/f1-agent-graph-smoke.sh` validates persisted `Agency → Department → Workspace → Agent` creation plus missing-credential, invalid-hierarchy and cross-tenant/nonexistent-node errors against `/api/v1/agents/*`.
 - `scripts/f2-agent-graph-smoke.sh` remains only as a compatibility wrapper around the F1 smoke.
+
+## Runtime Worker PostgreSQL boundary (issue #266)
+
+F1 still permits `apps/runtime-worker` to write directly to PostgreSQL because durable execution progress must survive worker crashes before F2/F3 introduce any broader persistence redesign. Control Plane owns external APIs, authn/authz, tenant policy, execution creation/dispatch and user-facing status; Runtime Worker owns model/tool execution and writes durable runtime progress through this direct PostgreSQL boundary. F2+ may hide or move this persistence behind event-sourcing, a Control Plane API, or a persistence adapter without changing the F1 allowlist. This is a narrow F1 exception, not a general Control Plane bypass: the worker may persist only execution progress, checkpoints, tool/approval records, outbox events and its heartbeat.
+
+The runtime PostgreSQL credential is separate from the API/migration credential. `runtime-worker` must use `RUNTIME_DATABASE_URL`, whose username is `RUNTIME_POSTGRES_USER` (default `octo_runtime`) and whose password comes from `RUNTIME_POSTGRES_PASSWORD`. `DATABASE_URL` remains the API/migration/admin connection and must not be reused by `runtime-worker` in F1 close or production mode.
+
+Allowed F1 runtime tables:
+
+<!-- runtime-write-contract:start -->
+- `approvals`
+- `execution_checkpoint_writes`
+- `execution_checkpoints`
+- `execution_steps`
+- `executions`
+- `outbox_events`
+- `tool_invocations`
+- `worker_heartbeats`
+<!-- runtime-write-contract:end -->
+
+The runtime role must have `LOGIN`, `CONNECT`, `USAGE` on schema `public`, and only `SELECT`, `INSERT`, `UPDATE` on those tables. It must not have `SUPERUSER`, `CREATEDB`, `CREATEROLE`, `REPLICATION`, `BYPASSRLS`, `CREATE` on schema `public`, DDL permissions, migration metadata access, or table grants outside the allowlist. F1 runtime queries set `app.current_tenant` before tenant-scoped database work so RLS remains enforced.
+
+Canonical bootstrap and verification:
+
+- Normal compose/Coolify deployments run `packages/database/src/migrate.ts` in the `migrate` service. After Drizzle migrations complete, that runner bootstraps/validates the runtime role when `RUNTIME_POSTGRES_PASSWORD` is present. The password enters only through runtime environment variables; the versioned SQL migration can define/revoke/grant the role shape but intentionally cannot hardcode a secret.
+- `scripts/bootstrap-runtime-db-role.sh` is the manual fallback for operators that run migrations outside the compose `migrate` service, or need to rotate only the runtime role password/grants. It uses the same `DATABASE_URL`, `RUNTIME_POSTGRES_USER`, and `RUNTIME_POSTGRES_PASSWORD` inputs.
+- `scripts/f1-runtime-db-role-smoke.sh --strict` is the verification gate. It checks direct grants and effective privileges, including `PUBLIC`/inherited table privileges outside the F1 allowlist and sequence privileges outside sequences owned by the F1 allowlist tables.
+
+```bash
+# Manual fallback/rotation path when the canonical migrate service was not used.
+DATABASE_URL=postgresql://octo:<admin-password>@localhost:5432/octo \
+RUNTIME_POSTGRES_USER=octo_runtime \
+RUNTIME_POSTGRES_PASSWORD=<runtime-password> \
+bash scripts/bootstrap-runtime-db-role.sh
+
+# Verify positive and negative permissions.
+DATABASE_URL=postgresql://octo:<admin-password>@localhost:5432/octo \
+RUNTIME_DATABASE_URL=postgresql://octo_runtime:<runtime-password>@localhost:5432/octo \
+bash scripts/f1-runtime-db-role-smoke.sh --strict
+```
+
+`scripts/f1-verify.sh --close` runs the same smoke after compose migrations, before the full F1 stack starts. The gate fails if `RUNTIME_DATABASE_URL` is absent, if it uses the same PostgreSQL username as `DATABASE_URL`, if effective grants exceed the F1 allowlist, if DDL is possible, if sequence privileges escape the required set, or if the role has `BYPASSRLS`/administrative attributes.

@@ -34,6 +34,28 @@ F1_RUNTIME_DB_WRITE_TABLES = frozenset(
 )
 
 
+def runtime_database_url() -> str:
+    """Return the F1 runtime-worker PostgreSQL DSN.
+
+    RUNTIME_DATABASE_URL is the production/close-gate credential for the
+    least-privilege runtime role. DATABASE_URL remains a development fallback
+    for legacy tests and non-strict local runs only.
+    """
+    runtime_dsn = os.environ.get("RUNTIME_DATABASE_URL")
+    if runtime_dsn:
+        return runtime_dsn
+    if os.environ.get("F1_CLOSE_GATE") == "1" or os.environ.get("NODE_ENV") == "production":
+        raise RuntimeError("RUNTIME_DATABASE_URL required for F1 close/production runtime-worker")
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError("RUNTIME_DATABASE_URL required")
+    return dsn
+
+
+async def _set_current_tenant(conn: asyncpg.Connection, tenant_id: str) -> None:
+    await conn.execute("SELECT set_config('app.current_tenant', $1, false)", tenant_id)
+
+
 async def _next_outbox_sequence(conn: asyncpg.Connection, tenant_id: str, execution_id: str) -> int:
     await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", f"{tenant_id}:execution:{execution_id}")
     value = await conn.fetchval(
@@ -699,14 +721,13 @@ async def run_f1_execution(
     attempt: int | None = None,
     lease_owner: str | None = None,
 ) -> dict[str, Any]:
-    dsn = os.environ.get("DATABASE_URL")
-    if not dsn:
-        raise RuntimeError("DATABASE_URL required")
+    dsn = runtime_database_url()
     if not lease_token or attempt is None:
         raise RuntimeError("lease_token and attempt are required for F1 runtime ownership")
 
     conn = await asyncpg.connect(dsn)
     try:
+        await _set_current_tenant(conn, tenant_id)
         log.info(
             "execution.runtime_accepted",
             execution_id=execution_id,

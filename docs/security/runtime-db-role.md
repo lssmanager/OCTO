@@ -1,10 +1,10 @@
 # F1 Runtime Worker Database Role
 
-`octo_runtime_worker` is the PostgreSQL role used by the F1 Runtime Worker when it writes durable execution progress. The role is enforced by `packages/database/migrations/202605300002_f1_runtime_db_role.sql` and verified by `scripts/check-f1-runtime-contract.py`.
+`octo_runtime` is the PostgreSQL role used by the F1 Runtime Worker when it writes durable execution progress. The canonical deployment bootstrap runs in `packages/database/src/migrate.ts` after Drizzle migrations when `RUNTIME_POSTGRES_PASSWORD` is present. `packages/database/migrations/202605300002_f1_runtime_db_role.sql` keeps the role/grant contract versioned without a hardcoded password, and `scripts/bootstrap-runtime-db-role.sh` is the manual fallback/password-rotation path. The contract is verified by `scripts/check-f1-runtime-contract.py` and `scripts/f1-runtime-db-role-smoke.sh`.
 
 ## Role invariants
 
-The role must always be:
+The role is configured via `RUNTIME_POSTGRES_USER` (default `octo_runtime`) and `RUNTIME_POSTGRES_PASSWORD`; `runtime-worker` connects through `RUNTIME_DATABASE_URL`. `DATABASE_URL` remains reserved for API/migrations/admin bootstrap. The role must always be:
 
 - `LOGIN` only for runtime-worker database connections.
 - `NOSUPERUSER`.
@@ -13,7 +13,8 @@ The role must always be:
 - `NOCREATEROLE`.
 - `NOREPLICATION`.
 - Without `CREATE` on the database or `public` schema.
-- Without table grants outside the F1 runtime write contract.
+- Without direct or effective table privileges outside the F1 runtime write contract, including privileges inherited through `PUBLIC`.
+- Without sequence privileges outside sequences owned by the F1 allowlist tables.
 
 ## Allowed grants
 

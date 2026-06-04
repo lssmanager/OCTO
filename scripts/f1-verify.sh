@@ -93,12 +93,17 @@ export_close_defaults() {
   export POSTGRES_DB="${POSTGRES_DB:-octo}"
   export POSTGRES_USER="${POSTGRES_USER:-octo}"
   export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-octo}"
+  export RUNTIME_POSTGRES_USER="${RUNTIME_POSTGRES_USER:-octo_runtime}"
+  export RUNTIME_POSTGRES_PASSWORD="${RUNTIME_POSTGRES_PASSWORD:-octo_runtime}"
   export REDIS_PASSWORD="${REDIS_PASSWORD:-octo}"
   export F1_HOST_DATABASE_URL="${F1_HOST_DATABASE_URL:-${DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}}}"
+  export F1_HOST_RUNTIME_DATABASE_URL="${F1_HOST_RUNTIME_DATABASE_URL:-${RUNTIME_DATABASE_URL:-postgresql://${RUNTIME_POSTGRES_USER}:${RUNTIME_POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}}}"
   export F1_HOST_REDIS_URL="${F1_HOST_REDIS_URL:-${REDIS_URL:-redis://:${REDIS_PASSWORD}@localhost:6379}}"
   export F1_COMPOSE_DATABASE_URL="${F1_COMPOSE_DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}}"
+  export F1_COMPOSE_RUNTIME_DATABASE_URL="${F1_COMPOSE_RUNTIME_DATABASE_URL:-postgresql://${RUNTIME_POSTGRES_USER}:${RUNTIME_POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}}"
   export F1_COMPOSE_REDIS_URL="${F1_COMPOSE_REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379}"
   export DATABASE_URL="$F1_HOST_DATABASE_URL"
+  export RUNTIME_DATABASE_URL="$F1_HOST_RUNTIME_DATABASE_URL"
   export REDIS_URL="$F1_HOST_REDIS_URL"
   export JWT_SECRET="${JWT_SECRET:-dev-secret}"
   export JWT_KID="${JWT_KID:-dev-hs256}"
@@ -124,7 +129,7 @@ export_close_defaults() {
 }
 
 compose() {
-  DATABASE_URL="$F1_COMPOSE_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" docker compose "$@"
+  DATABASE_URL="$F1_COMPOSE_DATABASE_URL" RUNTIME_DATABASE_URL="$F1_COMPOSE_RUNTIME_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" docker compose "$@"
 }
 
 compose_down_clean() {
@@ -152,6 +157,9 @@ run_close_gate() {
   log "F1 close: start Postgres/Redis for migrations and integration tests"
   compose up -d postgres redis
   compose run --rm migrate
+
+  log "F1 close: runtime-worker least-privilege database role smoke"
+  bash scripts/f1-runtime-db-role-smoke.sh --strict
 
   log "F1 close: integration tests (DATABASE_URL/REDIS_URL are mandatory in close mode)"
   pnpm testintegration

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "phase": "F1",
-  "runtimeRole": "octo_runtime_worker",
+  "runtimeRole": "octo_runtime",
   "sourceOfTruth": "apps/runtime-worker/src/f1_runtime.py:F1_RUNTIME_DB_WRITE_TABLES",
   "runtimeBoundary": "Runtime Worker owns model/tool execution and writes durable runtime progress directly to PostgreSQL in F1.",
   "controlPlaneBoundary": "Control Plane owns external APIs, authn/authz, tenant policy, execution creation/dispatch, scheduling ownership and user-facing status.",

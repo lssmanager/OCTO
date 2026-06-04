@@ -46,7 +46,8 @@
     "security:vitest": "node scripts/verify-vitest-security.mjs",
     "f1:agent-graph-smoke": "bash scripts/f1-agent-graph-smoke.sh",
     "f2:agent-graph-smoke": "bash scripts/f2-agent-graph-smoke.sh",
-    "f1:workspace-type-gate": "pnpm --filter @octo/events build && pnpm --filter @octo/database build && pnpm --filter @octo/api typecheck && pnpm build && pnpm typecheck"
+    "f1:workspace-type-gate": "pnpm --filter @octo/events build && pnpm --filter @octo/database build && pnpm --filter @octo/api typecheck && pnpm build && pnpm typecheck",
+    "f1:runtime-db-role-smoke": "bash scripts/f1-runtime-db-role-smoke.sh --strict"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.60.1",
