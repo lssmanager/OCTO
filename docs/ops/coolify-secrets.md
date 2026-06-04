@@ -185,7 +185,9 @@ Add these as **Environment Variables** (not Build Variables):
 | `RUNTIME_POSTGRES_PASSWORD` | Strong generated secret, different from `POSTGRES_PASSWORD`. |
 | `RUNTIME_DATABASE_URL` | `postgresql://${RUNTIME_POSTGRES_USER}:${RUNTIME_POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}` or the equivalent Coolify internal PostgreSQL host. |
 
-After migrations, bootstrap the role once per database (safe to rerun):
+Canonical Coolify flow: the `migrate` service receives `DATABASE_URL`, `RUNTIME_POSTGRES_USER` and `RUNTIME_POSTGRES_PASSWORD`. After schema migrations, `packages/database/src/migrate.ts` bootstraps/validates the runtime role and sets the password from the environment. The SQL migration remains secret-free; it only records the role/grant contract.
+
+If migrations were run outside the Coolify compose `migrate` service, bootstrap the role manually once per database (safe to rerun and useful for password rotation):
 
 ```bash
 DATABASE_URL=postgresql://octo:<admin-password>@postgres:5432/octo \

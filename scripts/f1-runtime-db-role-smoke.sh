@@ -89,6 +89,7 @@ SELECT set_config('octo.runtime_role', :'runtime_role', false);
 DO $$
 DECLARE
   runtime_role text := current_setting('octo.runtime_role');
+  schema_name CONSTANT text := 'public';
   allowed_tables CONSTANT text[] := ARRAY[
     'approvals', 'execution_checkpoint_writes', 'execution_checkpoints', 'execution_steps',
     'executions', 'outbox_events', 'tool_invocations', 'worker_heartbeats'
@@ -103,11 +104,11 @@ BEGIN
   IF role_record.rolsuper OR role_record.rolcreatedb OR role_record.rolcreaterole OR role_record.rolreplication OR role_record.rolbypassrls THEN
     RAISE EXCEPTION 'runtime role % has administrative attributes or BYPASSRLS', runtime_role;
   END IF;
-  IF NOT has_schema_privilege(runtime_role, 'public', 'USAGE') THEN
-    RAISE EXCEPTION 'runtime role % lacks USAGE on public', runtime_role;
+  IF NOT has_schema_privilege(runtime_role, schema_name, 'USAGE') THEN
+    RAISE EXCEPTION 'runtime role % lacks USAGE on %', runtime_role, schema_name;
   END IF;
-  IF has_schema_privilege(runtime_role, 'public', 'CREATE') THEN
-    RAISE EXCEPTION 'runtime role % must not have CREATE on public', runtime_role;
+  IF has_schema_privilege(runtime_role, schema_name, 'CREATE') THEN
+    RAISE EXCEPTION 'runtime role % must not have CREATE on %', runtime_role, schema_name;
   END IF;
   IF has_database_privilege(runtime_role, current_database(), 'CREATE') THEN
     RAISE EXCEPTION 'runtime role % must not have CREATE on database', runtime_role;
@@ -119,29 +120,91 @@ BEGIN
   SELECT string_agg(table_name || ':' || privilege_type, ', ' ORDER BY table_name, privilege_type)
   INTO unexpected
   FROM information_schema.role_table_grants
-  WHERE grantee = runtime_role AND table_schema = 'public'
+  WHERE grantee = runtime_role AND table_schema = schema_name
     AND table_name <> ALL(allowed_tables);
   IF unexpected IS NOT NULL THEN
-    RAISE EXCEPTION 'runtime role has grants outside the F1 table allowlist: %', unexpected;
+    RAISE EXCEPTION 'runtime role has direct grants outside the F1 table allowlist: %', unexpected;
   END IF;
 
   SELECT string_agg(table_name || ':' || privilege_type, ', ' ORDER BY table_name, privilege_type)
   INTO unexpected
   FROM information_schema.role_table_grants
-  WHERE grantee = runtime_role AND table_schema = 'public'
+  WHERE grantee = runtime_role AND table_schema = schema_name
     AND table_name = ANY(allowed_tables)
     AND privilege_type NOT IN ('SELECT', 'INSERT', 'UPDATE');
   IF unexpected IS NOT NULL THEN
-    RAISE EXCEPTION 'runtime role has disallowed privileges on an F1 table: %', unexpected;
+    RAISE EXCEPTION 'runtime role has direct disallowed privileges on an F1 table: %', unexpected;
   END IF;
 
   SELECT string_agg(table_name || ':' || privilege, ', ' ORDER BY table_name, privilege)
   INTO unexpected
-  FROM unnest(allowed_tables) AS table_name
-  CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE')) AS p(privilege)
-  WHERE NOT has_table_privilege(runtime_role, 'public.' || table_name, privilege);
+  FROM (
+    SELECT c.relname AS table_name, p.privilege
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS p(privilege)
+    WHERE n.nspname = schema_name
+      AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND NOT (c.relname = ANY (allowed_tables))
+      AND has_table_privilege(runtime_role, format('%I.%I', schema_name, c.relname), p.privilege)
+  ) effective_table_privileges;
   IF unexpected IS NOT NULL THEN
-    RAISE EXCEPTION 'runtime role is missing F1 table privileges: %', unexpected;
+    RAISE EXCEPTION 'runtime role has effective table privileges outside the F1 table allowlist: %', unexpected;
+  END IF;
+
+  SELECT string_agg(table_name || ':' || privilege, ', ' ORDER BY table_name, privilege)
+  INTO unexpected
+  FROM (
+    SELECT c.relname AS table_name, p.privilege
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    CROSS JOIN (VALUES ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS p(privilege)
+    WHERE n.nspname = schema_name
+      AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND c.relname = ANY (allowed_tables)
+      AND has_table_privilege(runtime_role, format('%I.%I', schema_name, c.relname), p.privilege)
+  ) effective_disallowed_privileges;
+  IF unexpected IS NOT NULL THEN
+    RAISE EXCEPTION 'runtime role has effective disallowed privileges on an F1 table: %', unexpected;
+  END IF;
+
+  SELECT string_agg(table_name || ':' || privilege, ', ' ORDER BY table_name, privilege)
+  INTO unexpected
+  FROM unnest(allowed_tables) AS allowed(table_name)
+  CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE')) AS p(privilege)
+  WHERE NOT has_table_privilege(runtime_role, format('%I.%I', schema_name, allowed.table_name), p.privilege);
+  IF unexpected IS NOT NULL THEN
+    RAISE EXCEPTION 'runtime role is missing required effective F1 table privileges: %', unexpected;
+  END IF;
+
+  WITH public_sequences AS (
+    SELECT c.relname AS sequence_name
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = schema_name
+      AND c.relkind = 'S'
+  ), allowed_sequences AS (
+    SELECT seq.relname AS sequence_name
+    FROM pg_class seq
+    JOIN pg_namespace seq_ns ON seq_ns.oid = seq.relnamespace
+    JOIN pg_depend dep ON dep.objid = seq.oid AND dep.deptype IN ('a', 'i')
+    JOIN pg_class tbl ON tbl.oid = dep.refobjid
+    JOIN pg_namespace tbl_ns ON tbl_ns.oid = tbl.relnamespace
+    WHERE seq_ns.nspname = schema_name
+      AND tbl_ns.nspname = schema_name
+      AND tbl.relname = ANY (allowed_tables)
+      AND seq.relkind = 'S'
+  )
+  SELECT string_agg(sequence_name || ':' || privilege, ', ' ORDER BY sequence_name, privilege)
+  INTO unexpected
+  FROM public_sequences
+  CROSS JOIN (VALUES ('USAGE'), ('SELECT'), ('UPDATE')) AS p(privilege)
+  WHERE NOT EXISTS (
+      SELECT 1 FROM allowed_sequences WHERE allowed_sequences.sequence_name = public_sequences.sequence_name
+    )
+    AND has_sequence_privilege(runtime_role, format('%I.%I', schema_name, public_sequences.sequence_name), p.privilege);
+  IF unexpected IS NOT NULL THEN
+    RAISE EXCEPTION 'runtime role has effective sequence privileges outside the F1 sequence allowlist: %', unexpected;
   END IF;
 END $$;
 SQL

@@ -47,10 +47,14 @@ Allowed F1 runtime tables:
 
 The runtime role must have `LOGIN`, `CONNECT`, `USAGE` on schema `public`, and only `SELECT`, `INSERT`, `UPDATE` on those tables. It must not have `SUPERUSER`, `CREATEDB`, `CREATEROLE`, `REPLICATION`, `BYPASSRLS`, `CREATE` on schema `public`, DDL permissions, migration metadata access, or table grants outside the allowlist. F1 runtime queries set `app.current_tenant` before tenant-scoped database work so RLS remains enforced.
 
-Bootstrap and verification:
+Canonical bootstrap and verification:
+
+- Normal compose/Coolify deployments run `packages/database/src/migrate.ts` in the `migrate` service. After Drizzle migrations complete, that runner bootstraps/validates the runtime role when `RUNTIME_POSTGRES_PASSWORD` is present. The password enters only through runtime environment variables; the versioned SQL migration can define/revoke/grant the role shape but intentionally cannot hardcode a secret.
+- `scripts/bootstrap-runtime-db-role.sh` is the manual fallback for operators that run migrations outside the compose `migrate` service, or need to rotate only the runtime role password/grants. It uses the same `DATABASE_URL`, `RUNTIME_POSTGRES_USER`, and `RUNTIME_POSTGRES_PASSWORD` inputs.
+- `scripts/f1-runtime-db-role-smoke.sh --strict` is the verification gate. It checks direct grants and effective privileges, including `PUBLIC`/inherited table privileges outside the F1 allowlist and sequence privileges outside sequences owned by the F1 allowlist tables.
 
 ```bash
-# After migrations, create/update the least-privilege role with a secret from the environment.
+# Manual fallback/rotation path when the canonical migrate service was not used.
 DATABASE_URL=postgresql://octo:<admin-password>@localhost:5432/octo \
 RUNTIME_POSTGRES_USER=octo_runtime \
 RUNTIME_POSTGRES_PASSWORD=<runtime-password> \
@@ -62,4 +66,4 @@ RUNTIME_DATABASE_URL=postgresql://octo_runtime:<runtime-password>@localhost:5432
 bash scripts/f1-runtime-db-role-smoke.sh --strict
 ```
 
-`scripts/f1-verify.sh --close` runs the same smoke after compose migrations, before the full F1 stack starts. The gate fails if `RUNTIME_DATABASE_URL` is absent, if it uses the same PostgreSQL username as `DATABASE_URL`, if grants exceed the F1 allowlist, if DDL is possible, or if the role has `BYPASSRLS`/administrative attributes.
+`scripts/f1-verify.sh --close` runs the same smoke after compose migrations, before the full F1 stack starts. The gate fails if `RUNTIME_DATABASE_URL` is absent, if it uses the same PostgreSQL username as `DATABASE_URL`, if effective grants exceed the F1 allowlist, if DDL is possible, if sequence privileges escape the required set, or if the role has `BYPASSRLS`/administrative attributes.

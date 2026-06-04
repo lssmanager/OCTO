@@ -61,6 +61,7 @@ TO octo_runtime;
 DO $$
 DECLARE
   runtime_role CONSTANT text := 'octo_runtime';
+  schema_name CONSTANT text := 'public';
   allowed_tables CONSTANT text[] := ARRAY[
     'approvals',
     'execution_checkpoint_writes',
@@ -110,22 +111,91 @@ BEGIN
   INTO unexpected_table_grants
   FROM information_schema.role_table_grants
   WHERE grantee = runtime_role
-    AND table_schema = 'public'
+    AND table_schema = schema_name
     AND NOT (table_name = ANY (allowed_tables));
-
   IF unexpected_table_grants IS NOT NULL THEN
-    RAISE EXCEPTION 'Runtime DB role % has table grants outside F1 contract: %', runtime_role, unexpected_table_grants;
+    RAISE EXCEPTION 'Runtime DB role % has direct table grants outside F1 contract: %', runtime_role, unexpected_table_grants;
   END IF;
 
   SELECT string_agg(table_name || ':' || privilege_type, ', ' ORDER BY table_name, privilege_type)
   INTO unexpected_privileges
   FROM information_schema.role_table_grants
   WHERE grantee = runtime_role
-    AND table_schema = 'public'
+    AND table_schema = schema_name
     AND table_name = ANY (allowed_tables)
     AND privilege_type NOT IN ('SELECT', 'INSERT', 'UPDATE');
-
   IF unexpected_privileges IS NOT NULL THEN
-    RAISE EXCEPTION 'Runtime DB role % has disallowed privileges on F1 tables: %', runtime_role, unexpected_privileges;
+    RAISE EXCEPTION 'Runtime DB role % has direct disallowed privileges on F1 tables: %', runtime_role, unexpected_privileges;
+  END IF;
+
+  SELECT string_agg(table_name || ':' || privilege, ', ' ORDER BY table_name, privilege)
+  INTO unexpected_table_grants
+  FROM (
+    SELECT c.relname AS table_name, p.privilege
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS p(privilege)
+    WHERE n.nspname = schema_name
+      AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND NOT (c.relname = ANY (allowed_tables))
+      AND has_table_privilege(runtime_role, format('%I.%I', schema_name, c.relname), p.privilege)
+  ) effective_table_privileges;
+  IF unexpected_table_grants IS NOT NULL THEN
+    RAISE EXCEPTION 'Runtime DB role % has effective table privileges outside F1 contract: %', runtime_role, unexpected_table_grants;
+  END IF;
+
+  SELECT string_agg(table_name || ':' || privilege, ', ' ORDER BY table_name, privilege)
+  INTO unexpected_privileges
+  FROM (
+    SELECT c.relname AS table_name, p.privilege
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    CROSS JOIN (VALUES ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS p(privilege)
+    WHERE n.nspname = schema_name
+      AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND c.relname = ANY (allowed_tables)
+      AND has_table_privilege(runtime_role, format('%I.%I', schema_name, c.relname), p.privilege)
+  ) effective_disallowed_privileges;
+  IF unexpected_privileges IS NOT NULL THEN
+    RAISE EXCEPTION 'Runtime DB role % has effective disallowed privileges on F1 tables: %', runtime_role, unexpected_privileges;
+  END IF;
+
+  SELECT string_agg(table_name || ':' || privilege, ', ' ORDER BY table_name, privilege)
+  INTO unexpected_privileges
+  FROM unnest(allowed_tables) AS allowed(table_name)
+  CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE')) AS p(privilege)
+  WHERE NOT has_table_privilege(runtime_role, format('%I.%I', schema_name, allowed.table_name), p.privilege);
+  IF unexpected_privileges IS NOT NULL THEN
+    RAISE EXCEPTION 'Runtime DB role % is missing required effective F1 table privileges: %', runtime_role, unexpected_privileges;
+  END IF;
+
+  WITH public_sequences AS (
+    SELECT c.relname AS sequence_name
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = schema_name
+      AND c.relkind = 'S'
+  ), allowed_sequences AS (
+    SELECT seq.relname AS sequence_name
+    FROM pg_class seq
+    JOIN pg_namespace seq_ns ON seq_ns.oid = seq.relnamespace
+    JOIN pg_depend dep ON dep.objid = seq.oid AND dep.deptype IN ('a', 'i')
+    JOIN pg_class tbl ON tbl.oid = dep.refobjid
+    JOIN pg_namespace tbl_ns ON tbl_ns.oid = tbl.relnamespace
+    WHERE seq_ns.nspname = schema_name
+      AND tbl_ns.nspname = schema_name
+      AND tbl.relname = ANY (allowed_tables)
+      AND seq.relkind = 'S'
+  )
+  SELECT string_agg(sequence_name || ':' || privilege, ', ' ORDER BY sequence_name, privilege)
+  INTO unexpected_privileges
+  FROM public_sequences
+  CROSS JOIN (VALUES ('USAGE'), ('SELECT'), ('UPDATE')) AS p(privilege)
+  WHERE NOT EXISTS (
+      SELECT 1 FROM allowed_sequences WHERE allowed_sequences.sequence_name = public_sequences.sequence_name
+    )
+    AND has_sequence_privilege(runtime_role, format('%I.%I', schema_name, public_sequences.sequence_name), p.privilege);
+  IF unexpected_privileges IS NOT NULL THEN
+    RAISE EXCEPTION 'Runtime DB role % has effective sequence privileges outside F1 contract: %', runtime_role, unexpected_privileges;
   END IF;
 END $$;
