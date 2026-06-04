@@ -22,8 +22,8 @@ F1 stops at persisted graph hierarchy and state projection. Runtime execution, s
 
 ## Validation status
 
-- `scripts/f1-verify.sh --fast` is local feedback and labels output as `F1 FAST`; documented skips are allowed only in this mode.
-- `scripts/f1-verify.sh --close` is the strict release gate and labels output as `F1 CLOSE`; required checks cannot be skipped silently.
+- `scripts/f1-verify.sh --fast` is local feedback and labels output as `F1 FAST`; documented skips are allowed only in this mode and must be printed as `F1 FAST WARNING: SKIP ...`.
+- `scripts/f1-verify.sh --close` is the strict release gate and labels output as `F1 CLOSE`; required checks cannot be skipped silently, and unreached required checks are recorded as FAIL/not-run when an earlier prerequisite fails.
 - CLOSE blocks on workspace build/typecheck, lint, unit tests, DB/Redis integration, tenant isolation, observability, migrations, compose build/up, public smoke, Agent Graph F1 smoke and runtime DB-role smoke.
 - The public smoke requires the root status surface to return HTTP 200, include `OCTO`, avoid `Cannot GET /`, report phase `F1`, and expose version/commit/build time coherent with `/api/health/version`.
 - `scripts/f1-agent-graph-smoke.sh` validates persisted `Agency → Department → Workspace → Agent` creation plus missing-credential, invalid-hierarchy and cross-tenant/nonexistent-node errors against `/api/v1/agents/*`.

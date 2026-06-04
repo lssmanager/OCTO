@@ -1,6 +1,6 @@
 # F1 Tooling Debt: lint:boundaries and formatcheck
 
-This is the separate tracking artifact for the issue #265 lint/format decision.
+This is the separate tracking artifact for the issue #265 lint/format decision and GitHub issue #275 (`[F1-TOOLING] Resolver deuda de lint:boundaries y formatcheck fuera del close gate`).
 
 ## Decision
 
@@ -30,7 +30,7 @@ settings: { integrationKey: ${PAGERDUTY_INTEGRATION_KEY} }
 
 ## Required follow-up
 
-Create a separate GitHub issue from this artifact if one does not already exist, then either:
+Track the remaining work in GitHub issue #275, then either:
 
 1. fix the ESLint/plugin compatibility for `lint:boundaries`;
 2. fix Prettier parsing/configuration for templated YAML and format the repository; or
