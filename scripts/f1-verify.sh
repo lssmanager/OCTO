@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${F1_VERIFY_MODE:-fast}"
-if [[ "${1:-}" == "--close" ]]; then
-  MODE="close"
-elif [[ "${1:-}" == "--fast" ]]; then
-  MODE="fast"
-elif [[ "${1:-}" == "" ]]; then
-  :
-else
+MODE="fast"
+if (( $# > 1 )); then
   echo "Usage: $0 [--fast|--close]" >&2
   exit 64
 fi
 
-if [[ "$MODE" != "fast" && "$MODE" != "close" ]]; then
-  echo "F1 verify mode must be 'fast' or 'close' (got '$MODE')" >&2
+if [[ "${1:-}" == "--close" ]]; then
+  MODE="close"
+elif [[ "${1:-}" == "--fast" || "${1:-}" == "" ]]; then
+  MODE="fast"
+else
+  echo "Usage: $0 [--fast|--close]" >&2
   exit 64
 fi
 
@@ -29,11 +27,51 @@ REPORT_CHECK_NAMES=()
 REPORT_CHECK_RESULTS=()
 REPORT_CHECK_DETAILS=()
 REPORT_URLS=()
+REQUIRED_CLOSE_CHECKS=(
+  "close tooling available (docker and docker compose)"
+  "workspace build/typecheck gate"
+  "workspace lint"
+  "API unit tests"
+  "Agent Graph F1 unit/integration contract"
+  "scheduler build"
+  "runtime-worker unit checks"
+  "F1 naming guard (Agent Graph F1 is not presented as F2 close evidence)"
+  "anti-stub source scan"
+  "reset compose stack and volumes for reproducibility"
+  "start Postgres/Redis for migrations and integration tests"
+  "database migrations via compose migrate service"
+  "runtime-worker least-privilege database role smoke"
+  "integration tests with mandatory DB/Redis"
+  "tenant isolation gate (API, DB/RLS, queue, scheduler, reclaimer, outbox)"
+  "observability gate (executionId/traceId reconstruction)"
+  "compose build for full F1 stack"
+  "compose up for full F1 stack"
+  "strict public/API smoke (root, health, metadata, execution, outbox, workers)"
+  "Agent Graph F1 smoke"
+)
 
 append_report_check() {
   REPORT_CHECK_NAMES+=("$1")
   REPORT_CHECK_RESULTS+=("$2")
   REPORT_CHECK_DETAILS+=("$3")
+}
+
+report_has_check() {
+  local wanted="$1" i
+  for i in "${!REPORT_CHECK_NAMES[@]}"; do
+    [[ "${REPORT_CHECK_NAMES[$i]}" == "$wanted" ]] && return 0
+  done
+  return 1
+}
+
+mark_unreached_close_checks_failed() {
+  [[ "$MODE" == "close" ]] || return 0
+  local check
+  for check in "${REQUIRED_CLOSE_CHECKS[@]}"; do
+    if ! report_has_check "$check"; then
+      append_report_check "$check" "FAIL" "not run because the strict close gate stopped earlier; close mode treats not-run required checks as FAIL"
+    fi
+  done
 }
 
 report_escape() {
@@ -42,15 +80,18 @@ report_escape() {
 
 write_close_report() {
   [[ "$MODE" == "close" ]] || return 0
-  local ended_at commit branch environment build_version build_commit build_time build_phase report_dir
+  local ended_at commit branch environment build_version build_commit build_time build_phase report_dir gate_command ci_metadata compose_project
   ended_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   commit="$(git rev-parse HEAD 2>/dev/null || printf unknown)"
   branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf unknown)"
-  environment="node=${NODE_ENV:-unset}; docker=$(docker --version 2>/dev/null || printf unavailable); compose=$(docker compose version 2>/dev/null || printf unavailable)"
+  environment="node=${NODE_ENV:-unset}; pnpm=$(pnpm --version 2>/dev/null || printf unavailable); docker=$(docker --version 2>/dev/null || printf unavailable); compose=$(docker compose version 2>/dev/null || printf unavailable)"
   build_version="${BUILD_VERSION:-unset}"
   build_commit="${BUILD_COMMIT:-unset}"
   build_time="${BUILD_TIME:-unset}"
   build_phase="${BUILD_PHASE:-unset}"
+  gate_command="pnpm f1:close-gate"
+  ci_metadata="CI=${CI:-false}; GITHUB_RUN_ID=${GITHUB_RUN_ID:-unset}; COOLIFY_RESOURCE_UUID=${COOLIFY_RESOURCE_UUID:-unset}"
+  compose_project="${COMPOSE_PROJECT_NAME:-default}"
   report_dir="$(dirname "$REPORT_PATH")"
   mkdir -p "$report_dir"
 
@@ -61,7 +102,10 @@ write_close_report() {
     echo "- Finished at (UTC): ${ended_at}"
     echo "- Commit SHA: ${commit}"
     echo "- Branch: ${branch}"
+    echo "- Gate command: ${gate_command}"
     echo "- Environment: ${environment}"
+    echo "- CI/deploy metadata: ${ci_metadata}"
+    echo "- Compose project: ${compose_project}"
     echo "- Build phase: ${build_phase}"
     echo "- Build version: ${build_version}"
     echo "- Build commit: ${build_commit}"
@@ -93,7 +137,7 @@ write_close_report() {
     echo
     echo "## Skip policy"
     echo
-    echo "Close mode allows no silent skips. Any required check that cannot run is recorded as FAIL and stops the gate."
+    echo "Close mode allows no silent skips. Any required check that fails, cannot run or is not reached is recorded as FAIL. FAST mode is the only mode that may skip optional local feedback, and every FAST skip is logged with an explicit \`F1 FAST WARNING: SKIP\` label."
     echo
     echo "## Final decision"
     echo
@@ -120,6 +164,7 @@ run_close_check() {
   append_report_check "$name" "FAIL" "$* (exit ${status})"
   REPORT_DECISION="FAIL"
   REPORT_FAILURE_REASON="${name} failed with exit ${status}"
+  mark_unreached_close_checks_failed
   write_close_report
   exit "$status"
 }
@@ -147,26 +192,20 @@ run_common_checks() {
   run_mode_check "scheduler build" pnpm --filter @octo/scheduler-worker build
   run_mode_check "runtime-worker unit checks" bash -c 'cd apps/runtime-worker && python -m compileall src && python -m pytest tests/unit/test_llm_provider.py tests/unit/test_tool_registry.py tests/unit/test_tool_executor.py tests/unit/test_tool_policy.py tests/unit/test_reclaim_lineage.py -q'
 
-  run_mode_check "F1 naming guard (no F2 labels in F1 gate scripts)" bash -c 'matches="$(rg -n "F2 close|f2:agent-graph-smoke|f2-agent-graph-smoke" scripts/f1-verify.sh scripts/f1-agent-graph-smoke.sh scripts/f1-smoke.sh || true)"; matches="$(printf "%s\n" "$matches" | rg -v "F1 naming guard" || true)"; test -z "$matches"'
+  run_mode_check "F1 naming guard (Agent Graph F1 is not presented as F2 close evidence)" bash -c 'matches="$(rg -n "F2 close|f2:agent-graph-smoke|f2-agent-graph-smoke" scripts/f1-verify.sh scripts/f1-agent-graph-smoke.sh scripts/f1-smoke.sh || true)"; matches="$(printf "%s\n" "$matches" | rg -v "F1 naming guard" || true)"; test -z "$matches"'
+  run_mode_check "anti-stub source scan" anti_stub_source_scan
+}
 
-  log "F1 ${MODE^^}: anti-stub gate"
-  PATTERNS=("not yet implemented" "F0 stub" "stub response" "Execution engine not yet wired" "hardcoded healthy" "TODO F1" "status unknown" "queues: \[\]" "workers: \[\]" "healthy: true")
-  TARGETS=(apps/api/src apps/runtime-worker/src apps/scheduler-worker/src apps/reclaimer-worker/src packages)
-  for p in "${PATTERNS[@]}"; do
-    if rg -n "$p" "${TARGETS[@]}" -g '!**/*.md' -g '!**/tests/**' -g '!apps/runtime-worker/src/routers/execution.py' -g '!apps/runtime-worker/src/execution/engine.py' ; then
-      echo "Anti-stub gate failed on pattern: $p"
-      if [[ "$MODE" == "close" ]]; then
-        append_report_check "anti-stub gate" "FAIL" "pattern: $p"
-        REPORT_DECISION="FAIL"
-        REPORT_FAILURE_REASON="anti-stub gate failed on pattern: $p"
-        write_close_report
-      fi
-      exit 1
+anti_stub_source_scan() {
+  local p
+  local patterns=("not yet implemented" "F0 stub" "stub response" "Execution engine not yet wired" "hardcoded healthy" "TODO F1" "status unknown" "queues: \[\]" "workers: \[\]" "healthy: true")
+  local targets=(apps/api/src apps/runtime-worker/src apps/scheduler-worker/src apps/reclaimer-worker/src packages)
+  for p in "${patterns[@]}"; do
+    if rg -n "$p" "${targets[@]}" -g '!**/*.md' -g '!**/tests/**' -g '!apps/runtime-worker/src/routers/execution.py' -g '!apps/runtime-worker/src/execution/engine.py' ; then
+      echo "Anti-stub source scan failed on pattern: $p" >&2
+      return 1
     fi
   done
-  if [[ "$MODE" == "close" ]]; then
-    append_report_check "anti-stub gate" "PASS" "stub/placeholder patterns absent from F1 runtime sources"
-  fi
 }
 
 run_fast_integration_if_available() {
@@ -176,7 +215,7 @@ run_fast_integration_if_available() {
     pnpm test:tenant-isolation
     pnpm test:observability
   else
-    warn "F1 fast: skipping integration tests because DATABASE_URL and/or REDIS_URL are not set. Use 'pnpm f1:close-gate' for the strict F1 close gate; close mode never skips this."
+    warn "F1 FAST WARNING: SKIP integration tests because DATABASE_URL and/or REDIS_URL are not set. Use 'pnpm f1:close-gate' for the strict F1 close gate; CLOSE mode never skips this."
   fi
 
   if [[ "${F1_VERIFY_DOCKER:-0}" == "1" ]]; then
@@ -190,10 +229,10 @@ run_fast_integration_if_available() {
       cleanup
       trap - EXIT
     else
-      warn "F1 fast: skipping optional Docker smoke because docker compose is unavailable. Use close mode on a Docker-capable host to enforce it."
+      warn "F1 FAST WARNING: SKIP optional Docker smoke because docker compose is unavailable. Use close mode on a Docker-capable host to enforce it."
     fi
   else
-    warn "F1 fast: Docker smoke not requested (set F1_VERIFY_DOCKER=1 or run 'pnpm f1:close-gate')."
+    warn "F1 FAST WARNING: SKIP Docker smoke because F1_VERIFY_DOCKER=1 was not set. Run 'pnpm f1:close-gate' for the strict gate."
   fi
 }
 
@@ -264,6 +303,7 @@ run_close_gate() {
         REPORT_FAILURE_REASON="close gate exited with status ${status}"
       fi
       REPORT_DECISION="FAIL"
+      mark_unreached_close_checks_failed
       write_close_report
     fi
     compose_down_clean
