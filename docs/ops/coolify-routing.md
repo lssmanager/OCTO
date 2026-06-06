@@ -1,5 +1,47 @@
 # Coolify Routing Decision for F1 Public Surface
 
+## Current observed deployment — 2026-06-06
+
+The currently observed Coolify deployment at `https://agents.socialstudies.cloud/` proves that the public `octo-api` control-plane surface is reachable for F1, but it does **not** prove full F1 closure yet.
+
+Observed public metadata:
+
+| Field | Observed value |
+|---|---|
+| URL | `https://agents.socialstudies.cloud/` |
+| Service | `octo-api` |
+| Phase | `F1` |
+| Version | `0.1.0-f1` |
+| Commit | `2be6f23359ef97ef40dc7efe7b6256d17b0ec993` |
+| Built at | `local` |
+| Environment | `production` |
+| Root status | `reachable` |
+
+Observed endpoint results:
+
+| Endpoint | Result | Interpretation |
+|---|---|---|
+| `/api/health/live` | `status: ok` | API process is alive. |
+| `/api/health/version` | `service: octo-api`, `phase: F1`, `version: 0.1.0-f1` | Build metadata is exposed. |
+| `/api/health/ready` | `ready: false` | F1 is not ready for closure. |
+| readiness `postgres` | `status: ok` | API can reach PostgreSQL. |
+| readiness `redis` | `status: ok` | API can reach Redis. |
+| readiness `queue` | `status: ok`, `name: execution.dispatch` | API can reach the F1 dispatch queue. |
+| readiness `litellm` | `status: error`, `error: This operation was aborted` | LiteLLM is the direct readiness blocker. |
+| `/api/v1/ops/f1/status` without `X-Internal-Secret` | `401 Unauthorized` | Expected for protected internal endpoint; must also be validated with the secret. |
+
+This state is documented in `docs/reports/f1-coolify-deployment-status.md`. The close report must remain `FAIL` until the strict close gate passes.
+
+Open blockers derived from this deployment state:
+
+- #286: deploy and validate the complete F1 stack in Coolify, not only API.
+- #287: fix LiteLLM readiness.
+- #288: validate runtime-worker F1, handoff and runtime DB role.
+- #289: validate scheduler/reclaimer/outbox workers and durable dispatch.
+- #290: run public Agent Graph smoke against the deployed API.
+- #291: validate observability, internal endpoints and F1 security gates.
+- #281 remains the umbrella F1 close issue.
+
 F1 is deployed as **web + API**, not API-only. The canonical F1 public surface is:
 
 - web `/` → **F1 Agent Graph Console**;
