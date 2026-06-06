@@ -43,11 +43,18 @@ docker_compose_available() { command -v docker >/dev/null 2>&1 && docker compose
 
 diagnostics() {
   echo "--- endpoint diagnostics ---"
-  for url in "$F1_WEB_URL/" "$F1_WEB_URL/status" "$F1_WEB_URL/api/health" "$API_ROOT_URL/" "$API_URL/health/live" "$API_URL/health/ready" "$API_URL/health/version" "$RUNTIME_URL/health/ready" "$SCHEDULER_URL/health/status" "$OUTBOX_URL/status" "$RECLAIMER_URL/health/status"; do
+  for url in "$F1_WEB_URL/" "$F1_WEB_URL/status" "$F1_WEB_URL/api/health" "$API_URL/health/live" "$API_URL/health/ready" "$API_URL/health/version"; do
     echo "# $url"
     curl -fsS "$url" || true
     echo
   done
+  if [[ "$MODE" == "strict" ]]; then
+    for url in "$API_ROOT_URL/" "$RUNTIME_URL/health/ready" "$SCHEDULER_URL/health/status" "$OUTBOX_URL/status" "$RECLAIMER_URL/health/status"; do
+      echo "# $url"
+      curl -fsS "$url" || true
+      echo
+    done
+  fi
   if docker_compose_available; then
     echo "--- docker compose ps ---"
     docker compose ps || true
@@ -144,6 +151,40 @@ assert_version_metadata() {
     [[ "$built_at" != "unknown" && -n "$built_at" ]] || { rm -f "$file"; fail "strict F1 smoke requires non-unknown built_at"; }
     assert_root_metadata_matches_version "$file" "$phase" "$version" "$commit" "$built_at"
   fi
+  rm -f "$file"
+}
+
+
+assert_api_ready_dependencies() {
+  local file
+  file="$(mktemp)"
+  log "checking API readiness dependencies: $API_URL/health/ready"
+  curl -fsS "$API_URL/health/ready" -o "$file"
+  node - "$file" <<'NODE' || { cat "$file" >&2 || true; rm -f "$file"; fail "API readiness must report ok for postgres, redis, execution.dispatch queue and LiteLLM"; }
+const fs = require('fs');
+const file = process.argv[2];
+const body = JSON.parse(fs.readFileSync(file, 'utf8'));
+const checks = body.checks || {};
+const required = ['postgres', 'redis', 'queue', 'litellm'];
+const failures = [];
+if (body.ready !== true && body.status !== 'ok') {
+  failures.push(`overall readiness is not ok (status=${body.status ?? 'missing'}, ready=${body.ready ?? 'missing'})`);
+}
+for (const name of required) {
+  if (!checks[name]) {
+    failures.push(`${name} check is missing`);
+  } else if (checks[name].status !== 'ok') {
+    failures.push(`${name} status=${checks[name].status ?? 'missing'}`);
+  }
+}
+if (checks.queue && checks.queue.name !== 'execution.dispatch') {
+  failures.push(`queue name=${checks.queue.name ?? 'missing'}`);
+}
+if (failures.length > 0) {
+  console.error(failures.join('\n'));
+  process.exit(1);
+}
+NODE
   rm -f "$file"
 }
 
@@ -406,24 +447,25 @@ wait_reclaim_completed() {
 }
 
 run_health_smoke() {
-  log "F1 smoke: web+api public surface and health endpoints"
+  log "F1 smoke: public web+api surface and API dependency readiness"
   wait_http "F1 web health" "$F1_WEB_URL/api/health"
   assert_web_surface
   assert_web_status_surface
-  assert_root_surface "API root operational surface" "$API_ROOT_URL/"
   wait_http "API live" "$API_URL/health/live"
   wait_http "API ready" "$API_URL/health/ready"
+  assert_api_ready_dependencies
   wait_http "API version" "$API_URL/health/version"
   assert_version_metadata
-  wait_http "runtime live" "$RUNTIME_URL/health/live"
-  wait_http "scheduler live" "$SCHEDULER_URL/health/live"
-  wait_http "scheduler ready" "$SCHEDULER_URL/health/ready"
 }
 
 run_strict_smoke() {
   docker_compose_available || fail "strict smoke requires docker compose for SQL and service diagnostics"
   run_health_smoke
+  assert_root_surface "API root operational surface" "$API_ROOT_URL/"
+  wait_http "runtime live" "$RUNTIME_URL/health/live"
   wait_http "runtime ready" "$RUNTIME_URL/health/ready"
+  wait_http "scheduler live" "$SCHEDULER_URL/health/live"
+  wait_http "scheduler ready" "$SCHEDULER_URL/health/ready"
   wait_http "outbox publisher ready" "$OUTBOX_URL/health/ready"
   wait_http "reclaimer ready" "$RECLAIMER_URL/health/ready"
 
