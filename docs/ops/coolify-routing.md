@@ -130,16 +130,21 @@ Runtime environment variables for the API service:
 | `LITELLM_BASE_URL` | `http://litellm:4000` unless Coolify renames the compose service | Internal service URL used by `octo-api`; do not point it at OpenAI/Anthropic/etc. |
 | `LITELLM_MASTER_KEY` | Coolify Environment Variable | Secret runtime env only; never a build arg. |
 | `LITELLM_HEALTH_ENDPOINT` | `/health/readiness` (default) | Checks that the LiteLLM proxy can receive traffic. `/health/liveliness` is process-only. |
-| `LITELLM_HEALTH_TIMEOUT_MS` | `3000` (default; max 10000) | Avoids false failures from LiteLLM cold start or transient internal-network latency. |
+| `LITELLM_HEALTH_TIMEOUT_MS` | `5000` (default; max 10000) | Avoids false failures from LiteLLM cold start or transient internal-network latency. |
 | `OPENAI_API_KEY` | Valid provider key, or an explicitly controlled F1 test key only for non-production smoke | Inject into the LiteLLM service as runtime env. Do not pass provider secrets to the API build. |
 
-The LiteLLM compose service is declared in `docker-compose.yml`, uses the pinned
+The LiteLLM compose service is declared in `docker-compose.yml` and mirrored in
+`docker-compose.f1.yml`, uses the pinned
 `ghcr.io/berriai/litellm:main-v1.61.7@sha256:0f7f39f40bf6ba4cc802b991ce8c4eb2fa41c8a25b821e1d2d5197229cad27fe`
 image, mounts `docker/litellm/config.yaml`, and exposes port `4000` only as the
-LiteLLM gateway. Its Docker healthcheck uses `/health/readiness`; the API
-readiness payload should show `checks.litellm.status: ok`, `endpoint:
-/health/readiness`, `latencyMs`, and LiteLLM metadata such as `upstreamStatus`,
-`db`, or `litellmVersion` when the proxy returns JSON.
+LiteLLM gateway. Its Docker healthcheck uses `/health/readiness` with a 30s
+`start_period`; if production startup timing exceeds that, capture the first
+successful readiness latency before changing the value. The API readiness payload
+should show `checks.litellm.status: ok`, `endpoint: /health/readiness`,
+`latencyMs`, and LiteLLM metadata such as `upstreamStatus`, `db`, or
+`litellmVersion` when the proxy returns JSON. If LiteLLM returns HTTP 200 with
+metadata like `status: disconnected` or `db: Not connected`, OCTO treats that as
+unhealthy because F1 uses LiteLLM database-backed auth/config.
 
 Internal validation from the API/LiteLLM network after deployment:
 

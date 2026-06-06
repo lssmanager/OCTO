@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-octo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-octo}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-octo} -d ${POSTGRES_DB:-octo}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-octo} -d ${POSTGRES_DB:-octo}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -18,7 +18,7 @@ services:
   redis:
     image: redis:7.4.2-alpine3.21
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -33,7 +33,7 @@ services:
       context: .
       dockerfile: docker/migrate.Dockerfile
     # One-shot migration job: intentionally does not restart after successful completion.
-    restart: "no"
+    restart: 'no'
     networks: [octonet]
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -50,23 +50,50 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       JWT_SECRET: ${JWT_SECRET}
-    ports: ["3001:3001"]
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
+      LITELLM_HEALTH_ENDPOINT: ${LITELLM_HEALTH_ENDPOINT:-/health/readiness}
+      LITELLM_HEALTH_TIMEOUT_MS: ${LITELLM_HEALTH_TIMEOUT_MS:-5000}
+    ports: ['3001:3001']
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      litellm:
+        condition: service_healthy
     read_only: true
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: ["ALL"]
-    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    security_opt: ['no-new-privileges:true']
+    cap_drop: ['ALL']
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=64m']
     restart: unless-stopped
     networks: [octonet]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health/live >/dev/null || exit 1"]
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3001/api/health/live >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-v1.61.7@sha256:0f7f39f40bf6ba4cc802b991ce8c4eb2fa41c8a25b821e1d2d5197229cad27fe
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      DATABASE_URL: ${DATABASE_URL}
+    volumes:
+      - ./docker/litellm/config.yaml:/app/config.yaml:ro
+    ports: ['${LITELLM_PORT:-4000}:4000']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [octonet]
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4000/health/readiness']
+      interval: 30s
+      timeout: 10s
+      retries: 5
       start_period: 30s
 
   runtime-worker:
@@ -79,16 +106,16 @@ services:
       # Required for F1 durable execution writes; use a least-privilege runtime role.
       DATABASE_URL: ${DATABASE_URL}
       API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
-    ports: ["8000:8000"]
+    ports: ['8000:8000']
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
     read_only: true
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: ["ALL"]
-    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    security_opt: ['no-new-privileges:true']
+    cap_drop: ['ALL']
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=64m']
     restart: unless-stopped
     networks: [octonet]
     healthcheck:
@@ -104,7 +131,6 @@ services:
       retries: 3
       start_period: 30s
 
-
   outbox-publisher-worker:
     image: octo/outbox-publisher-worker:sha-${GIT_SHA:-local}
     build:
@@ -114,20 +140,20 @@ services:
       REDIS_URL: ${REDIS_URL}
       DATABASE_URL: ${DATABASE_URL}
       OUTBOX_STREAM_KEY: ${OUTBOX_STREAM_KEY:-octo.events}
-    ports: ["3010:3010"]
+    ports: ['3010:3010']
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
     read_only: true
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: ["ALL"]
-    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    security_opt: ['no-new-privileges:true']
+    cap_drop: ['ALL']
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=64m']
     restart: unless-stopped
     networks: [octonet]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3010/health/live >/dev/null || exit 1"]
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3010/health/live >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -144,25 +170,24 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
       RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute}
-    ports: ["3003:3003"]
+    ports: ['3003:3003']
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
     read_only: true
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: ["ALL"]
-    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    security_opt: ['no-new-privileges:true']
+    cap_drop: ['ALL']
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=64m']
     restart: unless-stopped
     networks: [octonet]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health/live >/dev/null || exit 1"]
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3003/health/live >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-
 
   reclaimer-worker:
     image: octo/reclaimer-worker:sha-${GIT_SHA:-local}
@@ -178,13 +203,13 @@ services:
       redis:
         condition: service_healthy
     read_only: true
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: ["ALL"]
-    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    security_opt: ['no-new-privileges:true']
+    cap_drop: ['ALL']
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=64m']
     restart: unless-stopped
     networks: [octonet]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3011/health/ready >/dev/null || exit 1"]
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3011/health/ready >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3

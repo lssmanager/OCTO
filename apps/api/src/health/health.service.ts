@@ -59,7 +59,7 @@ interface LiteLLMCheck {
 
 /** Milliseconds before a dependency check is considered timed out */
 const CHECK_TIMEOUT_MS = 500;
-const DEFAULT_LITELLM_CHECK_TIMEOUT_MS = 3000;
+const DEFAULT_LITELLM_CHECK_TIMEOUT_MS = 5000;
 const DEFAULT_LITELLM_HEALTH_ENDPOINT = '/health/readiness';
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -259,16 +259,28 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
         method: 'GET',
       });
 
+      const latencyMs = Date.now() - start;
       if (!res.ok) {
         return {
           status: 'error',
+          latencyMs,
           endpoint: this.litellmHealthEndpoint,
           error: `HTTP ${res.status} ${res.statusText}`,
         };
       }
 
       const metadata = await parseLiteLLMHealthMetadata(res);
-      const latencyMs = Date.now() - start;
+      const readinessError = getLiteLLMReadinessError(metadata);
+      if (readinessError) {
+        return {
+          status: 'error',
+          latencyMs,
+          endpoint: this.litellmHealthEndpoint,
+          ...metadata,
+          error: readinessError,
+        };
+      }
+
       return { status: 'ok', latencyMs, endpoint: this.litellmHealthEndpoint, ...metadata };
     } catch (err) {
       const error = controller.signal.aborted
@@ -287,6 +299,7 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
   }
 }
 
+/** Normalize a probe timeout and cap it so readiness cannot hang indefinitely. */
 function normalizeTimeoutMs(value: number, fallback: number): number {
   if (!Number.isFinite(value) || value <= 0) {
     return fallback;
@@ -294,6 +307,7 @@ function normalizeTimeoutMs(value: number, fallback: number): number {
   return Math.min(value, 10000);
 }
 
+/** Normalize LiteLLM health endpoint values supplied by runtime env. */
 function normalizeHealthEndpoint(endpoint: string): string {
   const trimmed = endpoint.trim();
   if (!trimmed) {
@@ -302,6 +316,23 @@ function normalizeHealthEndpoint(endpoint: string): string {
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 
+/** Return an error when LiteLLM readiness metadata reports an unhealthy upstream or DB. */
+function getLiteLLMReadinessError(metadata: Partial<LiteLLMCheck>): string | undefined {
+  const unhealthy: string[] = [];
+  const upstreamStatus = metadata.upstreamStatus?.trim().toLowerCase();
+  const dbStatus = metadata.db?.trim().toLowerCase();
+
+  if (upstreamStatus && !['ok', 'ready', 'healthy', 'connected'].includes(upstreamStatus)) {
+    unhealthy.push(`status=${metadata.upstreamStatus}`);
+  }
+  if (dbStatus && !['ok', 'ready', 'healthy', 'connected'].includes(dbStatus)) {
+    unhealthy.push(`db=${metadata.db}`);
+  }
+
+  return unhealthy.length > 0 ? `LiteLLM readiness unhealthy: ${unhealthy.join(' ')}` : undefined;
+}
+
+/** Extract the LiteLLM readiness fields exposed by the proxy health endpoint. */
 async function parseLiteLLMHealthMetadata(res: Response): Promise<Partial<LiteLLMCheck>> {
   const contentType = res.headers.get('content-type') ?? '';
   if (!contentType.includes('application/json')) {

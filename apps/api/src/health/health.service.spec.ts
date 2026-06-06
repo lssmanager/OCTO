@@ -182,6 +182,36 @@ describe('HealthController', () => {
       expect(checks.litellm.latencyMs).toEqual(expect.any(Number));
     });
 
+    it('treats disconnected LiteLLM readiness metadata as unhealthy', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              status: 'disconnected',
+              db: 'Not connected',
+              litellm_version: '1.61.7',
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          )
+        )
+      );
+
+      const checks = await service.runChecks();
+
+      expect(checks.litellm).toEqual(
+        expect.objectContaining({
+          status: 'error',
+          endpoint: '/health/readiness',
+          upstreamStatus: 'disconnected',
+          db: 'Not connected',
+          litellmVersion: '1.61.7',
+          latencyMs: expect.any(Number),
+          error: 'LiteLLM readiness unhealthy: status=disconnected db=Not connected',
+        })
+      );
+    });
+
     it('reports an explicit LiteLLM timeout instead of the raw AbortError message', async () => {
       process.env['LITELLM_HEALTH_TIMEOUT_MS'] = '1';
       service.onModuleInit();
