@@ -76,17 +76,25 @@ describeIfDb('F1 Agent Graph persisted hierarchy', () => {
     });
   });
 
+  it('rejects creating Agent hierarchy nodes through the generic nodes endpoint', async () => {
+    await cleanupTenant();
+    const service = makeService();
+
+    await expect(service.createNode(tenantId, { level: 'agent', name: 'Invalid Node Agent' })).rejects.toMatchObject({ status: 400 });
+  });
+
   it('patches node fields, policies and activationState for F1 node levels', async () => {
     await cleanupTenant();
     const service = makeService();
     const { agency, department, workspace, agentNode } = await createChain(service);
 
     const patchedAgency = await service.patchNode(tenantId, agency.id, { name: 'Patched Agency', slug: 'patched-agency', activationState: 'inactive', modelPolicy: { primaryModel: 'agency/model' } });
-    const patchedDepartment = await service.patchNode(tenantId, department.id, { activationState: 'suspended', toolPolicy: { deny: ['danger'] } });
+    const patchedDepartment = await service.patchNode(tenantId, department.id, { activationState: 'paused', toolPolicy: { deny: ['danger'] } });
     const patchedWorkspace = await service.patchNode(tenantId, workspace.id, { activationState: 'archived', budgetPolicy: { maxUsdPerRun: '0.20' } });
     const patchedAgentNode = await service.patchNode(tenantId, agentNode.id, { activationState: 'active', memoryPolicy: { retention: 'short' } });
 
     expect(patchedAgency).toMatchObject({ name: 'Patched Agency', slug: 'patched-agency', activationState: 'inactive' });
+    expect(patchedDepartment.activationState).toBe('inactive');
     expect(patchedDepartment.localPolicies.toolPolicy).toEqual({ deny: ['danger'] });
     expect(patchedWorkspace.activationState).toBe('archived');
     expect(patchedAgentNode.localPolicies.memoryPolicy).toEqual({ retention: 'short' });
@@ -122,12 +130,17 @@ describeIfDb('F1 Agent Graph persisted hierarchy', () => {
     const secondDepartment = await service.createNode(tenantId, { level: 'department', name: 'Second Department', parentId: secondAgency.id });
     const secondWorkspace = await service.createNode(tenantId, { level: 'workspace', name: 'Second Workspace', parentId: secondDepartment.id });
 
-    await service.reparentNode(tenantId, department.id, { parentId: secondAgency.id });
+    const movedDepartment = await service.reparentNode(tenantId, department.id, { parentId: secondAgency.id });
+    const agentAfterDepartmentMove = await service.get(tenantId, agent.id);
     const movedWorkspace = await service.reparentNode(tenantId, workspace.id, { parentId: secondDepartment.id });
+    const agentAfterWorkspaceMove = await service.get(tenantId, agent.id);
     const movedAgentNode = await service.reparentNode(tenantId, agentNode.id, { parentId: secondWorkspace.id });
     const movedAgent = await service.get(tenantId, agent.id);
 
+    expect(movedDepartment.parentId).toBe(secondAgency.id);
+    expect(agentAfterDepartmentMove.metadata).toMatchObject({ agencyId: secondAgency.id, workspaceId: workspace.id });
     expect(movedWorkspace.parentId).toBe(secondDepartment.id);
+    expect(agentAfterWorkspaceMove.metadata).toMatchObject({ agencyId: secondAgency.id, workspaceId: workspace.id });
     expect(movedAgentNode.parentId).toBe(secondWorkspace.id);
     expect(movedAgent.metadata).toMatchObject({ agencyId: secondAgency.id, workspaceId: secondWorkspace.id });
   });
@@ -143,6 +156,7 @@ describeIfDb('F1 Agent Graph persisted hierarchy', () => {
     await expect(service.reparentNode(tenantId, department.id, { parentId: department.id })).rejects.toMatchObject({ status: 400 });
     await expect(service.reparentNode(tenantId, department.id, { parentId: agentNode.id })).rejects.toMatchObject({ status: 400 });
     await expect(service.reparentNode(tenantId, department.id, { parentId: randomUUID() })).rejects.toMatchObject({ status: 404 });
+    await expect(service.patchNode(tenantId, workspace.id, { activationState: 'suspended' as any })).rejects.toMatchObject({ status: 400 });
     await expect(service.patchNode(tenantId, workspace.id, { activationState: 'deleted' as any })).rejects.toMatchObject({ status: 400 });
   });
 

@@ -10,7 +10,7 @@ type ConsoleAction = 'createNode' | 'createAgent' | 'patchNode' | 'reparentNode'
 const nextLevel: Record<Level, Level | null> = { agency: 'department', department: 'workspace', workspace: 'agent', agent: null };
 const parentLevel: Record<Level, Level | null> = { agency: null, department: 'agency', workspace: 'department', agent: 'workspace' };
 const labels: Record<Level, string> = { agency: 'Agency', department: 'Department', workspace: 'Workspace', agent: 'Agent' };
-const activationStates = ['active', 'inactive', 'suspended', 'archived'];
+const activationStates = ['active', 'inactive', 'archived'];
 const emptyPolicy = '{\n}';
 
 function flatten(nodes: AgentGraphNode[]): AgentGraphNode[] {
@@ -155,23 +155,35 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
 
   function patchSelectedNode(activationOverride?: string) {
     if (!selected) return;
-    const body = {
-      name: editName,
-      slug: editSlug,
-      activationState: activationOverride ?? editActivationState,
-      modelPolicy: parseJsonField('Model policy', modelPolicy),
-      toolPolicy: parseJsonField('Tool policy', toolPolicy),
-      budgetPolicy: parseJsonField('Budget policy', budgetPolicy),
-      governance: parseJsonField('Governance', governance),
-      coreFiles: parseJsonField('Core files', coreFiles),
-      memoryPolicy: parseJsonField('Memory policy', memoryPolicy),
-    };
+    let body: Record<string, unknown>;
+    try {
+      body = {
+        name: editName,
+        slug: editSlug,
+        activationState: activationOverride ?? editActivationState,
+        modelPolicy: parseJsonField('Model policy', modelPolicy),
+        toolPolicy: parseJsonField('Tool policy', toolPolicy),
+        budgetPolicy: parseJsonField('Budget policy', budgetPolicy),
+        governance: parseJsonField('Governance', governance),
+        coreFiles: parseJsonField('Core files', coreFiles),
+        memoryPolicy: parseJsonField('Memory policy', memoryPolicy),
+      };
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Node policy fields must be valid JSON.');
+      return;
+    }
     void submit(activationOverride === 'archived' ? 'archiveNode' : 'patchNode', body, { nodeId: selected.id });
   }
 
   function patchSelectedAgent() {
     if (!selected?.agent) return;
-    const capabilities = parseJsonField('Capabilities', editCapabilities);
+    let capabilities: unknown;
+    try {
+      capabilities = parseJsonField('Capabilities', editCapabilities);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Capabilities must be valid JSON.');
+      return;
+    }
     void submit('patchAgent', { name: editAgentName, role: editAgentRole, goal: editAgentGoal, status: editAgentStatus, capabilities }, { agentId: selected.agent.id });
   }
 

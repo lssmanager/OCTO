@@ -1,8 +1,8 @@
 # F1 Close Gate Report
 
-- Started at (UTC): 2026-06-04T23:46:27Z
-- Finished at (UTC): 2026-06-04T23:46:27Z
-- Commit SHA: 5bf33047069b16bffe5a522a0366b5c290589a7f
+- Started at (UTC): 2026-06-06T18:35:57Z
+- Finished at (UTC): 2026-06-06T18:35:57Z
+- Commit SHA: b32055f4f998434e18be4cc900c22f6a15d15c55
 - Branch: work
 - Gate command: pnpm f1:close-gate
 - Environment: node=test; pnpm=11.2.2; docker=unavailable; compose=unavailable
@@ -10,8 +10,8 @@
 - Compose project: default
 - Build phase: F1
 - Build version: 0.1.0-f1
-- Build commit: 5bf3304
-- Build time: 2026-06-04T23:46:27Z
+- Build commit: b32055f
+- Build time: 2026-06-06T18:35:57Z
 
 ## Verified public URLs
 
