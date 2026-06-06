@@ -50,11 +50,17 @@ interface PostgresCheck {
 interface LiteLLMCheck {
   status: 'ok' | 'error';
   latencyMs?: number;
+  endpoint?: string;
+  upstreamStatus?: string;
+  db?: string | null;
+  litellmVersion?: string;
   error?: string;
 }
 
 /** Milliseconds before a dependency check is considered timed out */
 const CHECK_TIMEOUT_MS = 500;
+const DEFAULT_LITELLM_CHECK_TIMEOUT_MS = 3000;
+const DEFAULT_LITELLM_HEALTH_ENDPOINT = '/health/readiness';
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
@@ -69,12 +75,27 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
   private redisUrl!: string;
   private dbUrl!: string;
   private litellmUrl!: string;
+  private litellmHealthEndpoint!: string;
+  private litellmHealthTimeoutMs!: number;
   private _bootstrapped = false;
 
   onModuleInit(): void {
     this.redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
     this.dbUrl = process.env['DATABASE_URL'] ?? '';
-    this.litellmUrl = process.env['LITELLM_BASE_URL'] ?? 'http://litellm:4000';
+    this.litellmUrl = (process.env['LITELLM_BASE_URL'] ?? 'http://litellm:4000').replace(
+      /\/+$/,
+      ''
+    );
+    this.litellmHealthEndpoint = normalizeHealthEndpoint(
+      process.env['LITELLM_HEALTH_ENDPOINT'] ?? DEFAULT_LITELLM_HEALTH_ENDPOINT
+    );
+    this.litellmHealthTimeoutMs = normalizeTimeoutMs(
+      Number.parseInt(
+        process.env['LITELLM_HEALTH_TIMEOUT_MS'] ?? String(DEFAULT_LITELLM_CHECK_TIMEOUT_MS),
+        10
+      ),
+      DEFAULT_LITELLM_CHECK_TIMEOUT_MS
+    );
     this.healthQueue = createQueue<HealthJobData>(QUEUE_NAMES.HEALTH, {
       redisUrl: this.redisUrl,
     });
@@ -221,37 +242,88 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * LiteLLM health check — validates the LLM gateway is reachable.
+   * LiteLLM health check — validates the LLM gateway is ready to receive traffic.
    * Principle #6: All LLM calls go through LiteLLM — must be monitored.
-   * Uses LiteLLM's /health/liveliness endpoint (returns 200 when ready).
+   * Uses LiteLLM's /health/readiness endpoint by default; /health/liveliness
+   * only proves that the proxy process is alive.
    */
   private async checkLiteLLM(): Promise<LiteLLMCheck> {
     const start = Date.now();
-    try {
-      const url = `${this.litellmUrl}/health/liveliness`;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+    const endpoint = `${this.litellmUrl}${this.litellmHealthEndpoint}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.litellmHealthTimeoutMs);
 
-      const res = await fetch(url, {
+    try {
+      const res = await fetch(endpoint, {
         signal: controller.signal,
         method: 'GET',
       });
-      clearTimeout(timer);
 
       if (!res.ok) {
         return {
           status: 'error',
+          endpoint: this.litellmHealthEndpoint,
           error: `HTTP ${res.status} ${res.statusText}`,
         };
       }
 
+      const metadata = await parseLiteLLMHealthMetadata(res);
       const latencyMs = Date.now() - start;
-      return { status: 'ok', latencyMs };
+      return { status: 'ok', latencyMs, endpoint: this.litellmHealthEndpoint, ...metadata };
     } catch (err) {
+      const error = controller.signal.aborted
+        ? `timeout after ${this.litellmHealthTimeoutMs}ms`
+        : err instanceof Error
+          ? err.message
+          : String(err);
       return {
         status: 'error',
-        error: err instanceof Error ? err.message : String(err),
+        endpoint: this.litellmHealthEndpoint,
+        error,
       };
+    } finally {
+      clearTimeout(timer);
     }
   }
+}
+
+function normalizeTimeoutMs(value: number, fallback: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return Math.min(value, 10000);
+}
+
+function normalizeHealthEndpoint(endpoint: string): string {
+  const trimmed = endpoint.trim();
+  if (!trimmed) {
+    return '/health/readiness';
+  }
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+async function parseLiteLLMHealthMetadata(res: Response): Promise<Partial<LiteLLMCheck>> {
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return { upstreamStatus: res.statusText || String(res.status) };
+  }
+
+  const body = (await res.json().catch(() => undefined)) as Record<string, unknown> | undefined;
+  if (!body) {
+    return { upstreamStatus: res.statusText || String(res.status) };
+  }
+
+  const metadata: Partial<LiteLLMCheck> = {
+    upstreamStatus:
+      typeof body['status'] === 'string' ? body['status'] : res.statusText || String(res.status),
+  };
+
+  if (typeof body['db'] === 'string' || body['db'] === null) {
+    metadata.db = body['db'];
+  }
+  if (typeof body['litellm_version'] === 'string') {
+    metadata.litellmVersion = body['litellm_version'];
+  }
+
+  return metadata;
 }
