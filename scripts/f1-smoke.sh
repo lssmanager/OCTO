@@ -11,9 +11,18 @@ else
   exit 64
 fi
 
+derive_api_root_url() {
+  local api_url="${1%/}"
+  if [[ "$api_url" == */api ]]; then
+    printf '%s' "${api_url%/api}"
+  else
+    printf '%s' "$api_url"
+  fi
+}
+
 F1_WEB_URL="${F1_WEB_URL:-${F1_PUBLIC_URL:-http://localhost:3000}}"
 API_URL="${API_URL:-http://localhost:3001/api}"
-API_ROOT_URL="${API_ROOT_URL:-http://localhost:3001}"
+API_ROOT_URL="${API_ROOT_URL:-$(derive_api_root_url "$API_URL")}"
 F1_PUBLIC_URL="${F1_PUBLIC_URL:-$F1_WEB_URL}"
 RUNTIME_URL="${RUNTIME_PUBLIC_URL:-http://localhost:8000}"
 SCHEDULER_URL="${SCHEDULER_PUBLIC_URL:-http://localhost:3003}"
