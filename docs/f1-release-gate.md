@@ -33,7 +33,7 @@ The close gate records each required check in `docs/reports/f1-close-report.md`:
     - `/api/health/version`;
     - Runtime Worker, Scheduler, Outbox Publisher and Reclaimer readiness/heartbeats;
     - API → queue → scheduler → runtime → PostgreSQL → outbox → reclaimer execution evidence.
-17. Agent Graph F1 smoke through `scripts/f1-agent-graph-smoke.sh` against `/api/v1/agents/*`.
+17. Agent Graph F1 smoke through `scripts/f1-agent-graph-smoke.sh` against `/api/v1/agents/*`, covering full `Agency → Department → Workspace → Agent` creation, node detail, patch, activation/archive, valid reparent, invalid hierarchy/self-parent/cross-tenant failures and selected Agent deletion.
 
 ## Lint boundaries and format decision
 

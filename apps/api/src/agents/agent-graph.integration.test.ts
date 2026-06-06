@@ -9,47 +9,58 @@ import { PostgresAgentRepo } from './postgres-agent.repo';
 const databaseUrl = process.env['TEST_DATABASE_URL'] ?? process.env['DATABASE_URL'];
 const describeIfDb = databaseUrl ? describe : describe.skip;
 const tenantId = `tenant-f1-graph-${randomUUID()}`;
+const otherTenantId = `${tenantId}-other`;
 
-async function cleanupTenant() {
-  await withTenantTx(tenantId, async (tx) => {
-    await tx.delete(agentVersions).where(eq(agentVersions.tenantId, tenantId));
-    await tx.delete(agents).where(eq(agents.tenantId, tenantId));
-    await tx.delete(hierarchyNodes).where(eq(hierarchyNodes.tenantId, tenantId));
+async function cleanupTenant(id = tenantId) {
+  await withTenantTx(id, async (tx) => {
+    await tx.delete(agentVersions).where(eq(agentVersions.tenantId, id));
+    await tx.delete(agents).where(eq(agents.tenantId, id));
+    await tx.delete(hierarchyNodes).where(eq(hierarchyNodes.tenantId, id));
   });
+}
+
+function makeService() {
+  const repo = new PostgresAgentRepo();
+  return new AgentService(repo as any, new AgentPolicyResolverService(repo as any));
+}
+
+async function createChain(service = makeService(), id = tenantId) {
+  const agency = await service.createNode(id, {
+    level: 'agency',
+    name: `F1 Agency ${randomUUID()}`,
+    toolPolicy: { allow: ['builtin.echo'] },
+  });
+  const department = await service.createNode(id, { level: 'department', name: 'Engineering', parentId: agency.id });
+  const workspace = await service.createNode(id, {
+    level: 'workspace',
+    name: 'Platform Workspace',
+    parentId: department.id,
+    budgetPolicy: { maxUsdPerRun: '0.10' },
+  });
+  const agent = await service.create(id, 'user-f1', {
+    name: 'Graph Smoke Agent',
+    role: 'operator',
+    goal: 'prove graph persistence',
+    hierarchyLevel: 'agent',
+    hierarchyParentId: workspace.id,
+    capabilities: ['graph.create'],
+  });
+  const agentNode = (await service.graph(id)).flatMap(function walk(node): any[] { return [node, ...node.children.flatMap(walk)]; }).find((node) => node.agent?.id === agent.id)!;
+  return { agency, department, workspace, agent, agentNode };
 }
 
 describeIfDb('F1 Agent Graph persisted hierarchy', () => {
   afterAll(async () => {
     await cleanupTenant();
+    await cleanupTenant(otherTenantId);
   });
 
-  it('creates an agent, persists its workspace relationship, and returns the graph after service re-instantiation', async () => {
+  it('creates Agency → Department → Workspace → Agent and returns persisted effective graph after service re-instantiation', async () => {
     await cleanupTenant();
-    const repo = new PostgresAgentRepo();
-    const service = new AgentService(repo as any, new AgentPolicyResolverService(repo as any));
+    const service = makeService();
+    const { agency, department, workspace, agent } = await createChain(service);
 
-    const agency = await service.createNode(tenantId, {
-      level: 'agency',
-      name: 'F1 Test Agency',
-      toolPolicy: { allow: ['builtin.echo'] },
-    });
-    const department = await service.createNode(tenantId, { level: 'department', name: 'Engineering', parentId: agency.id });
-    const workspace = await service.createNode(tenantId, {
-      level: 'workspace',
-      name: 'Platform Workspace',
-      parentId: department.id,
-      budgetPolicy: { maxUsdPerRun: '0.10' },
-    });
-    const agent = await service.create(tenantId, 'user-f1', {
-      name: 'Graph Smoke Agent',
-      role: 'operator',
-      goal: 'prove graph persistence',
-      hierarchyLevel: 'agent',
-      hierarchyParentId: workspace.id,
-      capabilities: ['graph.create'],
-    });
-
-    const freshService = new AgentService(new PostgresAgentRepo() as any, new AgentPolicyResolverService(new PostgresAgentRepo() as any));
+    const freshService = makeService();
     const graph = await freshService.graph(tenantId);
     const graphAgency = graph.find((node) => node.id === agency.id)!;
     const graphDepartment = graphAgency.children.find((node) => node.id === department.id)!;
@@ -63,5 +74,102 @@ describeIfDb('F1 Agent Graph persisted hierarchy', () => {
       toolPolicy: { allow: ['builtin.echo'] },
       budgetPolicy: { maxUsdPerRun: '0.10' },
     });
+  });
+
+  it('patches node fields, policies and activationState for F1 node levels', async () => {
+    await cleanupTenant();
+    const service = makeService();
+    const { agency, department, workspace, agentNode } = await createChain(service);
+
+    const patchedAgency = await service.patchNode(tenantId, agency.id, { name: 'Patched Agency', slug: 'patched-agency', activationState: 'inactive', modelPolicy: { primaryModel: 'agency/model' } });
+    const patchedDepartment = await service.patchNode(tenantId, department.id, { activationState: 'suspended', toolPolicy: { deny: ['danger'] } });
+    const patchedWorkspace = await service.patchNode(tenantId, workspace.id, { activationState: 'archived', budgetPolicy: { maxUsdPerRun: '0.20' } });
+    const patchedAgentNode = await service.patchNode(tenantId, agentNode.id, { activationState: 'active', memoryPolicy: { retention: 'short' } });
+
+    expect(patchedAgency).toMatchObject({ name: 'Patched Agency', slug: 'patched-agency', activationState: 'inactive' });
+    expect(patchedDepartment.localPolicies.toolPolicy).toEqual({ deny: ['danger'] });
+    expect(patchedWorkspace.activationState).toBe('archived');
+    expect(patchedAgentNode.localPolicies.memoryPolicy).toEqual({ retention: 'short' });
+  });
+
+  it('patches an Agent and synchronizes the linked hierarchy node when operational fields apply', async () => {
+    await cleanupTenant();
+    const service = makeService();
+    const { agent, agentNode } = await createChain(service);
+
+    const patchedAgent = await service.patch(tenantId, agent.id, {
+      name: 'Patched Agent',
+      role: 'reviewer',
+      goal: 'review graph changes',
+      status: 'active',
+      capabilities: ['graph.patch'],
+      activationState: 'inactive',
+      modelPolicy: { primaryModel: 'agent/model' },
+    }, 'user-f1');
+    const patchedNode = await service.nodeDetail(tenantId, agentNode.id);
+
+    expect(patchedAgent).toMatchObject({ name: 'Patched Agent', role: 'reviewer', goal: 'review graph changes', status: 'active' });
+    expect(patchedNode).toMatchObject({ name: 'Patched Agent', activationState: 'inactive' });
+    expect(patchedNode.localPolicies.modelPolicy).toEqual({ primaryModel: 'agent/model' });
+    expect(patchedNode.effectiveCapabilities).toEqual(['graph.patch']);
+  });
+
+  it('reparents valid department, workspace and agent nodes and refreshes descendant agent metadata', async () => {
+    await cleanupTenant();
+    const service = makeService();
+    const { department, workspace, agent, agentNode } = await createChain(service);
+    const secondAgency = await service.createNode(tenantId, { level: 'agency', name: 'Second Agency' });
+    const secondDepartment = await service.createNode(tenantId, { level: 'department', name: 'Second Department', parentId: secondAgency.id });
+    const secondWorkspace = await service.createNode(tenantId, { level: 'workspace', name: 'Second Workspace', parentId: secondDepartment.id });
+
+    await service.reparentNode(tenantId, department.id, { parentId: secondAgency.id });
+    const movedWorkspace = await service.reparentNode(tenantId, workspace.id, { parentId: secondDepartment.id });
+    const movedAgentNode = await service.reparentNode(tenantId, agentNode.id, { parentId: secondWorkspace.id });
+    const movedAgent = await service.get(tenantId, agent.id);
+
+    expect(movedWorkspace.parentId).toBe(secondDepartment.id);
+    expect(movedAgentNode.parentId).toBe(secondWorkspace.id);
+    expect(movedAgent.metadata).toMatchObject({ agencyId: secondAgency.id, workspaceId: secondWorkspace.id });
+  });
+
+  it('rejects invalid hierarchy relations, self-parent, descendant cycles, missing parents and invalid activationState', async () => {
+    await cleanupTenant();
+    const service = makeService();
+    const { agency, department, workspace, agentNode } = await createChain(service);
+
+    await expect(service.reparentNode(tenantId, agentNode.id, { parentId: department.id })).rejects.toMatchObject({ status: 400 });
+    await expect(service.reparentNode(tenantId, department.id, { parentId: workspace.id })).rejects.toMatchObject({ status: 400 });
+    await expect(service.reparentNode(tenantId, agency.id, { parentId: department.id })).rejects.toMatchObject({ status: 400 });
+    await expect(service.reparentNode(tenantId, department.id, { parentId: department.id })).rejects.toMatchObject({ status: 400 });
+    await expect(service.reparentNode(tenantId, department.id, { parentId: agentNode.id })).rejects.toMatchObject({ status: 400 });
+    await expect(service.reparentNode(tenantId, department.id, { parentId: randomUUID() })).rejects.toMatchObject({ status: 404 });
+    await expect(service.patchNode(tenantId, workspace.id, { activationState: 'deleted' as any })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('returns cross-tenant hierarchy nodes as not found', async () => {
+    await cleanupTenant();
+    await cleanupTenant(otherTenantId);
+    const service = makeService();
+    const { agency } = await createChain(service, tenantId);
+    await createChain(service, otherTenantId);
+
+    await expect(service.nodeDetail(otherTenantId, agency.id)).rejects.toMatchObject({ status: 404 });
+    await expect(service.patchNode(otherTenantId, agency.id, { name: 'Cross Tenant' })).rejects.toMatchObject({ status: 404 });
+    await expect(service.reparentNode(otherTenantId, agency.id, { parentId: null })).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('uses archive for non-agent destructive action and physically deletes only the selected Agent node', async () => {
+    await cleanupTenant();
+    const service = makeService();
+    const { workspace, agent, agentNode } = await createChain(service);
+
+    const archivedWorkspace = await service.patchNode(tenantId, workspace.id, { activationState: 'archived' });
+    expect(archivedWorkspace.children.some((child) => child.id === agentNode.id)).toBe(true);
+
+    await expect(service.delete(tenantId, agent.id, 'user-f1')).resolves.toEqual({ deleted: true });
+    await expect(service.get(tenantId, agent.id)).rejects.toMatchObject({ status: 404 });
+    await expect(service.nodeDetail(tenantId, agentNode.id)).rejects.toMatchObject({ status: 404 });
+    const workspaceAfterDelete = await service.nodeDetail(tenantId, workspace.id);
+    expect(workspaceAfterDelete.id).toBe(workspace.id);
   });
 });
