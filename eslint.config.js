@@ -1,34 +1,43 @@
-// eslint.config.js — ESLint 9 flat config
-// OCTO Monorepo — Architectural boundary enforcement (Issue #41)
+// eslint.config.js - ESLint flat config
+// OCTO Monorepo - Architectural boundary enforcement (Issue #41, #275)
 //
 // Zone topology (dependency direction is strictly downward):
 //
-//   leaf        (contracts, config, prompts)
-//     ↑           zero internal @octo/* imports allowed
-//   infra       (database, events, queue, security, observability, runtime-state)
-//     ↑           ← leaf only
-//   sdk         (sdk-abstractions, agent-core)
-//     ↑           ← leaf + infra
-//   ui          (packages/ui)
-//     ↑           ← leaf only
-//   app         (apps/api, apps/web, apps/*-worker)
-//               ← leaf + infra + sdk + ui
-//               ✗ never imports another app directly
+//   leaf          (contracts, config, prompts)
+//     ^             zero internal @octo/* imports allowed
+//   infra         (database, events, queue, security, observability, runtime-state)
+//     ^             <- leaf only
+//   provider-sdk  (sdk-abstractions)
+//     ^             <- leaf only; external SDK isolation lives here
+//   agent-core    (hierarchy, graph, delegation, authority)
+//     ^             <- leaf + infra + provider-sdk
+//   ui            (packages/ui)
+//     ^             <- leaf only
+//   frontend      (apps/web)
+//                 <- leaf + provider-sdk + ui
+//                 x no infra, control-plane or runtime imports
+//   control-plane (apps/api)
+//                 <- leaf + infra + provider-sdk + agent-core + ui
+//   runtime       (apps/runtime-worker)
+//                 <- leaf + infra + provider-sdk + agent-core
+//                 x no control-plane, frontend or ui imports
+//   workers       (apps/*-worker)
+//                 <- leaf + infra + provider-sdk + agent-core
+//                 x no frontend/ui imports and no direct app-to-app imports
 //
-// Specific rules enforced (issue #41):
-//   [R1] frontend ✗ database    → frontend allow: leaf + sdk + ui (no infra)
-//   [R2] frontend ✗ queue       → same
-//   [R3] frontend ✗ agent-core  → sdk is allowed but only via allowed zone
-//   [R4] reclaimer ✗ @nestjs/*  → reclaimer allow: leaf + infra only
-//   [R5] agent-core ✗ bullmq    → sdk allow: leaf + infra (bullmq is external;
-//                                  agent-core must import @octo/queue, not bullmq)
-//   [R6] contracts ✗ @octo/*    → leaf allow: [] (zero internal deps)
-//   [R7] workers adapter-only   → worker allow: leaf + infra + sdk (no ui)
+// Specific rules enforced:
+//   [R1] frontend x database/queue/runtime-state/security/observability
+//   [R2] frontend x agent-core/runtime/control-plane
+//   [R3] runtime x frontend/control-plane/ui
+//   [R4] reclaimer x @nestjs/* by allowing only leaf + infra internals
+//   [R5] agent-core x direct queue implementation detail imports through zones;
+//        BullMQ access belongs behind @octo/queue adapters
+//   [R6] contracts/config/prompts x @octo/*
+//   [R7] workers adapter-only: no UI and no direct app-to-app imports
 //
-// NOTE: boundaries/no-unknown is intentionally OFF.
-// It fires on every node_modules import (@nestjs/*, bullmq, drizzle-orm, etc.)
-// which are all valid external dependencies — not architectural violations.
-// The element-types rule is sufficient to enforce the internal DAG topology.
+// NOTE: boundaries/no-unknown is intentionally scoped through include-paths so
+// external node_modules imports are not architectural violations. The element
+// topology enforces the internal DAG.
 
 import boundaries from 'eslint-plugin-boundaries';
 import tsParser from '@typescript-eslint/parser';
@@ -64,7 +73,7 @@ for (const ruleName of ['element-types', 'no-unknown']) {
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
-  // ── Ignore generated/build outputs globally ───────────────────────────────
+  // Global ignores for generated/build outputs.
   {
     ignores: [
       '**/dist/**',
@@ -79,7 +88,7 @@ export default [
     ],
   },
 
-  // ── TypeScript + Boundaries: all packages and apps ────────────────────────
+  // TypeScript + Boundaries: all packages and apps.
   {
     files: ['packages/**/*.ts', 'packages/**/*.tsx', 'apps/**/*.ts', 'apps/**/*.tsx'],
     languageOptions: {
@@ -114,8 +123,13 @@ export default [
           capture: ['pkg'],
         },
         {
-          type: 'sdk',
-          pattern: 'packages/(sdk-abstractions|agent-core)/**/*',
+          type: 'provider-sdk',
+          pattern: 'packages/sdk-abstractions/**/*',
+          capture: ['pkg'],
+        },
+        {
+          type: 'agent-core',
+          pattern: 'packages/agent-core/**/*',
           capture: ['pkg'],
         },
         {
@@ -129,8 +143,13 @@ export default [
           capture: ['app'],
         },
         {
-          type: 'api',
+          type: 'control-plane',
           pattern: 'apps/api/**/*',
+          capture: ['app'],
+        },
+        {
+          type: 'runtime',
+          pattern: 'apps/runtime-worker/**/*',
           capture: ['app'],
         },
         {
@@ -147,34 +166,28 @@ export default [
       'boundaries/ignore': ['**/*.d.ts', '**/dist/**', '**/.next/**', '**/node_modules/**'],
     },
     rules: {
-      // Enforce the internal DAG topology for all @octo/* cross-package imports
+      // Enforce the internal DAG topology for all @octo/* cross-package imports.
       'boundaries/element-types': [
         'error',
         {
           default: 'disallow',
           rules: [
-            // [R6] leaf → nothing internal
             { from: 'leaf', allow: [] },
-            // infra → leaf only
             { from: 'infra', allow: ['leaf'] },
-            // [R5] sdk: leaf + infra (bullmq via @octo/queue only)
-            { from: 'sdk', allow: ['leaf', 'infra'] },
-            // ui → leaf only
+            { from: 'provider-sdk', allow: ['leaf'] },
+            { from: 'agent-core', allow: ['leaf', 'infra', 'provider-sdk'] },
             { from: 'ui', allow: ['leaf'] },
-            // [R1][R2][R3] frontend: leaf + sdk + ui (NOT infra)
-            { from: 'frontend', allow: ['leaf', 'sdk', 'ui'] },
-            // api → full internal stack
-            { from: 'api', allow: ['leaf', 'infra', 'sdk', 'ui'] },
-            // [R4] reclaimer → leaf + infra only (no @nestjs/* = no sdk)
+            { from: 'frontend', allow: ['leaf', 'provider-sdk', 'ui'] },
+            { from: 'control-plane', allow: ['leaf', 'infra', 'provider-sdk', 'agent-core', 'ui'] },
+            { from: 'runtime', allow: ['leaf', 'infra', 'provider-sdk', 'agent-core'] },
             { from: 'reclaimer', allow: ['leaf', 'infra'] },
-            // [R7] workers → leaf + infra + sdk (adapter-only, no UI)
-            { from: 'worker', allow: ['leaf', 'infra', 'sdk'] },
+            { from: 'worker', allow: ['leaf', 'infra', 'provider-sdk', 'agent-core'] },
           ],
         },
       ],
 
-      // External deps (node_modules) are valid; only flag truly unknown
-      // internal imports that don't match any element pattern.
+      // External deps (node_modules) are valid; only flag truly unknown internal
+      // imports that do not match any element pattern.
       'boundaries/no-unknown': 'error',
 
       // [ADR-0017] Prevent raw execution status writes outside runtime-state.
