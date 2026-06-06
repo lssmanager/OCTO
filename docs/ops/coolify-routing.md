@@ -117,3 +117,26 @@ Repository references to `3100` are not part of the F1 deployment contract. For
 F1, web listens on `3000` and API listens on `3001`. A Coolify or Traefik label
 such as `loadbalancer.server.port=3100` is stale unless a separate, explicitly
 documented proxy container actually listens there.
+
+## Reproducibilidad
+
+- La fuente Docker Compose de F1 debe mantener imágenes pinadas; LiteLLM está fijado a `main-v1.61.7` con digest `sha256:0f7f39f40bf6ba4cc802b991ce8c4eb2fa41c8a25b821e1d2d5197229cad27fe`.
+- PostgreSQL y Redis usan versiones exactas (`postgres:16.6-alpine3.21`, `redis:7.4.2-alpine3.21`).
+- Para actualizar imágenes, seguir `docs/ops/docker-versioning.md`: seleccionar versión, resolver digest, actualizar compose/documentación y ejecutar el close gate.
+
+## Hardening
+
+- Los contenedores F1 propios no ejecutan procesos finales como root.
+- Los servicios long-running definen `healthcheck` y `restart: unless-stopped`; `migrate` es la excepción one-shot documentada con `restart: "no"`.
+- El compose F1 usa red explícita, volúmenes nombrados mínimos, puertos publicados solo para superficies necesarias, y controles `read_only`, `no-new-privileges`, `cap_drop: ALL` y `tmpfs` en workers.
+
+## Auditoría
+
+Antes de cerrar o promover F1, ejecutar:
+
+```bash
+pnpm docker:verify-hardening
+pnpm f1:close-gate
+```
+
+`f1:close-gate` integra el hardening como control bloqueante y `pnpm docker:verify-hardening` genera `artifacts/f1-hardening-report.md` con imágenes, versiones, digests, health checks, fecha y commit.

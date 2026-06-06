@@ -1,10 +1,10 @@
-FROM python:3.12-slim AS builder
+FROM python:3.12.8-slim-bookworm AS builder
 WORKDIR /app
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY apps/runtime-worker/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-FROM python:3.12-slim AS runtime
+FROM python:3.12.8-slim-bookworm AS runtime
 ARG VERSION=0.0.0
 ARG REVISION=unknown
 ARG CREATED=unknown

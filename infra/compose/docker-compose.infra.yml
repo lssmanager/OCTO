@@ -5,7 +5,7 @@ version: '3.9'
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.6-alpine3.21
     container_name: octo-postgres
     restart: unless-stopped
     environment:
@@ -23,7 +23,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.2-alpine3.21
     container_name: octo-redis
     restart: unless-stopped
     command: ['redis-server', '--requirepass', '${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}']
@@ -38,7 +38,7 @@ services:
       retries: 5
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.12.5
     container_name: octo-qdrant
     restart: unless-stopped
     environment:
@@ -48,9 +48,14 @@ services:
       - '127.0.0.1:6334:6334'
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:6333/healthz || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
     container_name: octo-minio
     restart: unless-stopped
     command: server /data --console-address ':9001'

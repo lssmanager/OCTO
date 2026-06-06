@@ -45,6 +45,7 @@ REQUIRED_CLOSE_CHECKS=(
   "tenant isolation gate (API, DB/RLS, queue, scheduler, reclaimer, outbox)"
   "observability gate (executionId/traceId reconstruction)"
   "compose build for full F1 stack"
+  "Docker reproducibility and hardening gate"
   "compose up for full F1 stack"
   "strict public web+API smoke (console, status, health, metadata, execution, outbox, workers)"
   "Agent Graph F1 smoke"
@@ -326,6 +327,7 @@ run_close_gate() {
   run_close_check "tenant isolation gate (API, DB/RLS, queue, scheduler, reclaimer, outbox)" pnpm test:tenant-isolation
   run_close_check "observability gate (executionId/traceId reconstruction)" pnpm test:observability
   run_close_check "compose build for full F1 stack" compose build api web runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker
+  run_close_check "Docker reproducibility and hardening gate" pnpm docker:verify-hardening
   run_close_check "compose up for full F1 stack" compose up -d api web runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker litellm
 
   REPORT_URLS+=("F1 public surface = web+api")
