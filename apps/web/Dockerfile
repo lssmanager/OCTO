@@ -61,10 +61,12 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 ARG BUILD_VERSION=unknown
 ARG BUILD_COMMIT=unknown
-ARG BUILD_PHASE=F0
+ARG BUILD_PHASE=F1
+ARG BUILD_TIME=unknown
 
 ENV BUILD_VERSION=${BUILD_VERSION} \
     BUILD_COMMIT=${BUILD_COMMIT} \
-    BUILD_PHASE=${BUILD_PHASE}
+    BUILD_PHASE=${BUILD_PHASE} \
+    BUILD_TIME=${BUILD_TIME}
 
 CMD ["node", "apps/web/server.js"]

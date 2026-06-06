@@ -11,9 +11,19 @@ else
   exit 64
 fi
 
+derive_api_root_url() {
+  local api_url="${1%/}"
+  if [[ "$api_url" == */api ]]; then
+    printf '%s' "${api_url%/api}"
+  else
+    printf '%s' "$api_url"
+  fi
+}
+
+F1_WEB_URL="${F1_WEB_URL:-${F1_PUBLIC_URL:-http://localhost:3000}}"
 API_URL="${API_URL:-http://localhost:3001/api}"
-API_ROOT_URL="${API_ROOT_URL:-${API_URL%/api}}"
-F1_PUBLIC_URL="${F1_PUBLIC_URL:-}"
+API_ROOT_URL="${API_ROOT_URL:-$(derive_api_root_url "$API_URL")}"
+F1_PUBLIC_URL="${F1_PUBLIC_URL:-$F1_WEB_URL}"
 RUNTIME_URL="${RUNTIME_PUBLIC_URL:-http://localhost:8000}"
 SCHEDULER_URL="${SCHEDULER_PUBLIC_URL:-http://localhost:3003}"
 OUTBOX_URL="${OUTBOX_PUBLIC_URL:-http://localhost:3010}"
@@ -33,7 +43,7 @@ docker_compose_available() { command -v docker >/dev/null 2>&1 && docker compose
 
 diagnostics() {
   echo "--- endpoint diagnostics ---"
-  for url in "$API_ROOT_URL/" "$API_URL/health/live" "$API_URL/health/ready" "$API_URL/health/version" "$RUNTIME_URL/health/ready" "$SCHEDULER_URL/health/status" "$OUTBOX_URL/status" "$RECLAIMER_URL/health/status"; do
+  for url in "$F1_WEB_URL/" "$F1_WEB_URL/status" "$F1_WEB_URL/api/health" "$API_ROOT_URL/" "$API_URL/health/live" "$API_URL/health/ready" "$API_URL/health/version" "$RUNTIME_URL/health/ready" "$SCHEDULER_URL/health/status" "$OUTBOX_URL/status" "$RECLAIMER_URL/health/status"; do
     echo "# $url"
     curl -fsS "$url" || true
     echo
@@ -42,8 +52,57 @@ diagnostics() {
     echo "--- docker compose ps ---"
     docker compose ps || true
     echo "--- recent worker logs ---"
-    docker compose logs --tail=120 api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker postgres redis || true
+    docker compose logs --tail=120 web api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker postgres redis || true
   fi
+}
+
+assert_contains() {
+  local file="$1" pattern="$2" message="$3"
+  if ! grep -qi "$pattern" "$file"; then
+    cat "$file" >&2 || true
+    fail "$message"
+  fi
+}
+
+assert_web_surface() {
+  local body_file status
+  body_file="$(mktemp)"
+  log "checking F1 web Agent Graph Console: $F1_WEB_URL/"
+  status="$(curl -sS -o "$body_file" -w '%{http_code}' "$F1_WEB_URL/" || true)"
+  if [[ "$status" != "200" ]]; then
+    cat "$body_file" >&2 || true
+    rm -f "$body_file"
+    fail "F1 web root must return HTTP 200 (got ${status:-curl-error})"
+  fi
+  if grep -qi 'Cannot GET /' "$body_file"; then
+    cat "$body_file" >&2 || true
+    rm -f "$body_file"
+    fail "F1 web root returned a missing-root response instead of the Agent Graph Console"
+  fi
+  assert_contains "$body_file" 'Agent Graph Console' 'F1 web root is missing Agent Graph Console marker'
+  assert_contains "$body_file" 'F1' 'F1 web root is missing F1 marker'
+  assert_contains "$body_file" 'Agent Graph System' 'F1 web root is missing Agent Graph System marker'
+  rm -f "$body_file"
+}
+
+assert_web_status_surface() {
+  local body_file status
+  body_file="$(mktemp)"
+  log "checking F1 web foundation status: $F1_WEB_URL/status"
+  status="$(curl -sS -o "$body_file" -w '%{http_code}' "$F1_WEB_URL/status" || true)"
+  if [[ "$status" != "200" ]]; then
+    cat "$body_file" >&2 || true
+    rm -f "$body_file"
+    fail "F1 web /status must return HTTP 200 (got ${status:-curl-error})"
+  fi
+  if grep -qi 'Cannot GET /' "$body_file"; then
+    cat "$body_file" >&2 || true
+    rm -f "$body_file"
+    fail "F1 web /status returned a missing-route response"
+  fi
+  assert_contains "$body_file" 'Services' 'F1 web /status is missing services status marker'
+  assert_contains "$body_file" 'Foundation\|Infrastructure\|Control Plane' 'F1 web /status is missing foundation status marker'
+  rm -f "$body_file"
 }
 
 assert_root_surface() {
@@ -347,11 +406,11 @@ wait_reclaim_completed() {
 }
 
 run_health_smoke() {
-  log "F1 smoke: public surface and health endpoints"
-  assert_root_surface "API root surface" "$API_ROOT_URL/"
-  if [[ -n "$F1_PUBLIC_URL" ]]; then
-    assert_root_surface "public root surface" "$F1_PUBLIC_URL"
-  fi
+  log "F1 smoke: web+api public surface and health endpoints"
+  wait_http "F1 web health" "$F1_WEB_URL/api/health"
+  assert_web_surface
+  assert_web_status_surface
+  assert_root_surface "API root operational surface" "$API_ROOT_URL/"
   wait_http "API live" "$API_URL/health/live"
   wait_http "API ready" "$API_URL/health/ready"
   wait_http "API version" "$API_URL/health/version"
@@ -382,7 +441,7 @@ run_strict_smoke() {
   seed_reclaim_candidate
   wait_reclaim_completed
 
-  log "F1 strict smoke passed: API -> queue -> scheduler -> runtime -> PostgreSQL -> outbox -> reclaimer verified"
+  log "F1 strict smoke passed: web Agent Graph Console + /status and API -> queue -> scheduler -> runtime -> PostgreSQL -> outbox -> reclaimer verified"
 }
 
 if [[ "$MODE" == "strict" ]]; then

@@ -46,7 +46,7 @@ REQUIRED_CLOSE_CHECKS=(
   "observability gate (executionId/traceId reconstruction)"
   "compose build for full F1 stack"
   "compose up for full F1 stack"
-  "strict public/API smoke (root, health, metadata, execution, outbox, workers)"
+  "strict public web+API smoke (console, status, health, metadata, execution, outbox, workers)"
   "Agent Graph F1 smoke"
 )
 
@@ -280,6 +280,14 @@ export_close_defaults() {
   export EXECUTION_DISPATCH_RECONCILER_STALE_MS="${EXECUTION_DISPATCH_RECONCILER_STALE_MS:-1000}"
   export OCTO_POSTGRES_VOLUME="${OCTO_POSTGRES_VOLUME:-octo_f1_close_postgres_data}"
   export OCTO_REDIS_VOLUME="${OCTO_REDIS_VOLUME:-octo_f1_close_redis_data}"
+  export WEB_PORT="${WEB_PORT:-3000}"
+  export WEB_API_URL="${WEB_API_URL:-http://api:3001/api}"
+  export F1_WEB_URL="${F1_WEB_URL:-http://localhost:${WEB_PORT}}"
+  export F1_PUBLIC_URL="${F1_PUBLIC_URL:-$F1_WEB_URL}"
+  export API_URL="${API_URL:-http://localhost:3001/api}"
+  export API_ROOT_URL="${API_ROOT_URL:-http://localhost:3001}"
+  export OCTO_WEB_CONSOLE_TOKEN="${OCTO_WEB_CONSOLE_TOKEN:-}"
+  export OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES="${OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES:-false}"
 }
 
 compose() {
@@ -298,7 +306,7 @@ run_close_gate() {
     if [[ $status -ne 0 ]]; then
       echo "F1 close gate failed; recent compose status/logs follow" >&2
       compose ps >&2 || true
-      compose logs --tail=200 api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker postgres redis litellm >&2 || true
+      compose logs --tail=200 web api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker postgres redis litellm >&2 || true
       if [[ -z "$REPORT_FAILURE_REASON" ]]; then
         REPORT_FAILURE_REASON="close gate exited with status ${status}"
       fi
@@ -317,14 +325,18 @@ run_close_gate() {
   run_close_check "integration tests with mandatory DB/Redis" pnpm testintegration
   run_close_check "tenant isolation gate (API, DB/RLS, queue, scheduler, reclaimer, outbox)" pnpm test:tenant-isolation
   run_close_check "observability gate (executionId/traceId reconstruction)" pnpm test:observability
-  run_close_check "compose build for full F1 stack" compose build api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker
-  run_close_check "compose up for full F1 stack" compose up -d api runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker litellm
+  run_close_check "compose build for full F1 stack" compose build api web runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker
+  run_close_check "compose up for full F1 stack" compose up -d api web runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker litellm
 
-  REPORT_URLS+=("${API_ROOT_URL:-http://localhost:3001/}")
-  REPORT_URLS+=("${API_URL:-http://localhost:3001/api}/health/live")
-  REPORT_URLS+=("${API_URL:-http://localhost:3001/api}/health/ready")
-  REPORT_URLS+=("${API_URL:-http://localhost:3001/api}/health/version")
-  run_close_check "strict public/API smoke (root, health, metadata, execution, outbox, workers)" env DATABASE_URL="$F1_COMPOSE_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" bash scripts/f1-smoke.sh --strict
+  REPORT_URLS+=("F1 public surface = web+api")
+  REPORT_URLS+=("Web URL: ${F1_WEB_URL}/")
+  REPORT_URLS+=("Web status URL: ${F1_WEB_URL}/status")
+  REPORT_URLS+=("Web health URL: ${F1_WEB_URL}/api/health")
+  REPORT_URLS+=("API root URL: ${API_ROOT_URL}/")
+  REPORT_URLS+=("API health live URL: ${API_URL}/health/live")
+  REPORT_URLS+=("API health ready URL: ${API_URL}/health/ready")
+  REPORT_URLS+=("API version URL: ${API_URL}/health/version")
+  run_close_check "strict public web+API smoke (console, status, health, metadata, execution, outbox, workers)" env DATABASE_URL="$F1_COMPOSE_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" F1_WEB_URL="$F1_WEB_URL" F1_PUBLIC_URL="$F1_PUBLIC_URL" API_URL="$API_URL" API_ROOT_URL="$API_ROOT_URL" bash scripts/f1-smoke.sh --strict
   run_close_check "Agent Graph F1 smoke" env API_URL="http://localhost:3001/api" JWT_SECRET="${JWT_SECRET}" JWT_KID="${JWT_KID}" bash scripts/f1-agent-graph-smoke.sh
 
   REPORT_DECISION="PASS"

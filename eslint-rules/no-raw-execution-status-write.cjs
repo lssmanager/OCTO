@@ -34,7 +34,7 @@ module.exports = {
   },
 
   create(context) {
-    const filename = context.getFilename();
+    const filename = context.filename ?? context.physicalFilename ?? context.getFilename?.() ?? '<unknown>';
 
     // Allow writes inside runtime-state package (that is the FSM authority)
     if (
