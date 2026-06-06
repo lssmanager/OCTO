@@ -24,7 +24,7 @@ F1 stops at persisted graph hierarchy, guarded reparenting, activation/archive a
 
 - `scripts/f1-verify.sh --fast` is local feedback and labels output as `F1 FAST`; documented skips are allowed only in this mode and must be printed as `F1 FAST WARNING: SKIP ...`.
 - `scripts/f1-verify.sh --close` is the strict release gate and labels output as `F1 CLOSE`; required checks cannot be skipped silently, and unreached required checks are recorded as FAIL/not-run when an earlier prerequisite fails.
-- CLOSE blocks on workspace build/typecheck, lint, unit tests, DB/Redis integration, tenant isolation, observability, migrations, compose build/up, public smoke, Agent Graph F1 smoke and runtime DB-role smoke.
+- CLOSE blocks on workspace build/typecheck, lint, unit tests, DB/Redis integration, tenant isolation, observability, migrations, compose build/up, the runtime-worker F1 health/202-handoff/heartbeat smoke, public smoke, Agent Graph F1 smoke and runtime DB-role smoke.
 - The public smoke requires the root status surface to return HTTP 200, include `OCTO`, avoid `Cannot GET /`, report phase `F1`, and expose version/commit/build time coherent with `/api/health/version`.
 - `scripts/f1-agent-graph-smoke.sh` validates persisted `Agency → Department → Workspace → Agent` creation, node detail, patch, activation/archive toggles, valid Department/Workspace/Agent reparent, invalid hierarchy/self-parent/cycle/missing-parent paths, Agent-node creation rejection through `/nodes`, cross-tenant/nonexistent-node errors and selected Agent deletion against `/api/v1/agents/*`.
 - `scripts/f2-agent-graph-smoke.sh` remains only as a compatibility wrapper around the F1 smoke.
@@ -70,4 +70,4 @@ RUNTIME_DATABASE_URL=postgresql://octo_runtime:<runtime-password>@localhost:5432
 bash scripts/f1-runtime-db-role-smoke.sh --strict
 ```
 
-`scripts/f1-verify.sh --close` runs the same smoke after compose migrations, before the full F1 stack starts. The gate fails if `RUNTIME_DATABASE_URL` is absent, if it uses the same PostgreSQL username as `DATABASE_URL`, if effective grants exceed the F1 allowlist, if DDL is possible, if sequence privileges escape the required set, or if the role has `BYPASSRLS`/administrative attributes.
+`scripts/f1-verify.sh --close` runs the same DB-role smoke after compose migrations, before the full F1 stack starts. After stack startup it also runs `scripts/f1-runtime-handoff-smoke.sh`, which requires runtime-worker `/health/live`, `/health/ready`, `/health/status`, `RUNTIME_DATABASE_URL` evidence, a direct F1 HTTP handoff returning `202 Accepted`, API runtime worker visibility and a fresh `worker_heartbeats` row. The gate fails if `RUNTIME_DATABASE_URL` is absent, if it uses the same PostgreSQL username as `DATABASE_URL`, if effective grants exceed the F1 allowlist, if DDL is possible, if sequence privileges escape the required set, or if the role has `BYPASSRLS`/administrative attributes.

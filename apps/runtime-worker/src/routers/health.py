@@ -24,6 +24,8 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from ..f1_runtime import runtime_database_url
+
 log = structlog.get_logger(__name__)
 
 # Process start time for uptime calculation.
@@ -87,9 +89,10 @@ async def _check_redis() -> DependencyCheck:
 
 
 async def _check_database() -> DependencyCheck:
-    db_url = os.environ.get("DATABASE_URL", "")
-    if not db_url:
-        return DependencyCheck(status="error", detail="DATABASE_URL not configured")
+    try:
+        db_url = runtime_database_url()
+    except Exception as exc:  # noqa: BLE001
+        return DependencyCheck(status="error", detail=str(exc))
     try:
         import asyncpg  # type: ignore[import-untyped]
         t0 = time.monotonic()
@@ -154,6 +157,36 @@ async def _run_all_checks() -> dict[str, DependencyCheck]:
     }
 
 
+async def _latest_runtime_heartbeat() -> dict[str, Any] | None:
+    try:
+        import asyncpg  # type: ignore[import-untyped]
+
+        conn = await asyncpg.connect(runtime_database_url(), timeout=3)
+        try:
+            row = await conn.fetchrow(
+                """
+                SELECT
+                  instance_id, status, started_at, last_heartbeat_at,
+                  version, commit_sha, metadata, error
+                FROM worker_heartbeats
+                WHERE worker_type='runtime-worker'
+                ORDER BY last_heartbeat_at DESC
+                LIMIT 1
+                """
+            )
+        finally:
+            await conn.close()
+        if row is None:
+            return None
+        heartbeat = dict(row)
+        for key in ("started_at", "last_heartbeat_at"):
+            if heartbeat.get(key) is not None:
+                heartbeat[key] = heartbeat[key].isoformat()
+        return heartbeat
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "error": str(exc)}
+
+
 def _overall_status(checks: dict[str, DependencyCheck]) -> str:
     statuses = {c.status for c in checks.values()}
     if "error" in statuses:
@@ -216,6 +249,7 @@ async def worker_health() -> WorkerHealthResponse:
     - worker_id for multi-replica correlation in Grafana
     """
     import datetime
+
     import psutil  # type: ignore[import-untyped]
 
     proc = psutil.Process()
@@ -238,6 +272,37 @@ async def worker_health() -> WorkerHealthResponse:
         metrics_port=int(os.environ.get("METRICS_PORT", "9464")),
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
     )
+
+
+@router.get("/status")
+async def runtime_status() -> dict[str, Any]:
+    """F1 operational status for runtime-worker evidence and close gates."""
+    import datetime
+
+    checks = await _run_all_checks()
+    heartbeat = await _latest_runtime_heartbeat()
+    return {
+        "status": _overall_status(checks),
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "service": os.environ.get("OTEL_SERVICE_NAME", "octo-runtime-worker"),
+        "workerType": "runtime-worker",
+        "workerId": os.environ.get("WORKER_ID", f"worker-{os.getpid()}"),
+        "env": os.environ.get("NODE_ENV", "development"),
+        "phase": os.environ.get("BUILD_PHASE", "F0"),
+        "version": os.environ.get("BUILD_VERSION", "unknown"),
+        "commit": os.environ.get("BUILD_COMMIT", "unknown"),
+        "database": {
+            "credential": (
+                "RUNTIME_DATABASE_URL"
+                if os.environ.get("RUNTIME_DATABASE_URL")
+                else "DATABASE_URL-fallback"
+            ),
+            "runtimeDatabaseUrlConfigured": bool(os.environ.get("RUNTIME_DATABASE_URL")),
+            "check": checks["database"].model_dump(),
+        },
+        "heartbeat": heartbeat,
+        "checks": {k: v.model_dump() for k, v in checks.items()},
+    }
 
 
 @router.get("/version")
