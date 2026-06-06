@@ -2,6 +2,27 @@
 
 `pnpm f1:close-gate` is the only F1 close gate. It is intentionally stricter than compile/deploy success: it validates the live F1 system with real PostgreSQL, Redis, compose services, public web+API HTTP surfaces, Agent Graph F1, observability and runtime database-role evidence before F1 can be called closed.
 
+## Current Coolify evidence — 2026-06-06
+
+The current Coolify deployment at `https://agents.socialstudies.cloud/` is valid partial evidence for F1 but is **not** a passing release gate.
+
+Confirmed:
+
+- Public API root is reachable and reports `OCTO`, service `octo-api`, phase `F1`, version `0.1.0-f1` and commit `2be6f23359ef97ef40dc7efe7b6256d17b0ec993`.
+- `/api/health/live` returns `status: ok`.
+- `/api/health/version` returns F1 service metadata.
+- `/api/health/ready` confirms PostgreSQL, Redis and queue `execution.dispatch` as `ok`.
+- `/api/v1/ops/f1/status` returns `401` without `X-Internal-Secret`, which is expected for an internal protected endpoint.
+
+Blocking:
+
+- `/api/health/ready` returns `ready: false` because LiteLLM fails with `This operation was aborted`.
+- The observed deployment proves `octo-api` public availability, not the complete F1 stack.
+- No public Agent Graph smoke has passed yet against `https://agents.socialstudies.cloud/api`.
+- Runtime Worker, Scheduler, Reclaimer, Outbox Publisher, runtime DB role smoke, observability gate and tenant/security gates still need closure evidence.
+
+The detailed evidence is tracked in `docs/reports/f1-coolify-deployment-status.md`. The blocking issues are #286, #287, #288, #289, #290 and #291. Issue #281 remains the umbrella F1 closure ticket.
+
 ## Modes
 
 - `pnpm f1:verify` runs `scripts/f1-verify.sh --fast`. FAST mode is for local feedback. It may skip DB/Redis integration checks when `DATABASE_URL`/`REDIS_URL` are absent and may skip Docker smoke unless `F1_VERIFY_DOCKER=1` is set. FAST logs are labelled `F1 FAST`; every allowed skip is an explicit `F1 FAST WARNING: SKIP ...` warning.
