@@ -14,7 +14,7 @@
 # ─────────────────────────────────────────────
 # Stage 0: base — Python 3.12 slim
 # ─────────────────────────────────────────────
-FROM python:3.12-slim AS base
+FROM python:3.12.8-slim-bookworm AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

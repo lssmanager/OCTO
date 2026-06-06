@@ -8,11 +8,11 @@
 # Constraint: NO @nestjs/* — plain Node.js process only
 
 # ---- builder ----
-FROM node:22-alpine AS builder
+FROM node:22.22.2-alpine3.22 AS builder
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.2.2 --activate
 
 # Copy workspace manifests
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
@@ -40,7 +40,22 @@ RUN pnpm --filter @octo/observability build
 RUN pnpm --filter @octo/reclaimer-worker build
 
 # ---- runner ----
-FROM node:22-alpine AS runner
+FROM node:22.22.2-alpine3.22 AS runner
+ARG SOURCE_COMMIT=local
+ARG BUILD_VERSION=0.1.0-f1
+ARG BUILD_COMMIT=${SOURCE_COMMIT}
+ARG BUILD_PHASE=F1
+ARG BUILD_TIME=local
+ARG VERSION=${BUILD_VERSION}
+ARG REVISION=${BUILD_COMMIT}
+ARG CREATED=${BUILD_TIME}
+LABEL org.opencontainers.image.title="octo/reclaimer-worker" \
+      org.opencontainers.image.description="OCTO Reclaimer Worker" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.source="https://github.com/lssmanager/OCTO" \
+      org.opencontainers.image.licenses="Proprietary"
 WORKDIR /app
 
 # Non-root user
@@ -51,7 +66,11 @@ USER reclaimer
 COPY --from=builder --chown=reclaimer:octo /app/apps/reclaimer-worker/dist ./dist
 COPY --from=builder --chown=reclaimer:octo /app/node_modules               ./node_modules
 
-ENV NODE_ENV=production
+ENV BUILD_VERSION=${BUILD_VERSION} \
+    BUILD_COMMIT=${BUILD_COMMIT} \
+    BUILD_PHASE=${BUILD_PHASE} \
+    BUILD_TIME=${BUILD_TIME} \
+    NODE_ENV=production
 EXPOSE 3011
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

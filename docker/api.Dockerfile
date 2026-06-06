@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:22.22.2-alpine3.22 AS builder
 WORKDIR /app
 RUN apk add --no-cache libc6-compat && corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
@@ -8,7 +8,7 @@ RUN HUSKY=0 pnpm install --frozen-lockfile
 RUN pnpm turbo build --filter=@octo/api
 RUN pnpm --filter @octo/api deploy --prod --legacy /prod/api
 
-FROM node:22-alpine AS runtime
+FROM node:22.22.2-alpine3.22 AS runtime
 ARG SOURCE_COMMIT=local
 ARG BUILD_VERSION=0.1.0-f1
 ARG BUILD_COMMIT=${SOURCE_COMMIT}

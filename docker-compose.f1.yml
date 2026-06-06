@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.6-alpine3.21
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-octo}
       POSTGRES_USER: ${POSTGRES_USER:-octo}
@@ -10,21 +10,31 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    networks: [octonet]
+    volumes:
+      - octo_f1_postgres_data:/var/lib/postgresql/data
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.2-alpine3.21
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    networks: [octonet]
+    volumes:
+      - octo_f1_redis_data:/data
 
   migrate:
     image: octo/migrate:sha-${GIT_SHA:-local}
     build:
       context: .
       dockerfile: docker/migrate.Dockerfile
+    # One-shot migration job: intentionally does not restart after successful completion.
     restart: "no"
+    networks: [octonet]
     environment:
       DATABASE_URL: ${DATABASE_URL}
     depends_on:
@@ -50,6 +60,14 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    restart: unless-stopped
+    networks: [octonet]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health/live >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   runtime-worker:
     image: octo/runtime-worker:sha-${GIT_SHA:-local}
@@ -71,6 +89,20 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    restart: unless-stopped
+    networks: [octonet]
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          'import urllib.request; urllib.request.urlopen("http://localhost:8000/health/live", timeout=3)',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 
   outbox-publisher-worker:
@@ -92,6 +124,14 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    restart: unless-stopped
+    networks: [octonet]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3010/health/live >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   scheduler-worker:
     image: octo/scheduler-worker:sha-${GIT_SHA:-local}
@@ -114,6 +154,14 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    restart: unless-stopped
+    networks: [octonet]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health/live >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 
   reclaimer-worker:
@@ -133,3 +181,19 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    restart: unless-stopped
+    networks: [octonet]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3011/health/ready >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  octo_f1_postgres_data:
+  octo_f1_redis_data:
+
+networks:
+  octonet:
+    driver: bridge

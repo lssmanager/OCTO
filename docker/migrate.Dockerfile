@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:22.22.2-alpine3.22 AS builder
 WORKDIR /app
 RUN apk add --no-cache libc6-compat && corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
@@ -7,7 +7,7 @@ COPY packages ./packages
 COPY scripts ./scripts
 RUN HUSKY=0 pnpm install --frozen-lockfile
 
-FROM node:22-alpine AS runtime
+FROM node:22.22.2-alpine3.22 AS runtime
 ARG VERSION=0.0.0
 ARG REVISION=unknown
 ARG CREATED=unknown

@@ -5,7 +5,7 @@ version: '3.9'
 
 services:
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.116.1
     container_name: octo-otel-collector
     restart: unless-stopped
     command: ['--config=/etc/otel-collector-config.yaml']
@@ -15,9 +15,14 @@ services:
       - '4317:4317' # gRPC
       - '4318:4318' # HTTP
       - '8888:8888' # metrics
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:13133/ >/dev/null || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.1
     container_name: octo-prometheus
     restart: unless-stopped
     ports:
@@ -25,9 +30,14 @@ services:
     volumes:
       - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9090/-/healthy >/dev/null || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.4.0
     container_name: octo-grafana
     restart: unless-stopped
     ports:
@@ -38,14 +48,24 @@ services:
       - grafana_data:/var/lib/grafana
       - ../grafana/dashboards:/etc/grafana/provisioning/dashboards
       - ../grafana/datasources:/etc/grafana/provisioning/datasources
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/api/health >/dev/null || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:3.3.2
     container_name: octo-loki
     restart: unless-stopped
     ports:
       - '3200:3100'
     command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3100/ready >/dev/null || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   prometheus_data:

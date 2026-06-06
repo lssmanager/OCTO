@@ -205,3 +205,27 @@ bash scripts/f1-runtime-db-role-smoke.sh --strict
 ```
 
 The smoke fails if the runtime DSN is missing, if it reuses the API/migration username, if grants exist outside the F1 runtime table allowlist, if DDL succeeds, or if the role has `BYPASSRLS`/administrative attributes.
+
+## Reproducibilidad, Hardening y Auditoría F1
+
+### Reproducibilidad
+
+- `docker-compose.yml` debe usar imágenes pinadas; LiteLLM está fijado como `ghcr.io/berriai/litellm:main-v1.61.7@sha256:0f7f39f40bf6ba4cc802b991ce8c4eb2fa41c8a25b821e1d2d5197229cad27fe`.
+- PostgreSQL y Redis usan tags exactos de patch/Alpine (`postgres:16.6-alpine3.21`, `redis:7.4.2-alpine3.21`).
+- El procedimiento de actualización controlada está en [`docker-versioning.md`](./docker-versioning.md); nunca reemplazar un digest por `latest`, `main-latest`, `edge`, `nightly`, `canary` o `dev`.
+
+### Hardening
+
+- Los Dockerfiles F1 ejecutan procesos finales con usuario no root.
+- Los servicios long-running tienen `healthcheck` y `restart: unless-stopped`; `migrate` es el único one-shot con `restart: "no"`.
+- `docker-compose.f1.yml` reduce blast radius con red explícita, volúmenes mínimos, `read_only`, `no-new-privileges`, `cap_drop: ALL` y `tmpfs` temporal para workers.
+
+### Auditoría
+
+Ejecuta antes de promover un deploy:
+
+```bash
+pnpm docker:verify-hardening
+```
+
+El comando falla el gate ante imágenes flotantes, runtime root, falta de health checks/restart policies críticas o secretos en Dockerfiles, y genera `artifacts/f1-hardening-report.md` como evidencia.

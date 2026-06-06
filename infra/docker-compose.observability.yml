@@ -8,6 +8,12 @@ services:
       - '4317:4317'
       - '4318:4318'
       - '8889:8889'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:13133/ >/dev/null || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   prometheus:
     image: prom/prometheus:v2.55.0
@@ -19,6 +25,12 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
     ports: ['9090:9090']
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9090/-/healthy >/dev/null || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   grafana:
     image: grafana/grafana:11.3.0
@@ -31,12 +43,24 @@ services:
       - ./grafana/alerting:/etc/grafana/provisioning/alerting:ro
     ports: ['3100:3000']
     depends_on: [prometheus, loki]
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/api/health >/dev/null || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   loki:
     image: grafana/loki:3.2.0
     volumes:
       - loki_data:/loki
     ports: ['3200:3100']
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3100/ready >/dev/null || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   prometheus_data:
