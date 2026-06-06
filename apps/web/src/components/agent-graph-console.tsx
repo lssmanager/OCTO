@@ -82,6 +82,7 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
   const [toolPolicy, setToolPolicy] = useState(emptyPolicy);
   const [budgetPolicy, setBudgetPolicy] = useState(emptyPolicy);
   const [governance, setGovernance] = useState(emptyPolicy);
+  const [nodeCapabilities, setNodeCapabilities] = useState('[]');
   const [coreFiles, setCoreFiles] = useState('[]');
   const [memoryPolicy, setMemoryPolicy] = useState(emptyPolicy);
   const [reparentId, setReparentId] = useState('');
@@ -105,6 +106,7 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
     setToolPolicy(jsonText(selected.localPolicies['toolPolicy']));
     setBudgetPolicy(jsonText(selected.localPolicies['budgetPolicy']));
     setGovernance(jsonText(selected.localPolicies['governance']));
+    setNodeCapabilities(JSON.stringify(selected.localPolicies['capabilities'] ?? [], null, 2));
     setCoreFiles(JSON.stringify(selected.localPolicies['coreFiles'] ?? [], null, 2));
     setMemoryPolicy(jsonText(selected.localPolicies['memoryPolicy']));
     setReparentId(selected.parentId ?? '');
@@ -165,6 +167,7 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
         toolPolicy: parseJsonField('Tool policy', toolPolicy),
         budgetPolicy: parseJsonField('Budget policy', budgetPolicy),
         governance: parseJsonField('Governance', governance),
+        capabilities: parseJsonField('Node capabilities', nodeCapabilities),
         coreFiles: parseJsonField('Core files', coreFiles),
         memoryPolicy: parseJsonField('Memory policy', memoryPolicy),
       };
@@ -225,7 +228,9 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
               <div><span className="text-xs font-mono uppercase" style={{ color: 'var(--color-primary)' }}>{labels[selected.level]}</span><h3 className="font-semibold">{selected.name}</h3><p className="text-xs" style={{ color: 'var(--color-text-faint)' }}>{selected.id}</p></div>
               <p className="text-sm">Activation: <strong>{selected.activationState}</strong> · Runtime: <strong>{selected.runtimeStatus ?? 'not available'}</strong></p>
               {selected.agent && <p className="text-sm">Agent status: <strong>{selected.agent.status}</strong> · role {selected.agent.role}</p>}
-              <div><h4 className="mb-1 text-xs font-semibold uppercase">Effective capabilities</h4><JsonBlock value={selected.effectiveCapabilities} emptyLabel="No effective capabilities configured." /></div>
+              <div><h4 className="mb-1 text-xs font-semibold uppercase">Local configuration</h4><JsonBlock value={selected.localPolicies} emptyLabel="No local hierarchy configuration configured." /></div>
+              {selected.agent && <div><h4 className="mb-1 text-xs font-semibold uppercase">Agent local capabilities</h4><JsonBlock value={selected.agent.capabilities} emptyLabel="No Agent-local capabilities configured." /></div>}
+              <div><h4 className="mb-1 text-xs font-semibold uppercase">Effective inherited capabilities</h4><JsonBlock value={selected.effectiveCapabilities} emptyLabel="No inherited or Agent-local capabilities configured." /></div>
               <div><h4 className="mb-1 text-xs font-semibold uppercase">Effective policies</h4><JsonBlock value={selected.effectivePolicies} emptyLabel="No effective policies configured." /></div>
             </div> : <p className="mt-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>Select a graph node to inspect it.</p>}
           </section>
@@ -240,6 +245,7 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
               <textarea value={toolPolicy} onChange={(event) => setToolPolicy(event.target.value)} className="rounded-md border bg-transparent px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)' }} rows={3} aria-label="Tool policy JSON" />
               <textarea value={budgetPolicy} onChange={(event) => setBudgetPolicy(event.target.value)} className="rounded-md border bg-transparent px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)' }} rows={3} aria-label="Budget policy JSON" />
               <textarea value={governance} onChange={(event) => setGovernance(event.target.value)} className="rounded-md border bg-transparent px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)' }} rows={3} aria-label="Governance JSON" />
+              <textarea value={nodeCapabilities} onChange={(event) => setNodeCapabilities(event.target.value)} className="rounded-md border bg-transparent px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)' }} rows={3} aria-label="Node capabilities JSON" />
               <textarea value={coreFiles} onChange={(event) => setCoreFiles(event.target.value)} className="rounded-md border bg-transparent px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)' }} rows={3} aria-label="Core files JSON" />
               <textarea value={memoryPolicy} onChange={(event) => setMemoryPolicy(event.target.value)} className="rounded-md border bg-transparent px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)' }} rows={3} aria-label="Memory policy JSON" />
             </div>
@@ -264,7 +270,8 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
             <input value={editAgentRole} onChange={(event) => setEditAgentRole(event.target.value)} placeholder="Role" className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
             <input value={editAgentStatus} onChange={(event) => setEditAgentStatus(event.target.value)} placeholder="Status" className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
             <textarea value={editAgentGoal} onChange={(event) => setEditAgentGoal(event.target.value)} placeholder="Goal" className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }} />
-            <textarea value={editCapabilities} onChange={(event) => setEditCapabilities(event.target.value)} className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)' }} rows={3} aria-label="Capabilities JSON" />
+            <label className="mt-2 block text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Agent local capabilities</label>
+            <textarea value={editCapabilities} onChange={(event) => setEditCapabilities(event.target.value)} className="mt-1 w-full rounded-md border bg-transparent px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)' }} rows={3} aria-label="Agent local capabilities JSON" />
             <div className="mt-2 flex flex-wrap gap-2">
               <button type="button" onClick={patchSelectedAgent} className="rounded-md px-3 py-2 text-sm" style={{ backgroundColor: 'var(--color-primary)', color: 'white' }}>Save agent</button>
               <button type="button" onClick={() => window.confirm('Delete this Agent and its F1 hierarchy node? Non-agent nodes are archived instead of physically deleted.') && submit('deleteAgent', {}, { agentId: selected.agent!.id })} className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--color-error)', color: 'var(--color-error)' }}>Delete agent</button>

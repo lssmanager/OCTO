@@ -14,6 +14,9 @@ export type PolicyConfig = {
   toolPolicy?: { allow?: string[]; deny?: string[] };
   budgetPolicy?: Record<string, unknown>;
   governance?: Record<string, unknown>;
+  coreFiles?: unknown[];
+  memoryPolicy?: Record<string, unknown>;
+  capabilities?: string[];
 };
 
 export type HierarchyPolicyNode = {
@@ -22,6 +25,23 @@ export type HierarchyPolicyNode = {
   parentId: string | null;
   activationState: HierarchyActivationState;
   config: PolicyConfig;
+};
+
+export type ResolvedEffectivePolicyConfig = {
+  instructions: string;
+  modelPolicy: {
+    primaryModel: string;
+    fallbackModels: string[];
+    fallbackChain: string[];
+    allowedModels: string[];
+    registeredModels: string[];
+  };
+  toolPolicy: { allow: string[]; deny: string[] };
+  budgetPolicy: Record<string, unknown>;
+  governance: Record<string, unknown>;
+  coreFiles: unknown[];
+  memoryPolicy: Record<string, unknown>;
+  capabilities: string[];
 };
 
 export type EffectiveAgentPolicySnapshot = {
@@ -40,6 +60,9 @@ export type EffectiveAgentPolicySnapshot = {
   toolPolicy: { allow: string[]; deny: string[] };
   budgetPolicy: Record<string, unknown>;
   governance: Record<string, unknown>;
+  coreFiles: unknown[];
+  memoryPolicy: Record<string, unknown>;
+  effectiveCapabilities: string[];
   hierarchySnapshot: {
     chain: HierarchyPolicyNode[];
     agency?: HierarchyPolicyNode;
@@ -67,20 +90,73 @@ export function validateHierarchyRelation(parentLevel: HierarchyLevel | null, ch
   }
 }
 
-function unique(values: string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
+export function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim()) : [];
 }
 
-function asStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : [];
+export function normalizeCapabilities(value: unknown, label = 'capabilities'): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new BadRequestException(`invalid_${label}`);
+  }
+  return unique(value.map((item) => item.trim()).filter(Boolean));
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function configOf(value: Record<string, unknown> | null | undefined): PolicyConfig {
   return ((value as any)?.configJson ?? value ?? {}) as PolicyConfig;
 }
 
-function mergeObjects(chain: PolicyConfig[], key: 'budgetPolicy' | 'governance'): Record<string, unknown> {
+function mergeObjects(chain: PolicyConfig[], key: 'budgetPolicy' | 'governance' | 'memoryPolicy'): Record<string, unknown> {
   return chain.reduce<Record<string, unknown>>((acc, config) => ({ ...acc, ...((config[key] as Record<string, unknown> | undefined) ?? {}) }), {});
+}
+
+export function resolveEffectivePolicyConfig(chain: PolicyConfig[]): ResolvedEffectivePolicyConfig {
+  const primaryModel = [...chain]
+    .reverse()
+    .map((config) => config.modelPolicy?.primaryModel)
+    .find((model): model is string => typeof model === 'string' && model.length > 0) ?? '';
+
+  const fallbackModels = unique(
+    chain.flatMap((config) => [
+      ...asStringArray(config.modelPolicy?.fallbackChain),
+      ...asStringArray(config.modelPolicy?.fallbackModels),
+      ...asStringArray(config.fallbackModels),
+    ])
+  ).filter((model) => model !== primaryModel);
+  const allowedModels = unique(chain.flatMap((config) => asStringArray(config.modelPolicy?.allowedModels)));
+  const registeredModels = unique(chain.flatMap((config) => asStringArray(config.modelPolicy?.registeredModels)));
+  const fallbackChain = fallbackModels.filter((model) => {
+    if (registeredModels.length > 0 && !registeredModels.includes(model)) return false;
+    if (allowedModels.length > 0 && !allowedModels.includes(model)) return false;
+    return true;
+  });
+  if (primaryModel && registeredModels.length > 0 && !registeredModels.includes(primaryModel)) {
+    throw new BadRequestException(`model_not_registered:${primaryModel}`);
+  }
+  if (primaryModel && allowedModels.length > 0 && !allowedModels.includes(primaryModel)) {
+    throw new BadRequestException(`model_not_allowed:${primaryModel}`);
+  }
+
+  const deny = unique(chain.flatMap((config) => asStringArray(config.toolPolicy?.deny)));
+  const allow = unique(chain.flatMap((config) => asStringArray(config.toolPolicy?.allow))).filter(
+    (tool) => !deny.includes(tool)
+  );
+  const coreFiles = [...chain].reverse().find((config) => Array.isArray(config.coreFiles))?.coreFiles ?? [];
+
+  return {
+    instructions: String([...chain].reverse().find((config) => typeof config.instructions === 'string')?.instructions ?? ''),
+    modelPolicy: { primaryModel, fallbackModels: fallbackChain, fallbackChain, allowedModels, registeredModels },
+    toolPolicy: { allow, deny },
+    budgetPolicy: mergeObjects(chain, 'budgetPolicy'),
+    governance: mergeObjects(chain, 'governance'),
+    coreFiles,
+    memoryPolicy: mergeObjects(chain, 'memoryPolicy'),
+    capabilities: unique(chain.flatMap((config) => asStringArray(config.capabilities))),
+  };
 }
 
 @Injectable()
@@ -88,6 +164,7 @@ export class AgentPolicyResolverService {
   constructor(
     private readonly repo: {
       getAgentLocalConfig: (tenantId: string, agentId: string) => Promise<Record<string, unknown> | null>;
+      getAgentCapabilities?: (tenantId: string, agentId: string) => Promise<unknown>;
       getHierarchyPolicyChain?: (tenantId: string, agentId: string) => Promise<HierarchyPolicyNode[] | null>;
       getWorkspacePolicyDefaults: (tenantId: string, workspaceId: string) => Promise<Record<string, unknown> | null>;
       getAgentVersion: (tenantId: string, agentId: string) => Promise<number | null>;
@@ -101,43 +178,14 @@ export class AgentPolicyResolverService {
     const chain = (await this.repo.getHierarchyPolicyChain?.(tenantId, agentId)) ?? [];
     const workspaceId = String((local as any).workspaceId ?? chain.find((node) => node.level === 'workspace')?.id ?? '');
     const workspaceDefaults = configOf(await this.repo.getWorkspacePolicyDefaults(tenantId, workspaceId));
-    const effectiveChain: PolicyConfig[] = [workspaceDefaults, ...chain.map((node) => node.config), local];
+    const agentCapabilities = this.repo.getAgentCapabilities
+      ? await this.repo.getAgentCapabilities(tenantId, agentId)
+      : local.capabilities;
+    const hierarchyConfigs = chain.length > 0 ? chain.map((node) => node.config) : [workspaceDefaults];
+    const effectiveChain: PolicyConfig[] = [...hierarchyConfigs, { ...local, capabilities: asStringArray(agentCapabilities) }];
+    const resolved = resolveEffectivePolicyConfig(effectiveChain);
     const version = (await this.repo.getAgentVersion(tenantId, agentId)) ?? 1;
 
-    const primaryModel = [...effectiveChain]
-      .reverse()
-      .map((config) => config.modelPolicy?.primaryModel)
-      .find((model): model is string => typeof model === 'string' && model.length > 0) ?? '';
-
-    const fallbackModels = unique(
-      effectiveChain.flatMap((config) => [
-        ...asStringArray(config.modelPolicy?.fallbackChain),
-        ...asStringArray(config.modelPolicy?.fallbackModels),
-        ...asStringArray(config.fallbackModels),
-      ])
-    ).filter((model) => model !== primaryModel);
-    const allowedModels = unique(
-      effectiveChain.flatMap((config) => asStringArray(config.modelPolicy?.allowedModels))
-    );
-    const registeredModels = unique(
-      effectiveChain.flatMap((config) => asStringArray(config.modelPolicy?.registeredModels))
-    );
-    const fallbackChain = fallbackModels.filter((model) => {
-      if (registeredModels.length > 0 && !registeredModels.includes(model)) return false;
-      if (allowedModels.length > 0 && !allowedModels.includes(model)) return false;
-      return true;
-    });
-    if (primaryModel && registeredModels.length > 0 && !registeredModels.includes(primaryModel)) {
-      throw new BadRequestException(`model_not_registered:${primaryModel}`);
-    }
-    if (primaryModel && allowedModels.length > 0 && !allowedModels.includes(primaryModel)) {
-      throw new BadRequestException(`model_not_allowed:${primaryModel}`);
-    }
-
-    const deny = unique(effectiveChain.flatMap((config) => asStringArray(config.toolPolicy?.deny)));
-    const allow = unique(effectiveChain.flatMap((config) => asStringArray(config.toolPolicy?.allow))).filter(
-      (tool) => !deny.includes(tool)
-    );
     const hierarchyByLevel: Omit<EffectiveAgentPolicySnapshot['hierarchySnapshot'], 'chain'> = {};
     for (const node of chain) hierarchyByLevel[node.level as keyof typeof hierarchyByLevel] = node;
     const subagent = chain.find((node) => node.level === 'subagent');
@@ -147,14 +195,14 @@ export class AgentPolicyResolverService {
       agentVersion: version,
       workspaceId,
       ...(subagent ? { subagentId: subagent.id } : {}),
-      instructions: String(
-        [...effectiveChain].reverse().find((config) => typeof config.instructions === 'string')
-          ?.instructions ?? ''
-      ),
-      modelPolicy: { primaryModel, fallbackModels: fallbackChain, fallbackChain, allowedModels, registeredModels },
-      toolPolicy: { allow, deny },
-      budgetPolicy: mergeObjects(effectiveChain, 'budgetPolicy'),
-      governance: mergeObjects(effectiveChain, 'governance'),
+      instructions: resolved.instructions,
+      modelPolicy: resolved.modelPolicy,
+      toolPolicy: resolved.toolPolicy,
+      budgetPolicy: resolved.budgetPolicy,
+      governance: resolved.governance,
+      coreFiles: resolved.coreFiles,
+      memoryPolicy: resolved.memoryPolicy,
+      effectiveCapabilities: resolved.capabilities,
       hierarchySnapshot: { ...hierarchyByLevel, chain },
       schemaVersion: 2,
       resolvedAt: new Date().toISOString(),

@@ -28,14 +28,22 @@ async function createChain(service = makeService(), id = tenantId) {
   const agency = await service.createNode(id, {
     level: 'agency',
     name: `F1 Agency ${randomUUID()}`,
-    toolPolicy: { allow: ['builtin.echo'] },
+    toolPolicy: { allow: ['builtin.echo', 'danger.tool'] },
+    capabilities: ['agency.capability'],
   });
-  const department = await service.createNode(id, { level: 'department', name: 'Engineering', parentId: agency.id });
+  const department = await service.createNode(id, {
+    level: 'department',
+    name: 'Engineering',
+    parentId: agency.id,
+    toolPolicy: { deny: ['danger.tool'] },
+    capabilities: ['department.capability'],
+  });
   const workspace = await service.createNode(id, {
     level: 'workspace',
     name: 'Platform Workspace',
     parentId: department.id,
     budgetPolicy: { maxUsdPerRun: '0.10' },
+    capabilities: ['workspace.capability'],
   });
   const agent = await service.create(id, 'user-f1', {
     name: 'Graph Smoke Agent',
@@ -43,7 +51,7 @@ async function createChain(service = makeService(), id = tenantId) {
     goal: 'prove graph persistence',
     hierarchyLevel: 'agent',
     hierarchyParentId: workspace.id,
-    capabilities: ['graph.create'],
+    capabilities: ['agent.capability'],
   });
   const agentNode = (await service.graph(id)).flatMap(function walk(node): any[] { return [node, ...node.children.flatMap(walk)]; }).find((node) => node.agent?.id === agent.id)!;
   return { agency, department, workspace, agent, agentNode };
@@ -69,11 +77,51 @@ describeIfDb('F1 Agent Graph persisted hierarchy', () => {
 
     expect(graphAgent.level).toBe('agent');
     expect(graphAgent.parentId).toBe(workspace.id);
-    expect(graphAgent.effectiveCapabilities).toEqual(['graph.create']);
+    expect(graphAgent.effectiveCapabilities).toEqual(['agency.capability', 'department.capability', 'workspace.capability', 'agent.capability']);
+    expect(graphAgent.effectiveCapabilities).not.toContain('builtin.echo');
     expect(graphAgent.effectivePolicies).toMatchObject({
-      toolPolicy: { allow: ['builtin.echo'] },
+      toolPolicy: { allow: ['builtin.echo'], deny: ['danger.tool'] },
       budgetPolicy: { maxUsdPerRun: '0.10' },
     });
+  });
+
+  it('keeps graph and policy resolver semantics aligned for inherited capabilities and tool deny', async () => {
+    await cleanupTenant();
+    const service = makeService();
+    const { agent } = await createChain(service);
+
+    const graphAgent = (await service.graph(tenantId)).flatMap(function walk(node): any[] { return [node, ...node.children.flatMap(walk)]; }).find((node) => node.agent?.id === agent.id)!;
+    const snapshot = await service.getEffectivePolicySnapshot(tenantId, agent.id);
+
+    expect(snapshot.effectiveCapabilities).toEqual(graphAgent.effectiveCapabilities);
+    expect(snapshot.toolPolicy).toEqual(graphAgent.effectivePolicies.toolPolicy);
+    expect(snapshot.effectiveCapabilities).toEqual(['agency.capability', 'department.capability', 'workspace.capability', 'agent.capability']);
+    expect(snapshot.toolPolicy).toEqual({ allow: ['builtin.echo'], deny: ['danger.tool'] });
+  });
+
+  it('returns local or empty effectiveCapabilities when ancestors do not declare capabilities', async () => {
+    await cleanupTenant();
+    const service = makeService();
+    const agency = await service.createNode(tenantId, { level: 'agency', name: `Empty Agency ${randomUUID()}` });
+    const department = await service.createNode(tenantId, { level: 'department', name: 'Empty Department', parentId: agency.id });
+    const workspace = await service.createNode(tenantId, { level: 'workspace', name: 'Empty Workspace', parentId: department.id });
+    const emptyAgent = await service.create(tenantId, 'user-f1', { name: 'Empty Agent', role: 'operator', goal: 'empty caps', hierarchyLevel: 'agent', hierarchyParentId: workspace.id });
+    const localAgent = await service.create(tenantId, 'user-f1', { name: 'Local Agent', role: 'operator', goal: 'local caps', hierarchyLevel: 'agent', hierarchyParentId: workspace.id, capabilities: ['local.capability'] });
+    const flat = (await service.graph(tenantId)).flatMap(function walk(node): any[] { return [node, ...node.children.flatMap(walk)]; });
+
+    expect(flat.find((node) => node.agent?.id === emptyAgent.id)!.effectiveCapabilities).toEqual([]);
+    expect(flat.find((node) => node.agent?.id === localAgent.id)!.effectiveCapabilities).toEqual(['local.capability']);
+  });
+
+  it('updates descendant Agent effectiveCapabilities after patching an ancestor node', async () => {
+    await cleanupTenant();
+    const service = makeService();
+    const { agency, agent } = await createChain(service);
+
+    await service.patchNode(tenantId, agency.id, { capabilities: ['agency.capability', 'agency.patch'] });
+    const graphAgent = (await service.graph(tenantId)).flatMap(function walk(node): any[] { return [node, ...node.children.flatMap(walk)]; }).find((node) => node.agent?.id === agent.id)!;
+
+    expect(graphAgent.effectiveCapabilities).toEqual(['agency.capability', 'agency.patch', 'department.capability', 'workspace.capability', 'agent.capability']);
   });
 
   it('rejects creating Agent hierarchy nodes through the generic nodes endpoint', async () => {
@@ -119,7 +167,7 @@ describeIfDb('F1 Agent Graph persisted hierarchy', () => {
     expect(patchedAgent).toMatchObject({ name: 'Patched Agent', role: 'reviewer', goal: 'review graph changes', status: 'active' });
     expect(patchedNode).toMatchObject({ name: 'Patched Agent', activationState: 'inactive' });
     expect(patchedNode.localPolicies.modelPolicy).toEqual({ primaryModel: 'agent/model' });
-    expect(patchedNode.effectiveCapabilities).toEqual(['graph.patch']);
+    expect(patchedNode.effectiveCapabilities).toEqual(['agency.capability', 'department.capability', 'workspace.capability', 'graph.patch']);
   });
 
   it('reparents valid department, workspace and agent nodes and refreshes descendant agent metadata', async () => {

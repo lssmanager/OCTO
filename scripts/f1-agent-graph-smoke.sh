@@ -79,20 +79,38 @@ echo "F1 Agent Graph smoke: validating CRUD hierarchy against $API_URL for tenan
 
 expect_status 401 POST /v1/agents/nodes ''
 
-post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Agency ${RUN_ID}\",\"level\":\"agency\"}" > "$tmp/agency.json"
+post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Agency ${RUN_ID}\",\"level\":\"agency\",\"capabilities\":[\"smoke.agency\"],\"toolPolicy\":{\"allow\":[\"builtin.echo\",\"danger.tool\"]}}" > "$tmp/agency.json"
 agency_id="$(json_field "$tmp/agency.json" '.id')"
 
 expect_status 400 POST /v1/agents/nodes "$TOKEN" "{\"name\":\"Invalid Workspace ${RUN_ID}\",\"level\":\"workspace\",\"parentId\":\"$agency_id\"}"
 expect_status 400 POST /v1/agents/nodes "$TOKEN" "{\"name\":\"Invalid Agent Node ${RUN_ID}\",\"level\":\"agent\",\"parentId\":\"$agency_id\"}"
 expect_status 404 GET "/v1/agents/nodes/$agency_id" "$OTHER_TOKEN"
 
-post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Department ${RUN_ID}\",\"level\":\"department\",\"parentId\":\"$agency_id\"}" > "$tmp/department.json"
+post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Department ${RUN_ID}\",\"level\":\"department\",\"parentId\":\"$agency_id\",\"capabilities\":[\"smoke.department\"],\"toolPolicy\":{\"deny\":[\"danger.tool\"]}}" > "$tmp/department.json"
 department_id="$(json_field "$tmp/department.json" '.id')"
-post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Workspace ${RUN_ID}\",\"level\":\"workspace\",\"parentId\":\"$department_id\",\"budgetPolicy\":{\"maxUsdPerRun\":\"0.10\"}}" > "$tmp/workspace.json"
+post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Workspace ${RUN_ID}\",\"level\":\"workspace\",\"parentId\":\"$department_id\",\"budgetPolicy\":{\"maxUsdPerRun\":\"0.10\"},\"capabilities\":[\"smoke.workspace\"]}" > "$tmp/workspace.json"
 workspace_id="$(json_field "$tmp/workspace.json" '.id')"
 post_json /v1/agents "{\"name\":\"F1 Smoke Agent ${RUN_ID}\",\"role\":\"operator\",\"goal\":\"verify F1 agent graph\",\"hierarchyLevel\":\"agent\",\"hierarchyParentId\":\"$workspace_id\",\"capabilities\":[\"graph.smoke\"]}" > "$tmp/agent.json"
 agent_id="$(json_field "$tmp/agent.json" '.id')"
 get_json "/v1/agents/nodes/$workspace_id" > "$tmp/workspace-detail.json"
+get_json /v1/agents/graph > "$tmp/graph-inheritance.json"
+node - <<'NODE' "$tmp/graph-inheritance.json" "$agent_id"
+const fs = require('fs');
+const graph = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const agentId = process.argv[3];
+const flat = [];
+const walk = (nodes) => nodes.forEach((node) => { flat.push(node); walk(node.children || []); });
+walk(graph);
+const agentNode = flat.find((node) => node.agent && node.agent.id === agentId);
+const caps = agentNode?.effectiveCapabilities || [];
+for (const cap of ['smoke.agency', 'smoke.department', 'smoke.workspace', 'graph.smoke']) {
+  if (!caps.includes(cap)) throw new Error(`F1 smoke missing inherited capability ${cap}`);
+}
+const toolPolicy = agentNode?.effectivePolicies?.toolPolicy || {};
+if (!toolPolicy.allow?.includes('builtin.echo') || toolPolicy.allow?.includes('danger.tool') || !toolPolicy.deny?.includes('danger.tool')) {
+  throw new Error('F1 smoke effective toolPolicy did not preserve inherited allow/deny semantics');
+}
+NODE
 
 patch_json "/v1/agents/nodes/$workspace_id" "{\"name\":\"F1 Smoke Workspace Patched ${RUN_ID}\",\"activationState\":\"inactive\",\"modelPolicy\":{\"primaryModel\":\"smoke/model\"},\"toolPolicy\":{\"allow\":[\"builtin.echo\"]}}" > "$tmp/workspace-patched.json"
 node - <<'NODE' "$tmp/workspace-patched.json"

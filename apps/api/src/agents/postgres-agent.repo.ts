@@ -3,7 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { withTenantTx, agents, agentVersions, hierarchyNodes } from '@octo/database';
 import { randomUUID } from 'crypto';
 import type { HierarchyActivationState, HierarchyLevel } from '@octo/contracts';
-import { validateHierarchyRelation, type HierarchyPolicyNode } from './agent-policy-resolver.service';
+import { normalizeCapabilities, resolveEffectivePolicyConfig, validateHierarchyRelation, type HierarchyPolicyNode, type PolicyConfig } from './agent-policy-resolver.service';
 import type { AgentGraphNode, HierarchyNodeDto, PatchAgentDto, PatchHierarchyNodeDto, ReparentHierarchyNodeDto } from './agent.service';
 
 const DEFAULT_HIERARCHY_LEVEL: HierarchyLevel = 'agent';
@@ -20,27 +20,14 @@ function nodeConfig(row: any): Record<string, unknown> {
     toolPolicy: row.toolPolicy ?? {},
     budgetPolicy: row.budgetPolicy ?? {},
     governance: row.governance ?? {},
+    capabilities: Array.isArray(row.capabilities) ? row.capabilities : [],
     coreFiles: row.coreFiles ?? [],
     memoryPolicy: row.memoryPolicy ?? {},
   };
 }
 
-function mergeConfig(chain: Array<Record<string, unknown>>): Record<string, unknown> {
-  return chain.reduce<Record<string, unknown>>(
-    (acc, cfg) => ({
-      modelPolicy: { ...((acc['modelPolicy'] as Record<string, unknown> | undefined) ?? {}), ...((cfg['modelPolicy'] as Record<string, unknown> | undefined) ?? {}) },
-      toolPolicy: { ...((acc['toolPolicy'] as Record<string, unknown> | undefined) ?? {}), ...((cfg['toolPolicy'] as Record<string, unknown> | undefined) ?? {}) },
-      budgetPolicy: { ...((acc['budgetPolicy'] as Record<string, unknown> | undefined) ?? {}), ...((cfg['budgetPolicy'] as Record<string, unknown> | undefined) ?? {}) },
-      governance: { ...((acc['governance'] as Record<string, unknown> | undefined) ?? {}), ...((cfg['governance'] as Record<string, unknown> | undefined) ?? {}) },
-      coreFiles: (cfg['coreFiles'] as unknown[] | undefined) ?? (acc['coreFiles'] as unknown[] | undefined) ?? [],
-      memoryPolicy: { ...((acc['memoryPolicy'] as Record<string, unknown> | undefined) ?? {}), ...((cfg['memoryPolicy'] as Record<string, unknown> | undefined) ?? {}) },
-    }),
-    {}
-  );
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
+function asCapabilities(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim()) : [];
 }
 
 function validateActivationState(value: unknown): void {
@@ -57,7 +44,7 @@ function normalizeActivationState(value: unknown): HierarchyActivationState {
 function pickAgentPatch(input: PatchAgentDto): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   for (const key of ['name', 'description', 'role', 'goal', 'parentId', 'capabilities', 'governancePolicy', 'metadata', 'status'] as const) {
-    if (input[key] !== undefined) patch[key] = input[key];
+    if (input[key] !== undefined) patch[key] = key === 'capabilities' ? normalizeCapabilities(input[key]) : input[key];
   }
   if (Object.keys(patch).length > 0) patch['updatedAt'] = new Date();
   return patch;
@@ -65,8 +52,8 @@ function pickAgentPatch(input: PatchAgentDto): Record<string, unknown> {
 
 function pickNodePatch(input: PatchAgentDto | PatchHierarchyNodeDto): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
-  for (const key of ['name', 'slug', 'activationState', 'modelPolicy', 'toolPolicy', 'budgetPolicy', 'governance', 'coreFiles', 'memoryPolicy'] as const) {
-    if ((input as any)[key] !== undefined) patch[key] = key === 'activationState' ? normalizeActivationState((input as any)[key]) : (input as any)[key];
+  for (const key of ['name', 'slug', 'activationState', 'modelPolicy', 'toolPolicy', 'budgetPolicy', 'governance', 'capabilities', 'coreFiles', 'memoryPolicy'] as const) {
+    if ((input as any)[key] !== undefined) patch[key] = key === 'activationState' ? normalizeActivationState((input as any)[key]) : key === 'capabilities' ? normalizeCapabilities((input as any)[key]) : (input as any)[key];
   }
   if (Object.keys(patch).length > 0) patch['updatedAt'] = new Date();
   return patch;
@@ -198,6 +185,7 @@ export class PostgresAgentRepo {
       toolPolicy: input.toolPolicy ?? {},
       budgetPolicy: input.budgetPolicy ?? {},
       governance: input.governance ?? input.governancePolicy ?? {},
+      capabilities: [],
       coreFiles: input.coreFiles ?? [],
       memoryPolicy: input.memoryPolicy ?? {},
     });
@@ -219,7 +207,7 @@ export class PostgresAgentRepo {
         goal: input.goal,
         parentId: input.parentId ?? null,
         hierarchyNodeId,
-        capabilities: input.capabilities ?? [],
+        capabilities: normalizeCapabilities(input.capabilities),
         governancePolicy: input.governancePolicy ?? input.governance ?? {},
         metadata: { ...(input.metadata ?? {}), ...scopeMetadata },
         updatedAt: now,
@@ -267,6 +255,7 @@ export class PostgresAgentRepo {
         toolPolicy: input.toolPolicy ?? {},
         budgetPolicy: input.budgetPolicy ?? {},
         governance: input.governance ?? {},
+        capabilities: normalizeCapabilities(input.capabilities),
         coreFiles: input.coreFiles ?? [],
         memoryPolicy: input.memoryPolicy ?? {},
       });
@@ -305,6 +294,7 @@ export class PostgresAgentRepo {
       if (!agent) return null;
       const agentPatch = pickAgentPatch(input);
       const nodePatch = pickNodePatch(input);
+      delete nodePatch['capabilities'];
       if (input.hierarchyParentId !== undefined && agent.hierarchyNodeId) {
         await this.assertNotDescendantParent(tx, tenantId, agent.hierarchyNodeId, input.hierarchyParentId);
         await this.assertParentForLevel(tx, tenantId, input.hierarchyParentId, 'agent');
@@ -347,6 +337,10 @@ export class PostgresAgentRepo {
     const latest = await this.getLatestAgentVersion(tenantId, agentId);
     return (latest?.configJson as Record<string, unknown> | undefined) ?? null;
   }
+  async getAgentCapabilities(tenantId: string, agentId: string) {
+    const agent = await this.getAgentById(tenantId, agentId);
+    return agent?.capabilities ?? [];
+  }
   async getWorkspacePolicyDefaults(tenantId: string, workspaceId: string) {
     if (!workspaceId) return {};
     return withTenantTx(tenantId, async (tx: any) => {
@@ -380,6 +374,7 @@ export class PostgresAgentRepo {
           toolPolicy: row.tool_policy ?? {},
           budgetPolicy: row.budget_policy ?? {},
           governance: row.governance ?? {},
+          capabilities: row.capabilities ?? [],
           coreFiles: row.core_files ?? [],
           memoryPolicy: row.memory_policy ?? {},
         },
@@ -406,19 +401,21 @@ export class PostgresAgentRepo {
     const rawById = new Map(nodeRows.map((node: any) => [node.id, node]));
 
     const configCache = new Map<string, Record<string, unknown>>();
-    const effectiveConfig = (node: any): Record<string, unknown> => {
-      const cached = configCache.get(node.id);
+    const effectiveConfig = (node: any, agent?: any): Record<string, unknown> => {
+      const cacheKey = `${node.id}:${agent?.id ?? ''}:${JSON.stringify(agent?.capabilities ?? [])}`;
+      const cached = configCache.get(cacheKey);
       if (cached) return cached;
-      const chain: Array<Record<string, unknown>> = [];
+      const chain: PolicyConfig[] = [];
       let cursor: any | undefined = node;
       const visited = new Set<string>();
       while (cursor && !visited.has(cursor.id)) {
         visited.add(cursor.id);
-        chain.unshift(nodeConfig(cursor));
+        chain.unshift(nodeConfig(cursor) as PolicyConfig);
         cursor = cursor.parentId ? rawById.get(cursor.parentId) : undefined;
       }
-      const merged = mergeConfig(chain);
-      configCache.set(node.id, merged);
+      if (agent) chain.push({ capabilities: asCapabilities(agent.capabilities) });
+      const merged = resolveEffectivePolicyConfig(chain) as unknown as Record<string, unknown>;
+      configCache.set(cacheKey, merged);
       return merged;
     };
 
@@ -446,8 +443,8 @@ export class PostgresAgentRepo {
           metadata: agent.metadata ?? {},
         } : null,
         localPolicies: nodeConfig(row),
-        effectivePolicies: effectiveConfig(row),
-        effectiveCapabilities: asArray(agent?.capabilities),
+        effectivePolicies: effectiveConfig(row, agent),
+        effectiveCapabilities: (effectiveConfig(row, agent)['capabilities'] as string[] | undefined) ?? [],
         children: [],
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
