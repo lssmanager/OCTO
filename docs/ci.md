@@ -14,8 +14,9 @@ Main-only release checks:
 - docker-scan
 
 ## Local commands
-- `pnpm f1:workspace-type-gate` — reproducible F1/F2 handoff gate for `@octo/events`, `@octo/database`, `@octo/api`, then full workspace `build` and `typecheck`.
+- `pnpm f1:workspace-type-gate` - reproducible F1/F2 handoff gate for `@octo/events`, `@octo/database`, `@octo/api`, then full workspace `build` and `typecheck`.
 - `pnpm formatcheck`
+- `pnpm lint:boundaries`
 - `pnpm lint`
 - `pnpm typecheck`
 - `pnpm contracts:build`
@@ -31,6 +32,15 @@ Main-only release checks:
 - `pytest apps/runtime-worker/tests/ -v --tb=short`
 
 Use real Postgres/Redis for integration checks.
+
+## Tooling hygiene outside F1 close gate
+
+`pnpm lint:boundaries` and `pnpm formatcheck` are standalone repo hygiene checks. They are intentionally outside `pnpm f1:close-gate` for the F1 live-runtime close decision, but they should remain green before broad refactors or phase handoff work.
+
+- `pnpm lint:boundaries` enforces OCTO architectural zones for internal imports: frontend, control-plane, runtime, workers, UI, agent-core, provider SDK, infra and leaf packages. In particular, frontend must not import runtime/control-plane/infra/agent-core internals, and runtime code must not import frontend/control-plane/UI internals.
+- `pnpm formatcheck` verifies repo-wide formatting for source and operational files that Prettier can parse. Generated outputs, build/cache folders, lockfiles, logs and manually wrapped Markdown docs are excluded in `.prettierignore` with explicit comments.
+
+Promotion decision: keep both checks outside `pnpm f1:close-gate` until the team has a stable green baseline. Revisit promotion for F2 by default, or earlier only if F1 stable explicitly accepts adding tooling hygiene to the strict close gate.
 
 ## F1 public deployment smoke
 

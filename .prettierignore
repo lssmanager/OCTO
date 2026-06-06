@@ -1,8 +1,18 @@
+# Dependencies and package-manager state
 node_modules
+pnpm-lock.yaml
+
+# Build, cache and coverage outputs
 dist
 .turbo
 coverage
 .next
 *.log
+
+# Generated artifacts are rebuilt from source contracts or migrations.
+**/generated/**
+drizzle/**
+
+# Markdown docs are intentionally outside repo-wide formatcheck while the docs
+# corpus remains manually wrapped and review-oriented.
 *.md
-pnpm-lock.yaml
