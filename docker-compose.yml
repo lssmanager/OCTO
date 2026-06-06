@@ -3,8 +3,8 @@
 #
 # Coolify: apunta a este archivo como "Docker Compose" source.
 # Todas las variables con ${VAR} se inyectan desde Coolify → Environment Variables.
-# F1 issue #263: this stack exposes the API on container port 3001 and
-# intentionally does not define an apps/web service.
+# F1 public surface: Next.js web console on port 3000 plus API on port 3001.
+# The web root renders the Agent Graph Console; API remains under /api/*.
 #
 # ADR F0-014 (Dockerfile strategy), F0-016 (env config), F0-004 (database)
 # Principios Arquitectónicos OCTO: #1 (Control/Execution plane separation),
@@ -138,6 +138,50 @@ services:
     healthcheck:
       # Path correcto: incluye global prefix 'api' (main.ts: app.setGlobalPrefix('api'))
       test: ['CMD', 'curl', '-f', 'http://localhost:3001/api/health/live']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+
+  # ────────────────────────────────────────────────────────────────
+  # PRESENTATION PLANE — Next.js Web Console
+  # F1 public surface: / = Agent Graph Console, /status = foundation status.
+  # The web service talks to the API over the internal octonet network so
+  # console tokens remain server-side and are never exposed as NEXT_PUBLIC_*.
+  # ────────────────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-local}
+        BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f1}
+        BUILD_COMMIT: ${BUILD_COMMIT:-${SOURCE_COMMIT:-local}}
+        BUILD_PHASE: ${BUILD_PHASE:-F1}
+        BUILD_TIME: ${BUILD_TIME:-local}
+    container_name: octo-web
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      API_URL: ${WEB_API_URL:-http://api:3001/api}
+      RUNTIME_WORKER_URL: ${WEB_RUNTIME_WORKER_URL:-http://runtime-worker:8000}
+      OCTO_WEB_CONSOLE_TOKEN: ${OCTO_WEB_CONSOLE_TOKEN:-}
+      OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES: ${OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES:-false}
+      BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f1}
+      BUILD_COMMIT: ${BUILD_COMMIT:-${SOURCE_COMMIT:-local}}
+      BUILD_PHASE: ${BUILD_PHASE:-F1}
+      BUILD_TIME: ${BUILD_TIME:-local}
+    ports:
+      - '${WEB_PORT:-3000}:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - octonet
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
       interval: 30s
       timeout: 10s
       retries: 5

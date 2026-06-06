@@ -40,6 +40,28 @@ const require = createRequire(import.meta.url);
 // Custom rules
 const noRawExecutionStatusWrite = require('./eslint-rules/no-raw-execution-status-write.cjs');
 
+// eslint-plugin-boundaries 5.x still calls the pre-ESLint-10 context.getFilename()
+// helper. Keep the architectural rules active while running on ESLint 10 by
+// providing the compatibility method from the new context filename fields.
+for (const ruleName of ['element-types', 'no-unknown']) {
+  const rule = boundaries.rules?.[ruleName];
+  if (rule?.create) {
+    const create = rule.create.bind(rule);
+    rule.create = (context) => {
+      const compatContext = Object.create(context);
+      Object.defineProperties(compatContext, {
+        getFilename: {
+          value: () => context.filename ?? context.physicalFilename ?? '<unknown>',
+        },
+        getPhysicalFilename: {
+          value: () => context.physicalFilename ?? context.filename ?? '<unknown>',
+        },
+      });
+      return create(compatContext);
+    };
+  }
+}
+
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   // ── Ignore generated/build outputs globally ───────────────────────────────
@@ -47,6 +69,7 @@ export default [
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
+      '**/.next/**',
       '**/*.d.ts',
       '**/generated/**',
       'drizzle/**',
@@ -121,7 +144,7 @@ export default [
           capture: ['app'],
         },
       ],
-      'boundaries/ignore': ['**/*.d.ts', '**/dist/**', '**/node_modules/**'],
+      'boundaries/ignore': ['**/*.d.ts', '**/dist/**', '**/.next/**', '**/node_modules/**'],
     },
     rules: {
       // Enforce the internal DAG topology for all @octo/* cross-package imports
