@@ -47,6 +47,7 @@ REQUIRED_CLOSE_CHECKS=(
   "compose build for full F1 stack"
   "Docker reproducibility and hardening gate"
   "compose up for full F1 stack"
+  "runtime-worker F1 health, 202 handoff and heartbeat smoke"
   "strict public web+API smoke (console, status, health, metadata, execution, outbox, workers)"
   "Agent Graph F1 smoke"
 )
@@ -329,7 +330,7 @@ run_close_gate() {
   run_close_check "compose build for full F1 stack" compose build api web runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker
   run_close_check "Docker reproducibility and hardening gate" pnpm docker:verify-hardening
   run_close_check "compose up for full F1 stack" compose up -d api web runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker litellm
-  run_close_check "runtime-worker F1 health, 202 handoff and heartbeat smoke" env DATABASE_URL="$F1_COMPOSE_DATABASE_URL" API_URL="http://localhost:3001/api" RUNTIME_WORKER_URL="http://localhost:8000" RUNTIME_API_SECRET="$RUNTIME_API_SECRET" bash scripts/f1-runtime-handoff-smoke.sh
+  run_close_check "runtime-worker F1 health, 202 handoff and heartbeat smoke" env DATABASE_URL="$F1_HOST_DATABASE_URL" API_URL="http://localhost:3001/api" RUNTIME_WORKER_URL="http://localhost:8000" RUNTIME_API_SECRET="$RUNTIME_API_SECRET" bash scripts/f1-runtime-handoff-smoke.sh
 
   REPORT_URLS+=("F1 public surface = web+api")
   REPORT_URLS+=("Web URL: ${F1_WEB_URL}/")

@@ -139,10 +139,10 @@ JSON
 }
 
 verify_db_heartbeat() {
-  [[ -n "$DATABASE_URL" ]] || { log "DATABASE_URL not set; skipping direct worker_heartbeats SQL verification"; return 0; }
-  command -v psql >/dev/null 2>&1 || { log "psql not installed; skipping direct worker_heartbeats SQL verification"; return 0; }
+  [[ -n "$DATABASE_URL" ]] || { log "WARNING: DATABASE_URL not set; skipping optional host-side worker_heartbeats SQL verification (HTTP/runtime status checks still ran)"; return 0; }
+  command -v psql >/dev/null 2>&1 || { log "WARNING: psql not installed; skipping optional host-side worker_heartbeats SQL verification (HTTP/runtime status checks still ran)"; return 0; }
   local deadline=$((SECONDS + TIMEOUT_SECONDS)) count
-  log "waiting for runtime-worker heartbeat in worker_heartbeats"
+  log "waiting for runtime-worker heartbeat in worker_heartbeats via host DATABASE_URL"
   while true; do
     count="$(psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --tuples-only --no-align -c "SELECT count(*) FROM worker_heartbeats WHERE worker_type='runtime-worker' AND last_heartbeat_at > NOW() - interval '60 seconds'" | tr -d '[:space:]')"
     if [[ "$count" =~ ^[0-9]+$ ]] && (( count >= 1 )); then
