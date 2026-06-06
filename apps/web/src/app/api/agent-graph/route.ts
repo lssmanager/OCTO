@@ -12,11 +12,26 @@ export function agentGraphApiUrl(path: string, baseUrl = normalizeAgentGraphApiU
 const API_URL = normalizeAgentGraphApiUrl();
 const CONSOLE_COOKIE = 'octo_console_token';
 
-type ConsoleAction = 'createNode' | 'createAgent';
+type ConsoleAction = 'createNode' | 'createAgent' | 'patchNode' | 'reparentNode' | 'patchAgent' | 'deleteAgent' | 'archiveAgent' | 'archiveNode' | 'setActivationState';
 
-const actionPaths: Record<ConsoleAction, string> = {
-  createNode: '/v1/agents/nodes',
-  createAgent: '/v1/agents',
+type ActionSpec = { path: (payload: ConsolePayload) => string; method: 'POST' | 'PATCH' | 'DELETE'; body?: (payload: ConsolePayload) => unknown };
+type ConsolePayload = { action?: ConsoleAction; nodeId?: string; agentId?: string; body?: unknown };
+
+function requireId(value: string | undefined, label: string) {
+  if (!value) throw new Error(`missing_${label}`);
+  return encodeURIComponent(value);
+}
+
+const actionSpecs: Record<ConsoleAction, ActionSpec> = {
+  createNode: { method: 'POST', path: () => '/v1/agents/nodes' },
+  createAgent: { method: 'POST', path: () => '/v1/agents' },
+  patchNode: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}` },
+  reparentNode: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}/parent` },
+  patchAgent: { method: 'PATCH', path: (payload) => `/v1/agents/${requireId(payload.agentId, 'agent_id')}` },
+  deleteAgent: { method: 'DELETE', path: (payload) => `/v1/agents/${requireId(payload.agentId, 'agent_id')}`, body: () => undefined },
+  archiveAgent: { method: 'PATCH', path: (payload) => `/v1/agents/${requireId(payload.agentId, 'agent_id')}`, body: (payload) => ({ ...(payload.body as Record<string, unknown> | undefined), activationState: 'archived' }) },
+  archiveNode: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}`, body: (payload) => ({ ...(payload.body as Record<string, unknown> | undefined), activationState: 'archived' }) },
+  setActivationState: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}`, body: (payload) => payload.body },
 };
 
 function jsonError(status: number, message: string) {
@@ -79,24 +94,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let payload: { action?: ConsoleAction; body?: unknown };
+  let payload: ConsolePayload;
   try {
-    payload = (await req.json()) as { action?: ConsoleAction; body?: unknown };
+    payload = (await req.json()) as ConsolePayload;
   } catch {
     return jsonError(400, 'invalid_json');
   }
 
-  if (!payload.action || !Object.prototype.hasOwnProperty.call(actionPaths, payload.action)) {
+  if (!payload.action || !Object.prototype.hasOwnProperty.call(actionSpecs, payload.action)) {
     return jsonError(400, 'invalid_agent_graph_console_action');
   }
 
   try {
-    return await forward(actionPaths[payload.action], {
-      method: 'POST',
-      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify(payload.body ?? {}),
+    const spec = actionSpecs[payload.action];
+    const body = spec.body ? spec.body(payload) : payload.body;
+    return await forward(spec.path(payload), {
+      method: spec.method,
+      headers: { authorization: `Bearer ${token}`, ...(spec.method === 'DELETE' ? {} : { 'content-type': 'application/json' }) },
+      ...(spec.method === 'DELETE' ? {} : { body: JSON.stringify(body ?? {}) }),
     });
   } catch (err) {
-    return jsonError(502, err instanceof Error ? err.message : 'Unable to write F1 Agent Graph projection.');
+    const message = err instanceof Error ? err.message : 'Unable to write F1 Agent Graph projection.';
+    return jsonError(message.startsWith('missing_') ? 400 : 502, message);
   }
 }
