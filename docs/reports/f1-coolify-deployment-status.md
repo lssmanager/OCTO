@@ -1,6 +1,6 @@
 # F1 Coolify Deployment Status
 
-Fecha de evidencia: 2026-06-06 22:38 UTC
+Fecha de evidencia: 2026-06-06 22:38 UTC; revalidado 2026-06-06 23:03 UTC
 URL publica: https://agents.socialstudies.cloud/
 Commit desplegado: `2be6f23359ef97ef40dc7efe7b6256d17b0ec993`
 Version: `0.1.0-f1`
@@ -11,7 +11,7 @@ Servicio publico observado: `octo-api`
 
 El despliegue actual en Coolify demuestra que la superficie publica del Control Plane API de OCTO esta viva y reachable. Tambien demuestra conectividad basica con PostgreSQL, Redis y la cola `execution.dispatch` desde el readiness del API.
 
-Este reporte no declara F1 cerrada. El despliegue actual todavia no pasa readiness completo porque LiteLLM falla, y la evidencia disponible muestra principalmente una superficie API, no el stack F1 completo con web, runtime-worker, scheduler-worker, reclaimer-worker, outbox-publisher-worker y LiteLLM healthy.
+Este reporte no declara F1 cerrada. El despliegue actual todavia no pasa readiness completo porque LiteLLM falla, y la evidencia disponible muestra una superficie API-only: `/status` devuelve 404 y `/` muestra `octo-api`, no la F1 Agent Graph Console. Por tanto, no hay prueba del stack F1 completo con `web`, `runtime-worker`, `scheduler-worker`, `reclaimer-worker`, `outbox-publisher-worker` y LiteLLM healthy.
 
 ## Evidencia observada
 
@@ -30,7 +30,15 @@ Resultado observado:
 - Built at: `local`
 - Environment: `production`
 
-La pagina indica explicitamente que es una superficie operacional ligera del Control Plane y que no ejecuta dependency checks estrictos; para eso se debe usar readiness.
+La pagina indica explicitamente que es una superficie operacional ligera del Control Plane y que no ejecuta dependency checks estrictos; para eso se debe usar readiness. Esta evidencia confirma que el recurso publico observado sigue apuntando a la API, no al servicio `web`.
+
+### Web status route
+
+`GET https://agents.socialstudies.cloud/status`
+
+Resultado revalidado el 2026-06-06 23:03 UTC: HTTP `404`.
+
+Interpretacion: el servicio publico no esta renderizando la F1 foundation status UI requerida por el contrato web + API.
 
 ### Liveness
 
@@ -134,7 +142,7 @@ Interpretacion: esto no es un fallo por si mismo. El endpoint esta protegido y r
 | Queues | 82% | Redis y `execution.dispatch` estan `ok`; faltan workers, dispatch durable, reclaim y outbox. |
 | DB | 92% | Postgres y migraciones/API DB connectivity avanzan fuerte; falta runtime DB role smoke y aislamiento. |
 | LLM Integration | 55% | LiteLLM esta demostrado como fallando readiness. |
-| Infra | 88% | Coolify despliega API publica; falta stack F1 completo o decision documentada API-first. |
+| Infra | 82% | Coolify despliega API publica, pero `/status` 404 y `/` como `octo-api` confirman que todavia no demuestra el stack F1 completo. |
 | Observabilidad | 76% | Health/version/logs basicos existen; falta observability gate y reconstruccion por IDs. |
 | Seguridad | 78% | Endpoint interno protegido y no-root Dockerfile ayudan; faltan tenant isolation, runtime DB role, hardening y secretos. |
 
@@ -163,4 +171,4 @@ F1 no debe declararse al 100% mientras se cumpla cualquiera de estas condiciones
 
 ## Siguiente paso recomendado
 
-Resolver primero #287 porque LiteLLM es el bloqueo directo de readiness. Luego resolver #286 para alinear Coolify con el stack F1 requerido. Despues ejecutar los smokes/gates de #288, #289, #290 y #291, y finalmente cerrar #281 con `pnpm f1:close-gate` en PASS.
+Reconfigurar #286 como recurso Coolify Docker Compose usando `docker-compose.yml`, con `web:3000` como superficie publica y `/api/*` hacia `api:3001`. En paralelo, resolver #287 porque LiteLLM es el bloqueo directo de readiness. Despues ejecutar los smokes/gates de #288, #289, #290 y #291, y finalmente cerrar #281 con `pnpm f1:close-gate` en PASS.

@@ -128,28 +128,56 @@ Estas variables se graban intencionalmente en la imagen para trazabilidad
 
 ## F1 Public Surface and Build Metadata
 
-> Routing decision: `https://agents.socialstudies.cloud/` is the API-only F1
-> resource and must route to container port `3001`. See
-> [`docs/ops/coolify-routing.md`](./coolify-routing.md) for the complete
-> API-vs-web decision and post-deploy checks.
+> Routing decision for #286: F1 is a **Docker Compose web + API stack**, not an
+> API-only Dockerfile application. The observed API-only deployment proves that
+> `octo-api` is reachable, but it does not satisfy the F1 close contract until
+> the `web`, `api`, PostgreSQL, Redis, LiteLLM, worker and migration services are
+> deployed and validated together.
 
-For issue #263/F1 closeout, the public Coolify route must point to the API
-container port `3001`. The OCTO API listens on `PORT=3001`, exposes
-`EXPOSE 3001`, and serves these public verification URLs:
+Coolify must use these source settings for the F1 production resource:
 
-- `https://agents.socialstudies.cloud/` — lightweight OCTO F1 operational surface.
-- `https://agents.socialstudies.cloud/api/health/live` — container/process liveness.
+| Setting | Required value |
+|---|---|
+| Resource type | Docker Compose |
+| Compose source | `docker-compose.yml` |
+| Do not use | root `Dockerfile` as the F1 production resource |
+| Public web service | `web` on container port `3000` |
+| Internal API service | `api` on container port `3001` |
+| API routing | `/api/*` to `api:3001`, either through path routing or a dedicated API hostname |
+
+The canonical public verification URLs are:
+
+- `https://agents.socialstudies.cloud/` — F1 Agent Graph Console rendered by `web`.
+- `https://agents.socialstudies.cloud/status` — foundation/service status rendered by `web`.
+- `https://agents.socialstudies.cloud/api/health/live` — API process liveness.
 - `https://agents.socialstudies.cloud/api/health/ready` — strict dependency readiness
-  (PostgreSQL/Redis/LiteLLM/queue checks; returns 503 when dependencies are unhealthy).
-- `https://agents.socialstudies.cloud/api/health/version` — build metadata used by the
-  F1 close gate.
+  for PostgreSQL, Redis, queue `execution.dispatch` and LiteLLM.
+- `https://agents.socialstudies.cloud/api/health/version` — API build metadata used by
+  the F1 close gate.
 
-If Coolify/Traefik is configured with an application port, use `3001` for the API
-service. Port `3100` is reserved for a separate web console deployment and should not
-be used for the API-only Coolify application unless a distinct `apps/web` service is
-being deployed and routed intentionally.
+If Coolify cannot express same-host path routing for one compose resource, use a
+separate API hostname/resource and document the exact URL split in
+`docs/ops/coolify-routing.md` and `docs/reports/f1-coolify-deployment-status.md`.
+Do not silently fall back to API-only.
 
-Configure these non-secret build metadata variables in Coolify for F1 close deploys:
+Configure these variables as **Environment Variables** (runtime variables, not
+Build Variables) on the compose resource:
+
+| Variable | Required guidance |
+|---|---|
+| `POSTGRES_PASSWORD` | Strong generated database password. |
+| `REDIS_PASSWORD` | Strong generated Redis password; compose injects it into `REDIS_URL`. |
+| `JWT_SECRET` | Strong HMAC secret for compatibility with F1 smoke JWT generation. |
+| `JWT_SIGNING_KEYS` | Preferred key-store JSON when using explicit signing keys; must align with `JWT_SECRET`/`JWT_KID` used by smoke credentials. |
+| `RUNTIME_API_SECRET` | Shared internal secret for API ↔ runtime/scheduler calls. |
+| `RUNTIME_POSTGRES_PASSWORD` | Runtime-worker least-privilege database role password, distinct from `POSTGRES_PASSWORD`. |
+| `LITELLM_MASTER_KEY` | LiteLLM master key used by API/runtime readiness and calls. |
+| `OPENAI_API_KEY` | Real provider key or a controlled fake key only when the F1 environment intentionally uses fake LLM mode. |
+| `OCTO_WEB_CONSOLE_TOKEN` | Server-side token for web console writes when enabled; never `NEXT_PUBLIC_*`. |
+
+Configure these non-secret metadata variables for F1 close deploys. They may be
+Build Variables and must also be available to compose service runtime environments
+through `docker-compose.yml`:
 
 | Variable | Recommended F1 value | Notes |
 |----------|----------------------|-------|
@@ -157,21 +185,25 @@ Configure these non-secret build metadata variables in Coolify for F1 close depl
 | `BUILD_VERSION` | release/tag value, for example `0.1.0-f1` | Must not be `unknown` in close-gate deploys. |
 | `BUILD_COMMIT` | `${SOURCE_COMMIT}` when Coolify exposes it, otherwise the Git SHA | Must not be `unknown` in close-gate deploys. |
 | `SOURCE_COMMIT` | Coolify-provided Git SHA when available | The Dockerfiles default `BUILD_COMMIT` from this value when explicit `BUILD_COMMIT` is absent. |
-| `BUILD_TIME` | ISO-8601 UTC timestamp from the deployment | Must not be `unknown` in close-gate deploys. |
-
-These values are safe as Build Variables because they are metadata, not secrets. Do
-not place `DATABASE_URL`, `REDIS_URL`, JWT secrets, LiteLLM keys, or inter-service
-secrets in Build Variables.
+| `BUILD_TIME` | ISO-8601 UTC timestamp from the deployment | Must be a real UTC deployment timestamp for formal F1 close evidence. |
 
 Local/public smoke examples:
 
 ```bash
-curl -i http://localhost:3001/
-curl -i http://localhost:3001/api/health/live
-curl -i http://localhost:3001/api/health/ready
-curl -s http://localhost:3001/api/health/version
-F1_PUBLIC_URL=https://agents.socialstudies.cloud bash scripts/f1-smoke.sh --health
+curl -fsS https://agents.socialstudies.cloud/
+curl -fsS https://agents.socialstudies.cloud/status
+curl -fsS https://agents.socialstudies.cloud/api/health/live
+curl -fsS https://agents.socialstudies.cloud/api/health/ready
+curl -fsS https://agents.socialstudies.cloud/api/health/version
+F1_WEB_URL=https://agents.socialstudies.cloud \
+API_URL=https://agents.socialstudies.cloud/api \
+bash scripts/f1-smoke.sh --health
 ```
+
+Worker proof is not inferred from public API liveness. Validate
+`runtime-worker`, `scheduler-worker`, `reclaimer-worker` and
+`outbox-publisher-worker` through compose health, logs, worker heartbeats or
+`pnpm f1:close-gate` in the Docker/Coolify environment.
 
 ## F1 Runtime Worker PostgreSQL role
 

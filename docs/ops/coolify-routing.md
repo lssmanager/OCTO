@@ -21,6 +21,7 @@ Observed endpoint results:
 
 | Endpoint | Result | Interpretation |
 |---|---|---|
+| `/status` | HTTP `404` | Confirms the observed public route is still not the F1 web console/status surface. |
 | `/api/health/live` | `status: ok` | API process is alive. |
 | `/api/health/version` | `service: octo-api`, `phase: F1`, `version: 0.1.0-f1` | Build metadata is exposed. |
 | `/api/health/ready` | `ready: false` | F1 is not ready for closure. |
@@ -42,7 +43,7 @@ Open blockers derived from this deployment state:
 - #291: validate observability, internal endpoints and F1 security gates.
 - #281 remains the umbrella F1 close issue.
 
-F1 is deployed as **web + API**, not API-only. The canonical F1 public surface is:
+F1 must be deployed as **web + API**, not API-only. The canonical F1 public surface is:
 
 - web `/` → **F1 Agent Graph Console**;
 - web `/status` → foundation/service status UI;
@@ -54,16 +55,25 @@ authoritative backend for hierarchy, RBAC, tenant and persistence invariants.
 
 ## Required deployable services
 
-| Service | Dockerfile | Container port | Purpose |
-|---|---|---:|---|
-| `web` | `apps/web/Dockerfile` | `3000` | Public Next.js Agent Graph Console and `/status` UI. |
-| `api` | `docker/api.Dockerfile` through `docker-compose.yml` | `3001` | `/api/*` control-plane API and health/version endpoints. |
+| Service | Dockerfile / image | Container port | Required proof | Purpose |
+|---|---|---:|---|---|
+| `web` | `apps/web/Dockerfile` | `3000` | Public `/`, `/status`, `/api/health` | Public Next.js Agent Graph Console and foundation status UI. |
+| `api` | `docker/api.Dockerfile` through `docker-compose.yml` | `3001` | Public `/api/health/*` | `/api/*` control-plane API and health/version endpoints. |
+| `postgres` | `postgres:16.6-alpine3.21` | `5432` internal | Compose health plus API readiness `postgres: ok` | F1 system of record. |
+| `redis` | `redis:7.4.2-alpine3.21` | `6379` internal | Compose health plus API readiness `redis: ok` and queue `execution.dispatch` | BullMQ queue/cache coordination. |
+| `litellm` | pinned `ghcr.io/berriai/litellm` digest | `4000` internal | Compose health plus API readiness `litellm: ok` | Required LLM gateway boundary. |
+| `runtime-worker` | `docker/runtime-worker.Dockerfile` | `8000` internal | `/health/ready`, logs or heartbeat | F1 execution worker foundation. |
+| `scheduler-worker` | `docker/scheduler-worker.Dockerfile` | `3003` internal | `/health/ready`, logs or heartbeat | Queue consumer and dispatch coordinator. |
+| `reclaimer-worker` | `docker/reclaimer-worker.Dockerfile` | `3011` internal | `/health/ready`, logs or heartbeat | Lease/reclaim foundation. |
+| `outbox-publisher-worker` | `docker/outbox-publisher-worker.Dockerfile` | `3010` internal | `/health/ready` or logs | Publishes durable outbox events. |
+| `migrate` | `docker/migrate.Dockerfile` | n/a | `service_completed_successfully` | One-shot schema/runtime-role migration. |
 
-`docker-compose.yml` is the preferred F1 Coolify source because it builds and
-runs both services on the same internal network. The web service uses
-`API_URL=http://api:3001/api` inside compose so server-side rendering and the
-same-origin `/api/agent-graph` proxy can reach the API without exposing console
-tokens as `NEXT_PUBLIC_*` values.
+`docker-compose.yml` is the required F1 Coolify source because it builds and
+runs the web/API surfaces, dependencies, LiteLLM, workers and migration job on
+the same internal network. The web service uses `API_URL=http://api:3001/api`
+inside compose so server-side rendering and the same-origin `/api/agent-graph`
+proxy can reach the API without exposing console tokens as `NEXT_PUBLIC_*`
+values.
 
 ## Routing options
 
@@ -76,6 +86,7 @@ service `web` on port `3000`.
 |---|---|
 | Resource type | Docker Compose |
 | Compose file | `docker-compose.yml` |
+| Forbidden F1 source | root `Dockerfile` / single Dockerfile application |
 | Public service | `web` |
 | Public web port / Traefik target | `3000` |
 | Internal API service | `api` |
@@ -115,7 +126,9 @@ After deploy:
   and LiteLLM checks are healthy; it may return HTTP 503 during dependency
   outages.
 - `GET /api/health/version` returns F1 build metadata with non-`unknown`
-  `version`, `commit` and `built_at` values in close-gate deployments.
+  `version`, `commit` and a real UTC `built_at` value in close-gate deployments.
+- Worker proof is captured through compose health/logs/heartbeats or
+  `pnpm f1:close-gate`; public API liveness alone is not worker evidence.
 
 ## Build metadata variables
 
