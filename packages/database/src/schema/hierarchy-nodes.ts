@@ -38,6 +38,7 @@ export const hierarchyNodes = pgTable(
     toolPolicy: jsonb('tool_policy').notNull().default({}),
     budgetPolicy: jsonb('budget_policy').notNull().default({}),
     governance: jsonb('governance').notNull().default({}),
+    capabilities: jsonb('capabilities').notNull().default([]),
     coreFiles: jsonb('core_files').notNull().default([]),
     memoryPolicy: jsonb('memory_policy').notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

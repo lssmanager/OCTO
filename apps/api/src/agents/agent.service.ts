@@ -39,6 +39,7 @@ export type HierarchyNodeDto = {
   toolPolicy?: Record<string, unknown>;
   budgetPolicy?: Record<string, unknown>;
   governance?: Record<string, unknown>;
+  capabilities?: unknown;
   coreFiles?: unknown[];
   memoryPolicy?: Record<string, unknown>;
 };
