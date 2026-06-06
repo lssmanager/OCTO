@@ -8,7 +8,7 @@
 //
 // Uses Vitest + @nestjs/testing. Mocks Redis/DB dependencies.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { HealthController } from './health.controller';
 import { HealthService } from './health.service';
@@ -55,14 +55,36 @@ describe('HealthController', () => {
   let service: HealthService;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({ providers: [HealthService] }).compile();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [HealthService],
+    }).compile();
     service = module.get<HealthService>(HealthService);
     controller = new HealthController(service);
 
     // Simulate module init
     process.env['REDIS_URL'] = 'redis://localhost:6379';
     process.env['DATABASE_URL'] = 'postgresql://localhost:5432/octo';
+    process.env['LITELLM_BASE_URL'] = 'http://litellm:4000';
+    delete process.env['LITELLM_HEALTH_ENDPOINT'];
+    delete process.env['LITELLM_HEALTH_TIMEOUT_MS'];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            status: 'connected',
+            db: 'connected',
+            litellm_version: '1.61.7',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+    );
     service.onModuleInit();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   // E4.1 — /live always returns ok while process is alive
@@ -141,6 +163,79 @@ describe('HealthController', () => {
       expect(Object.values(checks).every((check) => check.status === 'ok')).toBe(false);
     });
 
+    it('checks LiteLLM readiness endpoint and returns operational metadata', async () => {
+      const checks = await service.runChecks();
+
+      expect(fetch).toHaveBeenCalledWith(
+        'http://litellm:4000/health/readiness',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(checks.litellm).toEqual(
+        expect.objectContaining({
+          status: 'ok',
+          endpoint: '/health/readiness',
+          upstreamStatus: 'connected',
+          db: 'connected',
+          litellmVersion: '1.61.7',
+        })
+      );
+      expect(checks.litellm.latencyMs).toEqual(expect.any(Number));
+    });
+
+    it('treats disconnected LiteLLM readiness metadata as unhealthy', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              status: 'disconnected',
+              db: 'Not connected',
+              litellm_version: '1.61.7',
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          )
+        )
+      );
+
+      const checks = await service.runChecks();
+
+      expect(checks.litellm).toEqual(
+        expect.objectContaining({
+          status: 'error',
+          endpoint: '/health/readiness',
+          upstreamStatus: 'disconnected',
+          db: 'Not connected',
+          litellmVersion: '1.61.7',
+          latencyMs: expect.any(Number),
+          error: 'LiteLLM readiness unhealthy: status=disconnected db=Not connected',
+        })
+      );
+    });
+
+    it('reports an explicit LiteLLM timeout instead of the raw AbortError message', async () => {
+      process.env['LITELLM_HEALTH_TIMEOUT_MS'] = '1';
+      service.onModuleInit();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          () =>
+            new Promise((_resolve, reject) =>
+              setTimeout(() => reject(new Error('This operation was aborted')), 5)
+            )
+        )
+      );
+
+      const checks = await service.runChecks();
+
+      expect(checks.litellm).toEqual(
+        expect.objectContaining({
+          status: 'error',
+          endpoint: '/health/readiness',
+          error: 'timeout after 1ms',
+        })
+      );
+    });
+
     it('returns not ready when execution.dispatch is unavailable', () => {
       const checks = {
         redis: { status: 'ok' },
@@ -152,5 +247,4 @@ describe('HealthController', () => {
       expect(Object.values(checks).every((check) => check.status === 'ok')).toBe(false);
     });
   });
-
 });

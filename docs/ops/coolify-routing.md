@@ -130,6 +130,54 @@ After deploy:
 - Worker proof is captured through compose health/logs/heartbeats or
   `pnpm f1:close-gate`; public API liveness alone is not worker evidence.
 
+## LiteLLM readiness wiring for issue #287
+
+F1 keeps LiteLLM as a separate service on the internal `octonet` network. The API
+must point to that service name and port; it must not call an LLM provider SDK or a
+public provider URL directly.
+
+Runtime environment variables for the API service:
+
+| Variable | Required F1 value | Notes |
+|---|---|---|
+| `LITELLM_BASE_URL` | `http://litellm:4000` unless Coolify renames the compose service | Internal service URL used by `octo-api`; do not point it at OpenAI/Anthropic/etc. |
+| `LITELLM_MASTER_KEY` | Coolify Environment Variable | Secret runtime env only; never a build arg. |
+| `LITELLM_HEALTH_ENDPOINT` | `/health/readiness` (default) | Checks that the LiteLLM proxy can receive traffic. `/health/liveliness` is process-only. |
+| `LITELLM_HEALTH_TIMEOUT_MS` | `5000` (default; max 10000) | Avoids false failures from LiteLLM cold start or transient internal-network latency. |
+| `OPENAI_API_KEY` | Valid provider key, or an explicitly controlled F1 test key only for non-production smoke | Inject into the LiteLLM service as runtime env. Do not pass provider secrets to the API build. |
+
+The LiteLLM compose service is declared in `docker-compose.yml` and mirrored in
+`docker-compose.f1.yml`, uses the pinned
+`ghcr.io/berriai/litellm:main-v1.61.7@sha256:0f7f39f40bf6ba4cc802b991ce8c4eb2fa41c8a25b821e1d2d5197229cad27fe`
+image, mounts `docker/litellm/config.yaml`, and exposes port `4000` only as the
+LiteLLM gateway. Its Docker healthcheck uses `/health/readiness` with a 30s
+`start_period`; if production startup timing exceeds that, capture the first
+successful readiness latency before changing the value. The API readiness payload
+should show `checks.litellm.status: ok`, `endpoint: /health/readiness`,
+`latencyMs`, and LiteLLM metadata such as `upstreamStatus`, `db`, or
+`litellmVersion` when the proxy returns JSON. If LiteLLM returns HTTP 200 with
+metadata like `status: disconnected` or `db: Not connected`, OCTO treats that as
+unhealthy because F1 uses LiteLLM database-backed auth/config.
+
+Internal validation from the API/LiteLLM network after deployment:
+
+```bash
+# from the API container, or any container attached to the same compose network
+curl -fsS http://litellm:4000/health/readiness
+
+# public API close-gate evidence
+curl -fsS https://agents.socialstudies.cloud/api/health/ready
+```
+
+If public readiness still reports `litellm.error: timeout after ...ms`, check in
+this order: LiteLLM container health, service name/DNS (`litellm:4000`), internal
+network attachment, `LITELLM_MASTER_KEY`, provider key injection in the LiteLLM
+container, and PostgreSQL connectivity for LiteLLM's `DATABASE_URL`.
+
+This is an F1 operational fix only. Do not add direct provider SDK bypasses,
+advanced routing, active-active provider balancing, tenant virtual-key routing,
+or F9 fallback behavior while resolving #287.
+
 ## Build metadata variables
 
 Configure these non-secret metadata variables for close-gate deploys:

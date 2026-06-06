@@ -54,7 +54,15 @@ services:
     networks:
       - octonet
     healthcheck:
-      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:?REDIS_PASSWORD is required}', '--no-auth-warning', 'ping']
+      test:
+        [
+          'CMD',
+          'redis-cli',
+          '-a',
+          '${REDIS_PASSWORD:?REDIS_PASSWORD is required}',
+          '--no-auth-warning',
+          'ping',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -109,6 +117,8 @@ services:
       # LiteLLM
       LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
+      LITELLM_HEALTH_ENDPOINT: ${LITELLM_HEALTH_ENDPOINT:-/health/readiness}
+      LITELLM_HEALTH_TIMEOUT_MS: ${LITELLM_HEALTH_TIMEOUT_MS:-5000}
       # Runtime Worker inter-service
       RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000}
       RUNTIME_API_SECRET: ${RUNTIME_API_SECRET:?RUNTIME_API_SECRET is required}
@@ -143,7 +153,6 @@ services:
       retries: 5
       start_period: 40s
     restart: unless-stopped
-
 
   # ────────────────────────────────────────────────────────────────
   # PRESENTATION PLANE — Next.js Web Console
@@ -382,11 +391,11 @@ services:
     networks:
       - octonet
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:4000/health/liveliness']
+      test: ['CMD', 'curl', '-f', 'http://localhost:4000/health/readiness']
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 20s
+      start_period: 30s
     restart: unless-stopped
 
 # ────────────────────────────────────────────────────────────────

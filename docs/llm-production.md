@@ -7,8 +7,9 @@
 
 ## HA and health
 - Minimum 2 replicas.
-- Liveness: `/health/liveliness`.
-- Readiness: `/health/readiness`.
+- Liveness: `/health/liveliness` (process is alive).
+- Readiness: `/health/readiness` (proxy can receive traffic).
+- F1 API readiness uses `LITELLM_BASE_URL` + `/health/readiness` by default and records latency plus returned LiteLLM metadata and fails if the readiness payload reports a disconnected proxy or database.
 
 ## Security
 - Store provider keys in secret manager only.
