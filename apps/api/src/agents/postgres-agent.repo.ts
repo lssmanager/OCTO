@@ -8,7 +8,7 @@ import type { AgentGraphNode, HierarchyNodeDto, PatchAgentDto, PatchHierarchyNod
 
 const DEFAULT_HIERARCHY_LEVEL: HierarchyLevel = 'agent';
 const F1_AGENT_GRAPH_LEVELS = new Set<HierarchyLevel>(['agency', 'department', 'workspace', 'agent']);
-const ACTIVATION_STATES = new Set<HierarchyActivationState>(['active', 'inactive', 'suspended', 'archived']);
+const ACTIVATION_STATES = new Set(['active', 'inactive', 'paused', 'archived']);
 
 function slugify(value: string): string {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || randomUUID();
@@ -44,9 +44,14 @@ function asArray(value: unknown): unknown[] {
 }
 
 function validateActivationState(value: unknown): void {
-  if (value !== undefined && !ACTIVATION_STATES.has(value as HierarchyActivationState)) {
+  if (value !== undefined && !ACTIVATION_STATES.has(value as string)) {
     throw new BadRequestException('invalid_activation_state');
   }
+}
+
+function normalizeActivationState(value: unknown): HierarchyActivationState {
+  validateActivationState(value);
+  return value === 'paused' ? 'inactive' : (value as HierarchyActivationState | undefined) ?? 'active';
 }
 
 function pickAgentPatch(input: PatchAgentDto): Record<string, unknown> {
@@ -61,7 +66,7 @@ function pickAgentPatch(input: PatchAgentDto): Record<string, unknown> {
 function pickNodePatch(input: PatchAgentDto | PatchHierarchyNodeDto): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   for (const key of ['name', 'slug', 'activationState', 'modelPolicy', 'toolPolicy', 'budgetPolicy', 'governance', 'coreFiles', 'memoryPolicy'] as const) {
-    if ((input as any)[key] !== undefined) patch[key] = (input as any)[key];
+    if ((input as any)[key] !== undefined) patch[key] = key === 'activationState' ? normalizeActivationState((input as any)[key]) : (input as any)[key];
   }
   if (Object.keys(patch).length > 0) patch['updatedAt'] = new Date();
   return patch;
@@ -188,7 +193,7 @@ export class PostgresAgentRepo {
       slug: input.slug ?? slugify(input.name ?? agentId),
       name: input.name ?? agentId,
       parentId,
-      activationState: input.activationState ?? 'active',
+      activationState: normalizeActivationState(input.activationState),
       modelPolicy: input.modelPolicy ?? {},
       toolPolicy: input.toolPolicy ?? {},
       budgetPolicy: input.budgetPolicy ?? {},
@@ -257,7 +262,7 @@ export class PostgresAgentRepo {
         name: input.name,
         slug: input.slug ?? slugify(input.name),
         parentId: input.parentId ?? null,
-        activationState: input.activationState ?? 'active',
+        activationState: normalizeActivationState(input.activationState),
         modelPolicy: input.modelPolicy ?? {},
         toolPolicy: input.toolPolicy ?? {},
         budgetPolicy: input.budgetPolicy ?? {},

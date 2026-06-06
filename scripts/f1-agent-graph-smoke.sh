@@ -83,6 +83,7 @@ post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Agency ${RUN_ID}\",\"level\":\"
 agency_id="$(json_field "$tmp/agency.json" '.id')"
 
 expect_status 400 POST /v1/agents/nodes "$TOKEN" "{\"name\":\"Invalid Workspace ${RUN_ID}\",\"level\":\"workspace\",\"parentId\":\"$agency_id\"}"
+expect_status 400 POST /v1/agents/nodes "$TOKEN" "{\"name\":\"Invalid Agent Node ${RUN_ID}\",\"level\":\"agent\",\"parentId\":\"$agency_id\"}"
 expect_status 404 GET "/v1/agents/nodes/$agency_id" "$OTHER_TOKEN"
 
 post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Department ${RUN_ID}\",\"level\":\"department\",\"parentId\":\"$agency_id\"}" > "$tmp/department.json"
@@ -103,14 +104,20 @@ NODE
 patch_json "/v1/agents/nodes/$workspace_id" '{"activationState":"active"}' > /dev/null
 expect_status 400 PATCH "/v1/agents/nodes/$workspace_id" "$TOKEN" '{"activationState":"deleted"}'
 
-post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Workspace Reparent Target ${RUN_ID}\",\"level\":\"workspace\",\"parentId\":\"$department_id\"}" > "$tmp/workspace2.json"
+post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Second Agency ${RUN_ID}\",\"level\":\"agency\"}" > "$tmp/agency2.json"
+agency2_id="$(json_field "$tmp/agency2.json" '.id')"
+post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Second Department ${RUN_ID}\",\"level\":\"department\",\"parentId\":\"$agency2_id\"}" > "$tmp/department2.json"
+department2_id="$(json_field "$tmp/department2.json" '.id')"
+post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Workspace Reparent Target ${RUN_ID}\",\"level\":\"workspace\",\"parentId\":\"$department2_id\"}" > "$tmp/workspace2.json"
 workspace2_id="$(json_field "$tmp/workspace2.json" '.id')"
 get_json /v1/agents/graph > "$tmp/graph-before-reparent.json"
 agent_node_id="$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); function flat(nodes){return nodes.flatMap(n=>[n,...flat(n.children||[])]);} console.log(flat(data).find(n=>n.agent&&n.agent.id===process.argv[2]).id);" "$tmp/graph-before-reparent.json" "$agent_id")"
+patch_json "/v1/agents/nodes/$department_id/parent" "{\"parentId\":\"$agency2_id\"}" > "$tmp/reparent-department.json"
+expect_status 400 PATCH "/v1/agents/nodes/$department_id/parent" "$TOKEN" "{\"parentId\":\"$workspace_id\"}"
+patch_json "/v1/agents/nodes/$workspace_id/parent" "{\"parentId\":\"$department2_id\"}" > "$tmp/reparent-workspace.json"
 patch_json "/v1/agents/nodes/$agent_node_id/parent" "{\"parentId\":\"$workspace2_id\"}" > "$tmp/reparent-agent.json"
 expect_status 400 PATCH "/v1/agents/nodes/$agent_node_id/parent" "$TOKEN" "{\"parentId\":\"$department_id\"}"
 expect_status 400 PATCH "/v1/agents/nodes/$department_id/parent" "$TOKEN" "{\"parentId\":\"$department_id\"}"
-expect_status 400 PATCH "/v1/agents/nodes/$department_id/parent" "$TOKEN" "{\"parentId\":\"$workspace_id\"}"
 expect_status 404 PATCH "/v1/agents/nodes/$department_id/parent" "$TOKEN" '{"parentId":"missing-parent"}'
 expect_status 404 PATCH "/v1/agents/nodes/$department_id/parent" "$OTHER_TOKEN" "{\"parentId\":\"$agency_id\"}"
 
@@ -119,19 +126,20 @@ patch_json "/v1/agents/nodes/$workspace_id" '{"activationState":"archived"}' > /
 patch_json "/v1/agents/nodes/$workspace_id" '{"activationState":"active"}' > /dev/null
 
 get_json /v1/agents/graph > "$tmp/graph.json"
-node - <<'NODE' "$tmp/graph.json" "$agency_id" "$department_id" "$workspace_id" "$workspace2_id" "$agent_id"
+node - <<'NODE' "$tmp/graph.json" "$agency_id" "$agency2_id" "$department_id" "$department2_id" "$workspace_id" "$workspace2_id" "$agent_id"
 const fs = require('fs');
 const graph = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const [agencyId, departmentId, workspaceId, workspace2Id, agentId] = process.argv.slice(3);
+const [agencyId, agency2Id, departmentId, department2Id, workspaceId, workspace2Id, agentId] = process.argv.slice(3);
 const flat = [];
 const walk = (nodes) => nodes.forEach((node) => { flat.push(node); walk(node.children || []); });
 walk(graph);
 const agency = flat.find((node) => node.id === agencyId && node.level === 'agency');
-const department = flat.find((node) => node.id === departmentId && node.parentId === agencyId && node.level === 'department');
-const workspace = flat.find((node) => node.id === workspaceId && node.parentId === departmentId && node.level === 'workspace');
-const workspace2 = flat.find((node) => node.id === workspace2Id && node.parentId === departmentId && node.level === 'workspace');
+const department = flat.find((node) => node.id === departmentId && node.parentId === agency2Id && node.level === 'department');
+const department2 = flat.find((node) => node.id === department2Id && node.parentId === agency2Id && node.level === 'department');
+const workspace = flat.find((node) => node.id === workspaceId && node.parentId === department2Id && node.level === 'workspace');
+const workspace2 = flat.find((node) => node.id === workspace2Id && node.parentId === department2Id && node.level === 'workspace');
 const agentNode = flat.find((node) => node.agent && node.agent.id === agentId);
-if (!agency || !department || !workspace || !workspace2) throw new Error('F1 Agent Graph smoke did not persist Agency → Department → Workspace');
+if (!agency || !department || !department2 || !workspace || !workspace2) throw new Error('F1 Agent Graph smoke did not persist Agency → Department → Workspace and valid reparent paths');
 if (!agentNode || agentNode.parentId !== workspace2Id) throw new Error('F1 Agent Graph smoke did not persist valid Workspace → Agent reparent');
 if (agentNode.agent.name !== 'F1 Smoke Agent Patched') throw new Error('F1 Agent Graph smoke did not patch agent fields');
 if (!JSON.stringify(agentNode.effectiveCapabilities || []).includes('graph.patch')) throw new Error('F1 Agent Graph smoke did not expose patched capabilities');

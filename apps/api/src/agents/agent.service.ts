@@ -34,7 +34,7 @@ export type HierarchyNodeDto = {
   slug?: string;
   level: HierarchyLevelDto;
   parentId?: string | null;
-  activationState?: 'active' | 'inactive' | 'suspended' | 'archived';
+  activationState?: 'active' | 'inactive' | 'paused' | 'archived';
   modelPolicy?: Record<string, unknown>;
   toolPolicy?: Record<string, unknown>;
   budgetPolicy?: Record<string, unknown>;
@@ -75,7 +75,7 @@ export type CreateAgentDto = {
   metadata?: Record<string, unknown>;
   hierarchyLevel?: 'agent';
   hierarchyParentId?: string | null;
-  activationState?: 'active' | 'inactive' | 'suspended' | 'archived';
+  activationState?: 'active' | 'inactive' | 'paused' | 'archived';
   modelPolicy?: Record<string, unknown>;
   toolPolicy?: Record<string, unknown>;
   budgetPolicy?: Record<string, unknown>;

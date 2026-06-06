@@ -12,7 +12,7 @@ export function agentGraphApiUrl(path: string, baseUrl = normalizeAgentGraphApiU
 const API_URL = normalizeAgentGraphApiUrl();
 const CONSOLE_COOKIE = 'octo_console_token';
 
-type ConsoleAction = 'createNode' | 'createAgent' | 'patchNode' | 'reparentNode' | 'patchAgent' | 'deleteAgent' | 'archiveAgent' | 'archiveNode' | 'setActivationState';
+type ConsoleAction = 'createNode' | 'createAgent' | 'patchNode' | 'reparentNode' | 'patchAgent' | 'deleteAgent' | 'archiveNode' | 'setActivationState';
 
 type ActionSpec = { path: (payload: ConsolePayload) => string; method: 'POST' | 'PATCH' | 'DELETE'; body?: (payload: ConsolePayload) => unknown };
 type ConsolePayload = { action?: ConsoleAction; nodeId?: string; agentId?: string; body?: unknown };
@@ -29,7 +29,6 @@ const actionSpecs: Record<ConsoleAction, ActionSpec> = {
   reparentNode: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}/parent` },
   patchAgent: { method: 'PATCH', path: (payload) => `/v1/agents/${requireId(payload.agentId, 'agent_id')}` },
   deleteAgent: { method: 'DELETE', path: (payload) => `/v1/agents/${requireId(payload.agentId, 'agent_id')}`, body: () => undefined },
-  archiveAgent: { method: 'PATCH', path: (payload) => `/v1/agents/${requireId(payload.agentId, 'agent_id')}`, body: (payload) => ({ ...(payload.body as Record<string, unknown> | undefined), activationState: 'archived' }) },
   archiveNode: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}`, body: (payload) => ({ ...(payload.body as Record<string, unknown> | undefined), activationState: 'archived' }) },
   setActivationState: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}`, body: (payload) => payload.body },
 };
