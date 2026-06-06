@@ -1,20 +1,34 @@
 # F1 Tooling Debt: lint:boundaries and formatcheck
 
-This is the separate tracking artifact for the issue #265 lint/format decision and GitHub issue #275 (`[F1-TOOLING] Resolver deuda de lint:boundaries y formatcheck fuera del close gate`).
+This is the tracking artifact for issue #265 lint/format decision and GitHub issue #275 (`[F1-TOOLING] Resolver deuda de lint:boundaries y formatcheck fuera del close gate`).
+
+## Status
+
+Resolved for issue #275. `pnpm lint:boundaries` and `pnpm formatcheck` are restored as useful standalone engineering hygiene checks, while remaining outside `pnpm f1:close-gate` for the F1 closure decision.
 
 ## Decision
 
-`pnpm lint:boundaries` and `pnpm formatcheck` are **not** part of `pnpm f1:close-gate` for F1 closure. They remain mandatory engineering hygiene to fix outside the F1 live-runtime close decision.
+`pnpm lint:boundaries` and `pnpm formatcheck` are **not** part of `pnpm f1:close-gate` for F1 closure. They should be considered candidates for promotion after the team has at least one stable green baseline outside the close gate. The default promotion point is F2, unless F1 stable explicitly decides to add them earlier.
 
 ## Rationale
 
 F1 closure is a strict live-system gate: build/typecheck, lint, unit tests, DB/Redis integration, tenant isolation, observability, migrations, compose build/up, public smoke, Agent Graph F1, metadata and runtime DB-role evidence.
 
-`pnpm lint:boundaries` and `pnpm formatcheck` currently fail for pre-existing repository/tooling reasons unrelated to the live F1 runtime. Boundary lint fails inside the ESLint/plugin compatibility path before producing a useful architectural result, while formatcheck fails on Prettier parsing environment-template syntax in `infra/grafana/alerting/contact-points.yaml` and broad formatting drift across unrelated files. Blocking F1 on that debt would obscure whether the live F1 system can be validated.
+`pnpm lint:boundaries` and `pnpm formatcheck` previously failed for repository/tooling reasons unrelated to live F1 runtime evidence. Blocking F1 on that debt would have obscured whether the live F1 system could be validated.
 
-## Last local evidence
+## Resolution
 
-Commands:
+The issue #275 cleanup keeps the checks outside the close gate but restores them as actionable commands:
+
+1. `eslint.config.js` now keeps the `eslint-plugin-boundaries` compatibility shim for ESLint 10 and makes the OCTO zones explicit: `leaf`, `infra`, `provider-sdk`, `agent-core`, `ui`, `frontend`, `control-plane`, `runtime`, `reclaimer`, and `worker`.
+2. The boundaries topology now separates `packages/sdk-abstractions` from `packages/agent-core`, so frontend code can depend on provider abstractions and UI/contracts without importing runtime agent-core logic.
+3. `infra/grafana/alerting/contact-points.yaml` now uses parseable YAML for templated environment placeholders instead of inline flow maps with unquoted `${...}` values.
+4. `.prettierignore` documents the repo-wide format policy for build outputs, generated artifacts, lockfiles, logs and manually wrapped Markdown docs.
+5. `docs/ci.md` documents the standalone tooling hygiene checks and the decision not to promote them into the F1 close gate until F1 stable or F2.
+
+## Historical evidence
+
+Commands observed before the cleanup:
 
 ```bash
 pnpm lint:boundaries
@@ -28,12 +42,6 @@ infra/grafana/alerting/contact-points.yaml: SyntaxError: Separator , missing in 
 settings: { integrationKey: ${PAGERDUTY_INTEGRATION_KEY} }
 ```
 
-## Required follow-up
+## Follow-up policy
 
-Track the remaining work in GitHub issue #275, then either:
-
-1. fix the ESLint/plugin compatibility for `lint:boundaries`;
-2. fix Prettier parsing/configuration for templated YAML and format the repository; or
-3. narrow `formatcheck` to supported file types and add an explicit generated/template ignore policy.
-
-After that debt is resolved, this decision can be revisited and the checks can be promoted into `pnpm f1:close-gate`.
+Keep `pnpm lint:boundaries` and `pnpm formatcheck` as standalone checks until they have stable green runs in development and CI. Revisit promotion into a strict gate at F2 by default, or earlier only if F1 stable explicitly accepts the extra gate cost.
