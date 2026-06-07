@@ -47,7 +47,8 @@ The close gate records each required check in `docs/reports/f1-close-report.md`:
 13. Tenant isolation tests across API, DB/RLS, queues/workers, scheduler, reclaimer and outbox.
 14. F1 observability tests for executionId/traceId reconstruction.
 15. Full F1 compose build and compose up.
-16. Strict public web+API smoke through `scripts/f1-smoke.sh --strict`, including:
+16. Runtime Worker F1 handoff smoke through `scripts/f1-runtime-handoff-smoke.sh`. This smoke runs from the host after `compose up`, so HTTP checks use the published host ports (`API_URL=http://localhost:3001/api` and `RUNTIME_WORKER_URL=http://localhost:8000`), direct SQL heartbeat verification uses `DATABASE_URL=$F1_HOST_DATABASE_URL`, and Compose services continue using `F1_COMPOSE_*` URLs internally. The runtime-worker container itself must keep using `RUNTIME_DATABASE_URL` with the least-privilege runtime role; the host admin `DATABASE_URL` is only for the smoke's optional direct `worker_heartbeats` read. The smoke validates `/health/live`, `/health/ready`, `/health/status`, `workerType=runtime-worker`, phase `F1`, `database.runtimeDatabaseUrlConfigured=true`, `database.credential=RUNTIME_DATABASE_URL`, HTTP handoff `202 Accepted`, JSON `status=accepted`, API worker visibility and a fresh heartbeat when host-side `psql` is available.
+17. Strict public web+API smoke through `scripts/f1-smoke.sh --strict`, including:
     - web `/` is HTTP 200, renders `Agent Graph Console`, contains `F1` / `Agent Graph System`, and does not return `Cannot GET /`;
     - web `/status` is HTTP 200 and renders foundation/service status;
     - web `/api/health` is HTTP 200 for the Next.js service healthcheck;
@@ -60,7 +61,7 @@ The close gate records each required check in `docs/reports/f1-close-report.md`:
 
 The close gate fails if documentation, compose or smoke disagree about this web+API contract; CLOSE mode must build and start the `web` service and must not silently fall back to an API-only surface.
 
-17. Agent Graph F1 smoke through `scripts/f1-agent-graph-smoke.sh` against `/api/v1/agents/*`, covering full `Agency → Department → Workspace → Agent` creation, inherited `effectiveCapabilities`, inherited tool `allow`/`deny` policy projection, rejection of Agent creation through `/nodes`, node detail, patch, activation/archive, valid Department/Workspace/Agent reparent, invalid hierarchy/self-parent/cycle/missing-parent/cross-tenant failures and selected Agent deletion.
+18. Agent Graph F1 smoke through `scripts/f1-agent-graph-smoke.sh` against `/api/v1/agents/*`, covering full `Agency → Department → Workspace → Agent` creation, inherited `effectiveCapabilities`, inherited tool `allow`/`deny` policy projection, rejection of Agent creation through `/nodes`, node detail, patch, activation/archive, valid Department/Workspace/Agent reparent, invalid hierarchy/self-parent/cycle/missing-parent/cross-tenant failures and selected Agent deletion.
 
 ## Lint boundaries and format decision
 

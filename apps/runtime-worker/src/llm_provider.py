@@ -124,7 +124,11 @@ def _explicit_model_policy(
 ) -> tuple[str, list[str], set[str], set[str]] | None:
     raw = snapshot.get("modelPolicy")
     if not isinstance(raw, dict):
-        raw = snapshot.get("model_policy") if isinstance(snapshot.get("model_policy"), dict) else None
+        raw = (
+            snapshot.get("model_policy")
+            if isinstance(snapshot.get("model_policy"), dict)
+            else None
+        )
     if not isinstance(raw, dict):
         return None
     primary = raw.get("primaryModel", raw.get("primary_model"))
@@ -365,7 +369,7 @@ async def call_llm(
     import httpx
 
     base = os.environ.get("LITELLM_BASE_URL", os.environ.get("LITELLM_URL", "http://litellm:4000"))
-    api_key = os.environ.get("LITELLM_API_KEY", "")
+    api_key = os.environ.get("LITELLM_API_KEY") or os.environ.get("LITELLM_MASTER_KEY", "")
     timeout_ms = min(int(os.environ.get("LITELLM_TIMEOUT_MS", "90000")), 300000)
     max_retries = min(int(os.environ.get("LITELLM_MAX_RETRIES", "3")), 5)
 

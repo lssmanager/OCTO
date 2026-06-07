@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 import asyncpg
 import structlog
@@ -77,6 +78,11 @@ async def submit_execution(
         agent_id=body.agent_id,
         workspace_id=body.workspace_id,
         path=str(request.url.path),
+        service="runtime-worker",
+        worker_id=os.environ.get("WORKER_ID", f"worker-{os.getpid()}"),
+        phase=os.environ.get("BUILD_PHASE", "F0"),
+        version=os.environ.get("BUILD_VERSION", "unknown"),
+        commit=os.environ.get("BUILD_COMMIT", "unknown"),
     )
 
     max_inflight = _settings.max_concurrent_executions
@@ -121,9 +127,7 @@ async def get_execution_status(
     """Read execution status without submitting or reclaiming execution work."""
     _verify_internal_secret(x_internal_secret)
 
-    dsn = _settings.database_url
-    if not dsn:
-        raise HTTPException(status_code=500, detail="DATABASE_URL required")
+    dsn = _settings.runtime_db_dsn
 
     conn = await asyncpg.connect(str(dsn))
     try:
