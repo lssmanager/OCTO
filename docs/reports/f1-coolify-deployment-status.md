@@ -172,3 +172,22 @@ F1 no debe declararse al 100% mientras se cumpla cualquiera de estas condiciones
 ## Siguiente paso recomendado
 
 Reconfigurar #286 como recurso Coolify Docker Compose usando `docker-compose.yml`, con `web:3000` como superficie publica y `/api/*` hacia `api:3001`. En paralelo, resolver #287 porque LiteLLM es el bloqueo directo de readiness. Despues ejecutar los smokes/gates de #288, #289, #290 y #291. Para #289, ejecutar `pnpm f1:queue-workers-smoke` contra el stack Coolify/Compose completo y conservar evidencia de scheduler, reclaimer, outbox, dispatch durable, handoff runtime, reclaim y outbox publication. Finalmente cerrar #281 con `pnpm f1:close-gate` en PASS.
+
+## Actualizacion #288 — Runtime Worker F1 evidence closure patch (2026-06-06 23:31 UTC)
+
+Revalidacion publica sin secreto interno:
+
+- `GET https://agents.socialstudies.cloud/api/health/live` devolvio `200` con `status: ok`.
+- `GET https://agents.socialstudies.cloud/api/health/ready` devolvio `503` con PostgreSQL, Redis y `execution.dispatch` en `ok`, y LiteLLM en `error: This operation was aborted`.
+- `GET https://agents.socialstudies.cloud/api/health/version` sigue reportando `service: octo-api`, `version: 0.1.0-f1`, `phase: F1`, commit `2be6f23359ef97ef40dc7efe7b6256d17b0ec993`.
+- `GET https://agents.socialstudies.cloud/status` sigue devolviendo `404 Cannot GET /status`, por lo que la evidencia publica continua indicando recurso API-only y no stack F1 completo.
+
+Cambios operacionales preparados para cerrar #288 cuando #286 despliegue Compose completo:
+
+- `docker-compose.yml` mantiene el servicio `runtime-worker` en el stack F1, sin inyectar `DATABASE_URL`, y ahora declara explicitamente `NODE_ENV=production`, `PORT=8000`, `RUNTIME_DATABASE_URL`, `API_URL`, `API_INTERNAL_SECRET`, Redis, LiteLLM (`LITELLM_BASE_URL`/`LITELLM_MASTER_KEY` y aliases compatibles), phase/version/commit y healthcheck propio en `/health/live`.
+- `runtime-worker` ahora resuelve su DSN operativo desde `RUNTIME_DATABASE_URL` en production/F1 close; `DATABASE_URL` queda solo como fallback no productivo para tests locales legacy.
+- `/health/status` queda como endpoint operativo interno para evidencia F1: worker type, env, phase, version, commit, conectividad DB usando `RUNTIME_DATABASE_URL` y ultimo heartbeat de `worker_heartbeats`.
+- `scripts/f1-runtime-handoff-smoke.sh` queda agregado para validar `/health/live`, `/health/ready`, `/health/status`, handoff HTTP F1 directo con `202 Accepted`, visibilidad del worker desde el API runtime surface y evidencia en `worker_heartbeats` cuando hay `DATABASE_URL` administrativo disponible; en el close gate ese `DATABASE_URL` debe ser `F1_HOST_DATABASE_URL` porque el smoke corre desde el host, no dentro de Compose.
+- `scripts/f1-verify.sh --close` ejecuta el smoke de runtime-worker despues de levantar el stack completo y antes del smoke publico estricto, usando `API_URL=http://localhost:3001/api`, `RUNTIME_WORKER_URL=http://localhost:8000` y `DATABASE_URL=$F1_HOST_DATABASE_URL` para evitar depender del DNS interno `postgres` desde el host.
+
+Esta actualizacion no marca `docs/reports/f1-close-report.md` como PASS. El cierre real requiere desplegar el Compose/resource correcto en Coolify, configurar secretos reales (`RUNTIME_API_SECRET`, `RUNTIME_POSTGRES_PASSWORD`, `RUNTIME_DATABASE_URL`, Redis y LiteLLM), ejecutar `scripts/f1-runtime-db-role-smoke.sh --strict`, ejecutar `pnpm f1:runtime-handoff-smoke` y finalmente `pnpm f1:close-gate` hasta PASS.
