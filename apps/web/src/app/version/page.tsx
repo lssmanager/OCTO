@@ -1,8 +1,14 @@
+import { notFound } from 'next/navigation';
 import { getVersionInfo } from '@/lib/health';
+import { hasDashboardAccess } from '@/lib/dashboard-access';
 
 export const revalidate = 60;
 
 export default async function VersionPage() {
+  if (!(await hasDashboardAccess())) {
+    notFound();
+  }
+
   const info = await getVersionInfo();
 
   const rows: Array<{ label: string; value: string }> = [

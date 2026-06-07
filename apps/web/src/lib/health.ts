@@ -1,3 +1,6 @@
+import { notFound } from 'next/navigation';
+import { hasDashboardAccess } from '@/lib/dashboard-access';
+
 /**
  * Server-side data fetching for health and version endpoints.
  * ONLY called from Server Components — never imported in client components.
@@ -30,6 +33,12 @@ export interface VersionInfo {
   buildTime?: string;
   nodeEnv?: string;
   apiUrl?: string;
+}
+
+async function requireDashboardAccess() {
+  if (!(await hasDashboardAccess())) {
+    notFound();
+  }
 }
 
 async function fetchHealth(url: string, label: string): Promise<ServiceHealth> {
@@ -86,6 +95,8 @@ async function fetchHealth(url: string, label: string): Promise<ServiceHealth> {
 }
 
 export async function getSystemHealth(): Promise<SystemHealthData> {
+  await requireDashboardAccess();
+
   const [api, runtime] = await Promise.all([
     fetchHealth(API_URL, 'api'),
     fetchHealth(RUNTIME_WORKER_URL, 'runtime-worker'),
@@ -99,6 +110,8 @@ export async function getSystemHealth(): Promise<SystemHealthData> {
 }
 
 export async function getVersionInfo(): Promise<VersionInfo> {
+  await requireDashboardAccess();
+
   return {
     version: process.env['npm_package_version'] ?? '0.0.1-f0',
     phase: 'F0',
