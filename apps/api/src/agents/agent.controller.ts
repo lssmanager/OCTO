@@ -64,6 +64,7 @@ export class AgentController {
 
   @Get('nodes/:nodeId')
   @RequireScopes('agents:read')
+  @HierarchyContextMeta({ nodeIdPath: 'nodeId' })
   nodeDetail(@Param('nodeId') nodeId: string, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.nodeDetail(p.tenantId, nodeId);
@@ -71,6 +72,7 @@ export class AgentController {
 
   @Post('nodes')
   @RequireScopes('agents:write')
+  @HierarchyContextMeta({ parentNodeIdPath: 'parentId' })
   createNode(@Body() body: HierarchyNodeDto, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.createNode(p.tenantId, body);
@@ -78,6 +80,7 @@ export class AgentController {
 
   @Patch('nodes/:nodeId')
   @RequireScopes('agents:write')
+  @HierarchyContextMeta({ nodeIdPath: 'nodeId' })
   patchNode(@Param('nodeId') nodeId: string, @Body() body: PatchHierarchyNodeDto, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.patchNode(p.tenantId, nodeId, body);
@@ -85,6 +88,7 @@ export class AgentController {
 
   @Patch('nodes/:nodeId/parent')
   @RequireScopes('agents:write')
+  @HierarchyContextMeta({ nodeIdPath: 'nodeId', parentNodeIdPath: 'parentId' })
   reparentNode(@Param('nodeId') nodeId: string, @Body() body: ReparentHierarchyNodeDto, @Req() req: OctoRequest & { user?: Principal }) {
     const p = mustPrincipal(req);
     return this.service.reparentNode(p.tenantId, nodeId, body);
