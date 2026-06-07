@@ -8,22 +8,26 @@ Endpoints:
   GET /health/version   — build metadata
   GET /health/metrics-url — Prometheus scrape URL for Grafana auto-discovery
 
-All endpoints are unauthenticated — consumed by Coolify, Docker HEALTHCHECK,
-and Grafana. No sensitive data is exposed.
+Only /health/live is unauthenticated for container liveness. Detailed
+readiness, status, version, worker and metrics discovery endpoints require the
+Control Plane shared internal secret because they expose topology and dependency
+evidence useful to attackers if the worker is ever accidentally reachable.
 """
 from __future__ import annotations
 
 import asyncio
+import hmac
 import os
 import time
 from typing import Any
 
 import httpx
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from ..config import Settings
 from ..f1_runtime import runtime_database_url
 
 log = structlog.get_logger(__name__)
@@ -37,6 +41,19 @@ _PROCESS_START: float = time.monotonic()
 _active_executions: int = 0
 
 router = APIRouter(prefix="/health", tags=["health"])
+_settings = Settings()
+
+
+def _verify_internal_secret(x_internal_secret: str | None) -> None:
+    """Verify the shared secret sent by the Control Plane or local debug tools."""
+    if x_internal_secret is None or not hmac.compare_digest(
+        x_internal_secret, _settings.api_internal_secret
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid internal secret",
+        )
+
 
 
 # ── Pydantic response models ───────────────────────────────────────────────────
@@ -199,8 +216,11 @@ def _overall_status(checks: dict[str, DependencyCheck]) -> str:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=HealthResponse)
-async def health_check() -> HealthResponse:
+async def health_check(
+    x_internal_secret: str | None = Header(default=None),
+) -> HealthResponse:
     """Full dependency health. Always returns 200 — consumers check .status."""
+    _verify_internal_secret(x_internal_secret)
     import datetime
     checks = await _run_all_checks()
     return HealthResponse(
@@ -221,8 +241,11 @@ async def liveness() -> dict[str, str]:
 
 
 @router.get("/ready")
-async def readiness() -> JSONResponse:
+async def readiness(
+    x_internal_secret: str | None = Header(default=None),
+) -> JSONResponse:
     """Readiness probe — 200 when all dependencies healthy, 503 otherwise."""
+    _verify_internal_secret(x_internal_secret)
     import datetime
     checks = await _run_all_checks()
     all_ok = all(c.status == "ok" for c in checks.values())
@@ -239,7 +262,9 @@ async def readiness() -> JSONResponse:
 
 
 @router.get("/worker", response_model=WorkerHealthResponse)
-async def worker_health() -> WorkerHealthResponse:
+async def worker_health(
+    x_internal_secret: str | None = Header(default=None),
+) -> WorkerHealthResponse:
     """Process-level health snapshot.
 
     Returns runtime metrics for this specific worker process:
@@ -248,6 +273,7 @@ async def worker_health() -> WorkerHealthResponse:
     - active_executions for saturation monitoring
     - worker_id for multi-replica correlation in Grafana
     """
+    _verify_internal_secret(x_internal_secret)
     import datetime
 
     import psutil  # type: ignore[import-untyped]
@@ -275,8 +301,11 @@ async def worker_health() -> WorkerHealthResponse:
 
 
 @router.get("/status")
-async def runtime_status() -> dict[str, Any]:
+async def runtime_status(
+    x_internal_secret: str | None = Header(default=None),
+) -> dict[str, Any]:
     """F1 operational status for runtime-worker evidence and close gates."""
+    _verify_internal_secret(x_internal_secret)
     import datetime
 
     checks = await _run_all_checks()
@@ -306,8 +335,11 @@ async def runtime_status() -> dict[str, Any]:
 
 
 @router.get("/version")
-async def version_info() -> dict[str, str]:
+async def version_info(
+    x_internal_secret: str | None = Header(default=None),
+) -> dict[str, str]:
     """Build metadata. Exposes image build-time ARG/ENV vars."""
+    _verify_internal_secret(x_internal_secret)
     import sys
     return {
         "service":    os.environ.get("OTEL_SERVICE_NAME", "octo-runtime-worker"),
@@ -320,8 +352,11 @@ async def version_info() -> dict[str, str]:
 
 
 @router.get("/metrics-url")
-async def metrics_url() -> dict[str, str]:
+async def metrics_url(
+    x_internal_secret: str | None = Header(default=None),
+) -> dict[str, str]:
     """Returns the Prometheus scrape URL for Grafana auto-discovery."""
+    _verify_internal_secret(x_internal_secret)
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("METRICS_PORT", "9464"))
     return {

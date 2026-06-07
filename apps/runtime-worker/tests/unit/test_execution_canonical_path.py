@@ -276,3 +276,34 @@ async def test_execute_endpoint_rejects_when_runtime_capacity_is_full(
     assert second_response.status_code == 429
     assert second_response.json() == {"detail": "runtime_execution_capacity_exhausted"}
     assert second_response.headers["retry-after"] == "1"
+
+
+def test_runtime_internal_surfaces_require_shared_secret() -> None:
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+
+    protected_paths = [
+        "/health",
+        "/health/ready",
+        "/health/status",
+        "/health/worker",
+        "/health/version",
+        "/health/metrics-url",
+        "/models/",
+    ]
+
+    for path in protected_paths:
+        response = client.get(path)
+        assert response.status_code == 401, path
+
+
+def test_runtime_liveness_remains_available_for_container_healthcheck() -> None:
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+
+    response = client.get("/health/live")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"

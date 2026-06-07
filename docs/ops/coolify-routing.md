@@ -70,7 +70,7 @@ authoritative backend for hierarchy, RBAC, tenant and persistence invariants.
 
 `docker-compose.yml` is the required F1 Coolify source because it builds and
 runs the web/API surfaces, dependencies, LiteLLM, workers and migration job on
-the same internal network. The web service uses `API_URL=http://api:3001/api`
+the same internal network. Runtime-worker, outbox-publisher-worker, reclaimer-worker and LiteLLM are not published to host ports in this deployable compose path; Coolify/Traefik should route only the web/API public surface, while execution-plane services remain reachable only by internal service DNS. The web service uses `API_URL=http://api:3001/api`
 inside compose so server-side rendering and the same-origin `/api/agent-graph`
 proxy can reach the API without exposing console tokens as `NEXT_PUBLIC_*`
 values.

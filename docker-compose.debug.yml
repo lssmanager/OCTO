@@ -1,0 +1,20 @@
+# docker-compose.debug.yml
+# Loopback-only host bindings for local operator smoke tests and debugging.
+# Do not use this override for default deployments/Coolify.
+
+services:
+  runtime-worker:
+    ports:
+      - '127.0.0.1:${WORKER_PORT:-8000}:8000'
+
+  outbox-publisher-worker:
+    ports:
+      - '127.0.0.1:${OUTBOX_PUBLISHER_PORT:-3010}:3010'
+
+  reclaimer-worker:
+    ports:
+      - '127.0.0.1:${RECLAIMER_HEALTH_PORT:-3011}:3011'
+
+  litellm:
+    ports:
+      - '127.0.0.1:${LITELLM_PORT:-4000}:4000'

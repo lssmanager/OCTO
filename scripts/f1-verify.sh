@@ -292,7 +292,7 @@ export_close_defaults() {
 }
 
 compose() {
-  DATABASE_URL="$F1_COMPOSE_DATABASE_URL" RUNTIME_DATABASE_URL="$F1_COMPOSE_RUNTIME_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" docker compose "$@"
+  DATABASE_URL="$F1_COMPOSE_DATABASE_URL" RUNTIME_DATABASE_URL="$F1_COMPOSE_RUNTIME_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" docker compose -f docker-compose.yml -f docker-compose.debug.yml "$@"
 }
 
 compose_down_clean() {

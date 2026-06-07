@@ -143,3 +143,27 @@ F1 exposes or defines operational metrics for execution counts and latencies, qu
 | `PROMETHEUS_ENABLED` | Enables metrics scraping path where supported. | `true` | services |
 | `OPS_METRICS_WINDOW_MINUTES` | Default ops aggregation window. | `5` | API ops |
 | `OUTBOX_STREAM_KEY` | Redis Stream for published outbox events. | `octo.events` | outbox-publisher |
+
+## Secure default exposure
+
+The observability compose file is internal by default:
+
+| Service | Default host exposure | Local debug override |
+| --- | --- | --- |
+| `otel-collector` | none; OTLP is reachable as `otel-collector:4317/4318` inside the compose network | `127.0.0.1:4317`, `127.0.0.1:4318`, `127.0.0.1:8889` via `infra/docker-compose.observability.debug.yml` |
+| `prometheus` | none; Grafana reaches `prometheus:9090` internally | `127.0.0.1:9090` via debug override |
+| `grafana` | none by default | `127.0.0.1:3100` via debug override |
+| `loki` | none; Grafana reaches `loki:3100` internally | `127.0.0.1:3200` via debug override |
+
+`GRAFANA_PASSWORD` is mandatory. The Grafana container refuses trivial reusable
+values such as `admin`, `password`, `changeme`, `grafana`, or `octo` before
+starting. Use a unique operator-provisioned value from the deployment secret
+store.
+
+Local observability debugging must be explicit and loopback-only:
+
+```bash
+GRAFANA_PASSWORD='<unique-local-secret>' \
+  docker compose -f infra/docker-compose.observability.yml \
+  -f infra/docker-compose.observability.debug.yml up -d
+```

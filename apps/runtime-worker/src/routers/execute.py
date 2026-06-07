@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import os
 
 import asyncpg
@@ -22,7 +23,9 @@ _inflight_tasks: set[asyncio.Task[None]] = set()
 
 def _verify_internal_secret(x_internal_secret: str | None) -> None:
     """Verify the shared secret sent by the Control Plane."""
-    if x_internal_secret != _settings.api_internal_secret:
+    if x_internal_secret is None or not hmac.compare_digest(
+        x_internal_secret, _settings.api_internal_secret
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid internal secret",
