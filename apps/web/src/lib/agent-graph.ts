@@ -1,3 +1,5 @@
+const API_URL = (process.env['API_URL'] ?? 'http://localhost:3001/api').replace(/\/+$/, '');
+
 export type AgentGraphNode = {
   id: string;
   tenantId: string;
@@ -31,13 +33,24 @@ export type AgentGraphData = {
   fetchedAt: string;
 };
 
-const DISABLED_GRAPH_MESSAGE =
-  'Agent graph projection is not exposed by the unauthenticated web console.';
-
-export function getBrowserApiUrl() {
-  return process.env['NEXT_PUBLIC_API_URL'] ?? process.env['API_URL'] ?? 'http://localhost:3001';
+export function writesConfigured(sessionToken?: string) {
+  return Boolean(sessionToken);
 }
 
-export async function getAgentGraph(): Promise<AgentGraphData> {
-  return { nodes: [], error: DISABLED_GRAPH_MESSAGE, fetchedAt: new Date().toISOString() };
+export async function getAgentGraph(sessionToken?: string): Promise<AgentGraphData> {
+  if (!sessionToken) {
+    return { nodes: [], error: 'Sign in with an authenticated console session to view the F1 Agent Graph projection.', fetchedAt: new Date().toISOString() };
+  }
+  try {
+    const res = await fetch(`${API_URL}/v1/agents/graph`, {
+      headers: { authorization: `Bearer ${sessionToken}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return { nodes: [], error: `API returned HTTP ${res.status}`, fetchedAt: new Date().toISOString() };
+    return { nodes: (await res.json()) as AgentGraphNode[], fetchedAt: new Date().toISOString() };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unable to fetch agent graph';
+    return { nodes: [], error: message, fetchedAt: new Date().toISOString() };
+  }
 }
