@@ -31,6 +31,8 @@ export class HierarchyAccessGuard implements CanActivate {
     const workspaceId = getByPath(bag, cfg.workspaceIdPath);
     const agentId = getByPath(bag, cfg.agentIdPath);
     const executionId = getByPath(bag, cfg.executionIdPath);
+    const nodeId = getByPath(bag, cfg.nodeIdPath);
+    const parentNodeId = getByPath(bag, cfg.parentNodeIdPath);
 
     if (agencyId && user.agency_ids && user.agency_ids.length > 0 && !user.agency_ids.includes(agencyId)) {
       throw new ForbiddenException({ code: 'AGENCY_SCOPE_DENIED' });
@@ -53,6 +55,20 @@ export class HierarchyAccessGuard implements CanActivate {
     }
     if (agentId) {
       req.hierarchyContext = await this.hierarchy.assertCanAccessAgent(principal, agentId);
+      return true;
+    }
+    if (nodeId) {
+      const nodeContext = await this.hierarchy.assertCanAccessHierarchyNode(principal, nodeId);
+      if (parentNodeId) {
+        const parentNodeContext = await this.hierarchy.assertCanAccessHierarchyNode(principal, parentNodeId);
+        req.hierarchyContext = { node: nodeContext, parentNode: parentNodeContext };
+        return true;
+      }
+      req.hierarchyContext = nodeContext;
+      return true;
+    }
+    if (parentNodeId) {
+      req.hierarchyContext = await this.hierarchy.assertCanAccessHierarchyNode(principal, parentNodeId);
       return true;
     }
     if (workspaceId) {
