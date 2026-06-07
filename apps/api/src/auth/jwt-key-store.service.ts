@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isUnsafeProductionJwtSecret } from '@octo/config';
 
 export type JwtKeyConfig = {
   kid: string;
@@ -10,8 +11,9 @@ export type JwtKeyConfig = {
 };
 
 const DEFAULT_HS256_KID = 'dev-hs256';
-const UNSAFE_DEV_SECRET = 'dev-secret';
 const MIN_PRODUCTION_HS256_SECRET_LENGTH = 32;
+const UNSAFE_PRODUCTION_SECRET_MESSAGE =
+  'AUTH_CONFIG_INVALID: published or development JWT signing secrets must not be used in production';
 
 @Injectable()
 export class JwtKeyStoreService {
@@ -62,10 +64,12 @@ export class JwtKeyStoreService {
         throw new Error('AUTH_CONFIG_INVALID: HS256 signing keys require a secret');
       if (key.algorithm === 'RS256' && !key.publicKey)
         throw new Error('AUTH_CONFIG_INVALID: RS256 signing keys require a publicKey');
-      if (this.isProduction() && key.secret === UNSAFE_DEV_SECRET) {
-        throw new Error(
-          'AUTH_CONFIG_INVALID: dev-secret must not be used for JWT signing in production'
-        );
+      if (
+        this.isProduction() &&
+        key.algorithm === 'HS256' &&
+        isUnsafeProductionJwtSecret(key.secret)
+      ) {
+        throw new Error(UNSAFE_PRODUCTION_SECRET_MESSAGE);
       }
     }
 
