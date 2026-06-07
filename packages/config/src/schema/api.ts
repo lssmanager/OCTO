@@ -25,6 +25,7 @@ export const apiConfigSchema = z.object({
 
   // JWT
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  JWT_SIGNING_KEYS: z.string().optional(),
   JWT_EXPIRES_IN: z.string().default('24h'),
 
   // LiteLLM
