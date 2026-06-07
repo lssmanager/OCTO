@@ -257,8 +257,8 @@ services:
       BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f1}
       BUILD_COMMIT: ${BUILD_COMMIT:-${SOURCE_COMMIT:-local}}
       BUILD_PHASE: ${BUILD_PHASE:-F1}
-    ports:
-      - '${WORKER_PORT:-8000}:8000'
+    expose:
+      - '8000'
     depends_on:
       postgres:
         condition: service_healthy
@@ -269,7 +269,7 @@ services:
     networks:
       - octonet
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:8000/health/live']
+      test: ['CMD-SHELL', 'curl -f http://localhost:8000/health/live']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -298,8 +298,8 @@ services:
         condition: service_completed_successfully
     networks:
       - octonet
-    ports:
-      - '${OUTBOX_PUBLISHER_PORT:-3010}:3010'
+    expose:
+      - '3010'
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3010/health/ready']
       interval: 20s
@@ -360,8 +360,8 @@ services:
         condition: service_completed_successfully
     networks:
       - octonet
-    ports:
-      - '${RECLAIMER_HEALTH_PORT:-3011}:3011'
+    expose:
+      - '3011'
     healthcheck:
       test:
         [

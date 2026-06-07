@@ -5,6 +5,8 @@ F2: consulta dinámica al LiteLLM proxy /models endpoint.
 """
 from __future__ import annotations
 
+import hmac
+
 import structlog
 from fastapi import APIRouter, Header, HTTPException, status
 
@@ -57,7 +59,9 @@ _F0_MODELS: list[ModelInfo] = [
 
 def _verify_internal_secret(x_internal_secret: str | None) -> None:
     """Verify the shared secret sent by the Control Plane."""
-    if x_internal_secret != _settings.api_internal_secret:
+    if x_internal_secret is None or not hmac.compare_digest(
+        x_internal_secret, _settings.api_internal_secret
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid internal secret",

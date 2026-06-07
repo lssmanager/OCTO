@@ -31,8 +31,8 @@ import asyncio
 import os
 import signal
 import threading
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI, Request
@@ -138,7 +138,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
             loop.run_in_executor(None, _shutdown_event.wait),
             timeout=float(SHUTDOWN_TIMEOUT_SECS),
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         log.warning(
             "octo_runtime_worker.shutdown_timeout",
             trace_id="bootstrap",
@@ -173,7 +173,9 @@ app = FastAPI(
     redoc_url="/redoc",
     # Disable default exception handler to allow structured error logging.
     # Re-added below as a custom handler that logs with structlog.
-    generate_unique_id_function=lambda route: f"{route.tags[0] if route.tags else 'default'}:{route.name}",
+    generate_unique_id_function=(
+        lambda route: f"{route.tags[0] if route.tags else 'default'}:{route.name}"
+    ),
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
@@ -181,13 +183,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.api_url],
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Internal-Secret"],
 )
 
 
 # ── X-Request-ID middleware ────────────────────────────────────────────────────
 @app.middleware("http")
-async def request_id_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+async def request_id_middleware(  # noqa: ANN201
+    request: Request, call_next  # noqa: ANN001
+):
     """Stamp X-Request-ID into structlog context vars for every request."""
     import uuid
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
