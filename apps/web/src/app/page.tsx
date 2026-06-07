@@ -1,18 +1,12 @@
 import { cookies } from 'next/headers';
 import { AgentGraphConsole } from '@/components/agent-graph-console';
-import { getAgentGraph } from '@/lib/agent-graph';
+import { getAgentGraph, writesConfigured } from '@/lib/agent-graph';
 
-export const revalidate = 15;
+export const dynamic = 'force-dynamic';
 
 export default async function AgentGraphPage() {
-  const graph = await getAgentGraph();
   const cookieStore = await cookies();
-  const hasConsoleSession = Boolean(cookieStore.get('octo_console_token'));
-  return (
-    <AgentGraphConsole
-      initialNodes={graph.nodes}
-      writesConfigured={hasConsoleSession}
-      initialError={graph.error}
-    />
-  );
+  const consoleSession = cookieStore.get('octo_console_token')?.value;
+  const graph = await getAgentGraph(consoleSession);
+  return <AgentGraphConsole initialNodes={graph.nodes} writesConfigured={writesConfigured(consoleSession)} initialError={graph.error} />;
 }
