@@ -16,6 +16,33 @@
 **Regla absoluta:** ningún secret, credencial, o token debe aparecer
 jamás como Build Variable en Coolify.
 
+## Gate bloqueante de CI/CD
+
+El workflow `Secret Scan` es una puerta **bloqueante** para merge a `main` y
+para cualquier release: si detecta secretos en el repositorio o indicadores de
+secretos en capas Docker, el cambio debe corregirse antes de merge/release. No
+se aceptan bypasses temporales; cualquier allowlist debe quedar localizada en
+`.gitleaks.toml` con una justificación concreta.
+
+La puerta ejecuta dos controles complementarios:
+
+1. Gitleaks con `.gitleaks.toml`, que extiende las reglas por defecto de
+   Gitleaks y solo añade allowlists acotadas para falsos positivos conocidos.
+2. Auditoría de `docker history --no-trunc` con detección amplia de nombres de
+   variables que contengan `SECRET`, `TOKEN` o `PASSWORD`, además de nombres
+   concretos como `DATABASE_URL`, `REDIS_URL`, `API_KEY` y
+   `LITELLM_MASTER_KEY`.
+
+Validación local del gate:
+
+```bash
+pnpm security:secret-scan-gate
+```
+
+La validación local crea fixtures temporales controlados y comprueba que el
+gate falla ante un token de repositorio y ante variables genéricas como
+`FUTURE_RUNTIME_TOKEN`/`APP_PASSWORD` en Docker history.
+
 ---
 
 ## Tabla: Clasificación Correcta por Variable
@@ -86,12 +113,12 @@ Ejecuta en el servidor donde corre Docker:
 docker images | grep octo-api
 
 # Verifica que ninguna credencial aparece en el historial de capas
-docker history --no-trunc <IMAGE_ID> | grep -iE '(password|secret|database_url|redis_url|jwt)'
+scripts/audit-docker-history-secrets.sh --image <IMAGE_ID>
 ```
 
-El comando `grep` debe devolver **output vacío**.
-Si aparece algún valor, significa que la variable aún está en Build Variables
-y debes repetir el procedimiento.
+El comando debe terminar con `PASS`. Si reporta `FAIL` y muestra una
+línea del historial, significa que la variable aún está en Build Variables y
+debes repetir el procedimiento.
 
 ---
 
