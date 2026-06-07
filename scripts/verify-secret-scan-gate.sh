@@ -26,10 +26,11 @@ IMAGE          CREATED BY                                      SIZE      COMMENT
 <missing>      ARG BUILD_VERSION=scan-test                     0B
 <missing>      ENV FUTURE_RUNTIME_TOKEN=redacted               0B
 <missing>      RUN /bin/sh -c echo APP_PASSWORD=redacted       0B
+<missing>      RUN /bin/sh -c echo DATABASE_URL=redacted       0B
 EOF_HISTORY
 
 if scripts/audit-docker-history-secrets.sh --history-file "$tmp_dir/leaky-history.txt" >/dev/null 2>&1; then
-  echo "FAIL: Docker layer audit fixture with TOKEN/PASSWORD indicators was not rejected." >&2
+  echo "FAIL: Docker layer audit fixture with TOKEN/PASSWORD/DATABASE_URL indicators was not rejected." >&2
   exit 1
 fi
 
@@ -37,6 +38,10 @@ if ! command -v gitleaks >/dev/null 2>&1; then
   echo "SKIP: gitleaks CLI not found; Docker layer and config self-tests passed." >&2
   exit 0
 fi
+
+mkdir -p "$tmp_dir/gitleaks-clean"
+printf 'placeholder = \"not-a-secret-fixture\"\n' > "$tmp_dir/gitleaks-clean/clean.txt"
+gitleaks dir "$tmp_dir/gitleaks-clean" --config .gitleaks.toml --no-banner --redact >/dev/null
 
 mkdir -p "$tmp_dir/gitleaks-fixture"
 printf 'stripe_key = \"%s%s\"\n' 'sk_live_' '1234567890abcdefghijklmnopqrstuv' > "$tmp_dir/gitleaks-fixture/leak.txt"
