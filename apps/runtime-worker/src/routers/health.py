@@ -1,17 +1,20 @@
 """Health endpoints for OCTO Runtime Worker (C4).
 
 Endpoints:
-  GET /health           — full status (Redis + DB + LiteLLM + process)
-  GET /health/live      — liveness probe (always 200 if process alive)
-  GET /health/ready     — readiness probe (503 if any dependency down)
-  GET /health/worker    — process-level snapshot (pid, uptime, memory, active jobs)
-  GET /health/version   — build metadata
-  GET /health/metrics-url — Prometheus scrape URL for Grafana auto-discovery
+  GET /health           - public process liveness, no operational details
+  GET /health/live      - public liveness probe (always 200 if process alive)
+  GET /health/ready     - public readiness probe (503 if any dependency down)
+  GET /health/status    - internal detailed dependency and heartbeat status
+  GET /health/worker    - internal process-level snapshot
+  GET /health/version   - internal build metadata
+  GET /health/metrics-url - internal Prometheus scrape URL for Grafana auto-discovery
 
-Only /health/live is unauthenticated for container liveness. Detailed
-readiness, status, version, worker and metrics discovery endpoints require the
-Control Plane shared internal secret because they expose topology and dependency
-evidence useful to attackers if the worker is ever accidentally reachable.
+Public probe endpoints are limited to minimal responses: /health and
+/health/live prove process liveness, and /health/ready returns only a boolean
+readiness outcome with no dependency evidence. Detailed status, version, worker
+and metrics discovery endpoints require the Control Plane shared
+X-Internal-Secret because they expose topology and dependency evidence useful to
+attackers if the worker is ever accidentally reachable.
 """
 from __future__ import annotations
 
@@ -35,7 +38,7 @@ log = structlog.get_logger(__name__)
 # Process start time for uptime calculation.
 _PROCESS_START: float = time.monotonic()
 
-# Active execution counter — incremented/decremented by the execution service.
+# Active execution counter - incremented/decremented by the execution service.
 # A simple int is used here; in F1+ this will be a proper async counter
 # backed by the ExecutionService.
 _active_executions: int = 0
@@ -43,20 +46,6 @@ _active_executions: int = 0
 router = APIRouter(prefix="/health", tags=["health"])
 _settings = Settings()
 
-
-def _verify_internal_secret(x_internal_secret: str | None) -> None:
-    """Verify the shared secret sent by the Control Plane or local debug tools."""
-    if x_internal_secret is None or not hmac.compare_digest(
-        x_internal_secret, _settings.api_internal_secret
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid internal secret",
-        )
-
-
-
-# ── Pydantic response models ───────────────────────────────────────────────────
 
 class DependencyCheck(BaseModel):
     status: str          # 'ok' | 'error' | 'degraded'
@@ -73,6 +62,15 @@ class HealthResponse(BaseModel):
     checks: dict[str, DependencyCheck]
 
 
+class PublicProbeResponse(BaseModel):
+    status: str
+    timestamp: str
+
+
+class PublicReadinessResponse(PublicProbeResponse):
+    ready: bool
+
+
 class WorkerHealthResponse(BaseModel):
     status: str
     pid: int
@@ -87,8 +85,6 @@ class WorkerHealthResponse(BaseModel):
     metrics_port: int
     timestamp: str
 
-
-# ── Dependency probe helpers ───────────────────────────────────────────────────
 
 async def _check_redis() -> DependencyCheck:
     redis_url = os.environ.get("REDIS_URL", "redis://redis:6379")
@@ -166,11 +162,11 @@ async def _run_all_checks() -> dict[str, DependencyCheck]:
         _check_control_plane(),
     )
     return {
-        "redis":          redis_check,
-        "database":       db_check,
-        "litellm":        litellm_check,
-        "control_plane":  cp_check,
-        "runtime_worker": DependencyCheck(status="ok"),  # this process is alive
+        "redis": redis_check,
+        "database": db_check,
+        "litellm": litellm_check,
+        "control_plane": cp_check,
+        "runtime_worker": DependencyCheck(status="ok"),
     }
 
 
@@ -204,6 +200,17 @@ async def _latest_runtime_heartbeat() -> dict[str, Any] | None:
         return {"status": "error", "error": str(exc)}
 
 
+def _verify_internal_secret(x_internal_secret: str | None) -> None:
+    """Protect internal health and ops surfaces with the shared service secret."""
+    if x_internal_secret is None or not hmac.compare_digest(
+        x_internal_secret, _settings.api_internal_secret
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid internal secret",
+        )
+
+
 def _overall_status(checks: dict[str, DependencyCheck]) -> str:
     statuses = {c.status for c in checks.values()}
     if "error" in statuses:
@@ -213,50 +220,42 @@ def _overall_status(checks: dict[str, DependencyCheck]) -> str:
     return "ok"
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
-
-@router.get("", response_model=HealthResponse)
-async def health_check(
-    x_internal_secret: str | None = Header(default=None),
-) -> HealthResponse:
-    """Full dependency health. Always returns 200 — consumers check .status."""
-    _verify_internal_secret(x_internal_secret)
+@router.get("", response_model=PublicProbeResponse)
+async def health_check() -> PublicProbeResponse:
+    """Public process liveness. No dependency or build details."""
     import datetime
-    checks = await _run_all_checks()
-    return HealthResponse(
-        status=_overall_status(checks),
+
+    return PublicProbeResponse(
+        status="ok",
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
-        service=os.environ.get("OTEL_SERVICE_NAME", "octo-runtime-worker"),
-        version=os.environ.get("BUILD_VERSION", "unknown"),
-        phase=os.environ.get("BUILD_PHASE", "F0"),
-        checks=checks,
     )
 
 
-@router.get("/live")
-async def liveness() -> dict[str, str]:
-    """Liveness probe — 200 if the process is alive."""
+@router.get("/live", response_model=PublicProbeResponse)
+async def liveness() -> PublicProbeResponse:
+    """Liveness probe - 200 if the process is alive."""
     import datetime
-    return {"status": "ok", "timestamp": datetime.datetime.utcnow().isoformat() + "Z"}
+
+    return PublicProbeResponse(
+        status="ok",
+        timestamp=datetime.datetime.utcnow().isoformat() + "Z",
+    )
 
 
-@router.get("/ready")
-async def readiness(
-    x_internal_secret: str | None = Header(default=None),
-) -> JSONResponse:
-    """Readiness probe — 200 when all dependencies healthy, 503 otherwise."""
-    _verify_internal_secret(x_internal_secret)
+@router.get("/ready", response_model=PublicReadinessResponse)
+async def readiness() -> JSONResponse:
+    """Readiness probe - 200 when all dependencies healthy, 503 otherwise."""
     import datetime
+
     checks = await _run_all_checks()
     all_ok = all(c.status == "ok" for c in checks.values())
     status_code = 200 if all_ok else 503
     return JSONResponse(
         status_code=status_code,
         content={
-            "status":    "ok" if all_ok else "error",
-            "ready":     all_ok,
+            "status": "ok" if all_ok else "not_ready",
+            "ready": all_ok,
             "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
-            "checks":    {k: v.model_dump() for k, v in checks.items()},
         },
     )
 
@@ -338,16 +337,17 @@ async def runtime_status(
 async def version_info(
     x_internal_secret: str | None = Header(default=None),
 ) -> dict[str, str]:
-    """Build metadata. Exposes image build-time ARG/ENV vars."""
+    """Build metadata. Exposes image build-time ARG and ENV vars."""
     _verify_internal_secret(x_internal_secret)
     import sys
+
     return {
-        "service":    os.environ.get("OTEL_SERVICE_NAME", "octo-runtime-worker"),
-        "version":    os.environ.get("BUILD_VERSION", "unknown"),
-        "commit":     os.environ.get("BUILD_COMMIT", "unknown"),
-        "phase":      os.environ.get("BUILD_PHASE", "F0"),
-        "built_at":   os.environ.get("BUILD_TIME", "unknown"),
-        "python":     sys.version,
+        "service": os.environ.get("OTEL_SERVICE_NAME", "octo-runtime-worker"),
+        "version": os.environ.get("BUILD_VERSION", "unknown"),
+        "commit": os.environ.get("BUILD_COMMIT", "unknown"),
+        "phase": os.environ.get("BUILD_PHASE", "F0"),
+        "built_at": os.environ.get("BUILD_TIME", "unknown"),
+        "python": sys.version,
     }
 
 
@@ -360,7 +360,7 @@ async def metrics_url(
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("METRICS_PORT", "9464"))
     return {
-        "url":     f"http://{host}:{port}/metrics",
-        "format":  "prometheus",
-        "note":    "Scraped by Prometheus via prometheus_client.start_http_server()",
+        "url": f"http://{host}:{port}/metrics",
+        "format": "prometheus",
+        "note": "Scraped by Prometheus via prometheus_client.start_http_server()",
     }

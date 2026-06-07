@@ -13,7 +13,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { HealthController } from './health.controller';
 import { HealthService } from './health.service';
 
-// ── Mocks ──────────────────────────────────────────────────────────────────
+// -- Mocks -----------------------------------------------------------------
 
 vi.mock('@octo/queue', () => ({
   createQueue: vi.fn(() => ({
@@ -48,7 +48,7 @@ vi.mock('drizzle-orm/postgres-js', () => ({
   drizzle: vi.fn(() => ({ execute: vi.fn(() => [{ '?column?': 1 }]) })),
 }));
 
-// ── Tests ──────────────────────────────────────────────────────────────────
+// -- Tests -----------------------------------------------------------------
 
 describe('HealthController', () => {
   let controller: HealthController;
@@ -61,7 +61,6 @@ describe('HealthController', () => {
     service = module.get<HealthService>(HealthService);
     controller = new HealthController(service);
 
-    // Simulate module init
     process.env['REDIS_URL'] = 'redis://localhost:6379';
     process.env['DATABASE_URL'] = 'postgresql://localhost:5432/octo';
     process.env['LITELLM_BASE_URL'] = 'http://litellm:4000';
@@ -87,7 +86,6 @@ describe('HealthController', () => {
     vi.unstubAllGlobals();
   });
 
-  // E4.1 — /live always returns ok while process is alive
   describe('GET /health/live', () => {
     it('returns { status: "ok" } unconditionally', () => {
       const result = controller.live();
@@ -97,36 +95,44 @@ describe('HealthController', () => {
     });
   });
 
-  // E4.2 — /ready returns 503 when dependencies are down
   describe('GET /health/ready', () => {
     it('returns 503 when DB is unreachable', async () => {
-      // Force DB check to fail by clearing DATABASE_URL
       const original = process.env['DATABASE_URL'];
       delete process.env['DATABASE_URL'];
-      // Re-init to pick up the cleared env
       service.onModuleInit();
 
       const res = { status: vi.fn() } as any;
       const body = await controller.ready(res);
 
       expect(res.status).toHaveBeenCalledWith(503);
-      expect(body.status).toBe('error');
+      expect(body.status).toBe('not_ready');
       expect(body.ready).toBe(false);
+      expect(Object.keys(body).sort()).toEqual(['ready', 'status', 'timestamp']);
 
-      // Restore
       process.env['DATABASE_URL'] = original;
       service.onModuleInit();
     });
+
+    it('does not expose dependency or operations details in the public readiness body', async () => {
+      const res = { status: vi.fn() } as any;
+      const body = await controller.ready(res);
+
+      expect(res.status).toHaveBeenCalledWith(expect.any(Number));
+      expect(Object.keys(body).sort()).toEqual(['ready', 'status', 'timestamp']);
+      expect(JSON.stringify(body)).not.toMatch(
+        /redis|postgres|queue|litellm|checks|error|latency|commit|version|waiting|active|failed/i
+      );
+    });
   });
 
-  // E4.3 — /start returns 503 before bootstrap, 200 after
   describe('GET /health/start', () => {
     it('returns 503 before markBootstrapped() is called', async () => {
       const res = { status: vi.fn() } as any;
       const body = await controller.start(res);
 
       expect(res.status).toHaveBeenCalledWith(503);
-      expect(body.bootstrapped).toBe(false);
+      expect(body.ready).toBe(false);
+      expect(Object.keys(body).sort()).toEqual(['ready', 'status', 'timestamp']);
     });
 
     it('returns 200 after markBootstrapped() is called', async () => {
@@ -136,12 +142,12 @@ describe('HealthController', () => {
       const body = await controller.start(res);
 
       expect(res.status).not.toHaveBeenCalled();
-      expect(body.bootstrapped).toBe(true);
+      expect(body.ready).toBe(true);
       expect(body.status).toBe('ok');
+      expect(Object.keys(body).sort()).toEqual(['ready', 'status', 'timestamp']);
     });
   });
 
-  // E4.4 — /live returns valid timestamp
   describe('GET /health/live', () => {
     it('includes a valid ISO 8601 timestamp', () => {
       const result = controller.live();
@@ -150,7 +156,6 @@ describe('HealthController', () => {
     });
   });
 
-  // F1 readiness semantics — /ready must fail when critical dependencies fail.
   describe('F1 readiness checks', () => {
     it('returns not ready when postgres check fails', () => {
       const checks = {

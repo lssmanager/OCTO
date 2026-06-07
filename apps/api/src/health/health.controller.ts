@@ -3,78 +3,84 @@ import type { FastifyReply } from 'fastify';
 import { Public } from '../admin/internal-secret.guard';
 import { HealthService, type HealthStatus } from './health.service';
 
+type PublicProbeStatus = 'ok' | 'not_ready';
+
+interface PublicProbeResponse {
+  status: PublicProbeStatus;
+  timestamp: string;
+}
+
+interface PublicReadinessResponse extends PublicProbeResponse {
+  ready: boolean;
+}
+
 /**
- * Health endpoints — no authentication required (public probes).
+ * Health endpoints.
  *
- * GET /api/health        — full status (Redis + BullMQ + Postgres)
- * GET /api/health/live   — liveness probe (always 200 if process is alive)
- * GET /api/health/ready  — readiness probe (503 if any dependency is down)
- * GET /api/health/start  — startup probe (503 until bootstrap complete)
- * GET /api/health/ping   — enqueues a health job to validate BullMQ end-to-end
- * GET /api/health/version — service version, commit, phase
+ * Public probe-safe endpoints:
+ * GET /api/health/live   - process liveness, no dependency details
+ * GET /api/health/ready  - readiness boolean, no dependency details
+ * GET /api/health/start  - startup boolean, no dependency details
+ *
+ * Internal/protected endpoints require X-Internal-Secret via InternalSecretGuard:
+ * GET /api/health        - detailed dependency status
+ * GET /api/health/ping   - BullMQ end-to-end health job enqueue
+ * GET /api/health/version - build metadata
  */
 @Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
-  /** Full health status — always 200, consumers check the `status` field. */
+  /** Detailed dependency health - protected by InternalSecretGuard. */
   @Get()
   @HttpCode(HttpStatus.OK)
   async check(): Promise<HealthStatus> {
     return this.healthService.check();
   }
 
-  /**
-   * Liveness probe.
-   * Returns 200 as long as the process is alive.
-   */
+  /** Liveness probe. Returns 200 as long as the process is alive. */
   @Public()
   @Get('live')
   @HttpCode(HttpStatus.OK)
-  live(): { status: string; timestamp: string } {
+  live(): PublicProbeResponse {
     return { status: 'ok', timestamp: new Date().toISOString() };
   }
 
   /**
-   * Readiness probe.
-   * Returns 200 when all dependencies are healthy.
-   * Returns 503 Service Unavailable when any dependency is down or degraded.
+   * Readiness probe. Public response is intentionally minimal: no dependency
+   * names, queue counts, latency, upstream metadata, or error strings.
    */
+  @Public()
   @Get('ready')
-  async ready(@Res({ passthrough: true }) res: FastifyReply): Promise<Record<string, unknown>> {
+  async ready(@Res({ passthrough: true }) res: FastifyReply): Promise<PublicReadinessResponse> {
     const checks = await this.healthService.runChecks();
     const allOk = Object.values(checks).every((c) => c.status === 'ok');
     const httpStatus = allOk ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE;
 
     res.status(httpStatus);
     return {
-      status: allOk ? 'ok' : 'error',
+      status: allOk ? 'ok' : 'not_ready',
       ready: allOk,
       timestamp: new Date().toISOString(),
-      checks,
     };
   }
 
-  /**
-   * Startup probe.
-   * Returns 200 when bootstrap is complete.
-   * Returns 503 while bootstrap is in progress.
-   */
+  /** Startup probe. Public response is intentionally minimal. */
   @Public()
   @Get('start')
-  async start(@Res({ passthrough: true }) res: FastifyReply): Promise<Record<string, unknown>> {
+  async start(@Res({ passthrough: true }) res: FastifyReply): Promise<PublicReadinessResponse> {
     const booted = this.healthService.isBootstrapped();
     if (!booted) {
       res.status(HttpStatus.SERVICE_UNAVAILABLE);
       return {
-        status: 'starting',
-        bootstrapped: false,
+        status: 'not_ready',
+        ready: false,
         timestamp: new Date().toISOString(),
       };
     }
     return {
       status: 'ok',
-      bootstrapped: true,
+      ready: true,
       timestamp: new Date().toISOString(),
     };
   }
@@ -87,9 +93,7 @@ export class HealthController {
     return { jobId, enqueuedAt: new Date().toISOString() };
   }
 
-  /**
-   * Version info.
-   */
+  /** Build metadata - protected by InternalSecretGuard. */
   @Get('version')
   @HttpCode(HttpStatus.OK)
   version(): Record<string, string> {
