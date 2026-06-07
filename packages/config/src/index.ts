@@ -7,4 +7,5 @@
 // Pattern source: F0-016-env-config-strategy.md, F0-013-code-standards.md
 
 export { apiConfigSchema, loadApiConfig, type ApiConfig } from './schema/api';
+export { JWT_SECRET_PLACEHOLDER, isUnsafeProductionJwtSecret } from './schema/jwt-secrets';
 export { runtimeConfigSchema, type RuntimeConfig } from './schema/runtime';
