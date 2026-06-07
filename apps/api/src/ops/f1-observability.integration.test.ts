@@ -98,13 +98,14 @@ describeIfInfra('F1 observability smoke', () => {
 
     const ops = new OpsV1Service({
       listDlq: async () => ({}), requeue: async () => ({}), discard: async () => undefined, metrics: async () => ({}), stale: async () => ({}), reset: async () => ({}), f1Status: async () => ({}),
-      observeExecution: async (_tenantId, id) => ({ execution: await repo.getExecutionSummary(id, _tenantId), timeline: await repo.getExecutionTimeline(id, _tenantId), outbox: await repo.getExecutionTimeline(id, _tenantId), dlq: [] }),
-      observeTrace: async (_tenantId, tid) => ({ traceId: tid, executions: rows(await sql`SELECT id, trace_id FROM executions WHERE tenant_id=${_tenantId} AND trace_id=${tid}`), timeline: await repo.getExecutionTimeline(executionId, _tenantId) }),
+      observeExecution: async (principal, id) => ({ execution: await repo.getExecutionSummary(id, principal.tenantId), timeline: await repo.getExecutionTimeline(id, principal.tenantId), outbox: await repo.getExecutionTimeline(id, principal.tenantId), dlq: [] }),
+      observeTrace: async (principal, tid) => ({ traceId: tid, executions: rows(await sql`SELECT id, trace_id FROM executions WHERE tenant_id=${principal.tenantId} AND trace_id=${tid}`), timeline: await repo.getExecutionTimeline(executionId, principal.tenantId) }),
     } as any);
-    const byExecution = await ops.observeExecution(tenantId, executionId);
+    const principal = { tenantId, userId: 'operator-test', sub: 'operator-test' };
+    const byExecution = await ops.observeExecution(principal, executionId);
     expect(byExecution.execution).toMatchObject({ id: executionId, traceId });
     expect(byExecution.timeline.length).toBeGreaterThanOrEqual(5);
-    const byTrace = await ops.observeTrace(tenantId, traceId);
+    const byTrace = await ops.observeTrace(principal, traceId);
     expect(byTrace.executions.map((row: any) => row.id)).toContain(executionId);
   });
 });

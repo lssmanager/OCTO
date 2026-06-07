@@ -9,10 +9,15 @@ import { OpsService } from './ops.service';
 import { OpsV1Controller, OpsExecutionController } from './ops-v1.controller';
 import { OpsV1Service } from './ops-v1.service';
 import { F1StatusService } from './f1-status.service';
+import { HierarchyAccessService } from '../auth/hierarchy-access.service';
 
 function rows(result: unknown): any[] {
   if (Array.isArray(result)) return result;
-  if (result && typeof result === 'object' && Array.isArray((result as { rows?: unknown[] }).rows)) {
+  if (
+    result &&
+    typeof result === 'object' &&
+    Array.isArray((result as { rows?: unknown[] }).rows)
+  ) {
     return (result as { rows: any[] }).rows;
   }
   return [];
@@ -23,6 +28,17 @@ function asIso(value: unknown): string | null {
   return value instanceof Date ? value.toISOString() : String(value);
 }
 
+function emptyRows() {
+  return { rows: [] };
+}
+
+function sqlIn(values: string[]) {
+  return sql.join(
+    values.map((value) => sql`${value}`),
+    sql`, `
+  );
+}
+
 @Module({
   imports: [HealthModule, JwtAuthModule],
   controllers: [OpsController, OpsV1Controller, OpsExecutionController],
@@ -31,7 +47,7 @@ function asIso(value: unknown): string | null {
     F1StatusService,
     {
       provide: OpsV1Service,
-      useFactory: (f1StatusService: F1StatusService) =>
+      useFactory: (f1StatusService: F1StatusService, hierarchy: HierarchyAccessService) =>
         new OpsV1Service({
           listDlq: async (tenantId, q) => {
             const page = Math.max(Number(q.page ?? 1), 1);
@@ -71,12 +87,22 @@ function asIso(value: unknown): string | null {
             } finally {
               await queue.close().catch(() => undefined);
             }
-            return { jobId, executionId: entry.executionId, requeued: true, targetQueue: QUEUES.EXECUTION_DISPATCH };
+            return {
+              jobId,
+              executionId: entry.executionId,
+              requeued: true,
+              targetQueue: QUEUES.EXECUTION_DISPATCH,
+            };
           },
           discard: async (tenantId, actorId, jobId, body) => {
             const updated = await db
               .update(executionDlq)
-              .set({ resolvedAt: new Date(), resolvedBy: actorId, notes: body.reason, updatedAt: new Date() })
+              .set({
+                resolvedAt: new Date(),
+                resolvedBy: actorId,
+                notes: body.reason,
+                updatedAt: new Date(),
+              })
               .where(and(eq(executionDlq.tenantId, tenantId), eq(executionDlq.id, jobId)))
               .returning({ id: executionDlq.id });
             if (!updated.length) throw new NotFoundException('DLQ_ENTRY_NOT_FOUND');
@@ -103,8 +129,11 @@ function asIso(value: unknown): string | null {
               .limit(100);
             return { executions: rows, checkedAt: new Date().toISOString() };
           },
-          observeExecution: async (tenantId, executionId) => {
-            const executionRows = rows(await db.execute(sql`
+          observeExecution: async (principal, executionId) => {
+            await hierarchy.assertCanAccessExecution(principal, executionId);
+            const tenantId = principal.tenantId;
+            const executionRows = rows(
+              await db.execute(sql`
               SELECT id, tenant_id, agent_id, agent_version_id, status, state, version, run_id, trace_id,
                      queue_job_id, worker_id, lease_owner, attempt, reclaim_count, error_code, error_message,
                      created_at, updated_at, started_at, completed_at, lease_expires_at, reclaimed_at,
@@ -112,7 +141,8 @@ function asIso(value: unknown): string | null {
               FROM executions
               WHERE tenant_id=${tenantId} AND id=${executionId}
               LIMIT 1
-            `));
+            `)
+            );
             const execution = executionRows[0];
             if (!execution) throw new NotFoundException('EXECUTION_NOT_FOUND');
 
@@ -145,15 +175,42 @@ function asIso(value: unknown): string | null {
                 ORDER BY created_at DESC
               `),
               (async () => {
-                const queue = createQueue(QUEUES.EXECUTION_DISPATCH, { redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379' });
+                const queue = createQueue(QUEUES.EXECUTION_DISPATCH, {
+                  redisUrl: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
+                });
                 try {
                   const [waiting, active, failed, delayed] = await Promise.all([
-                    queue.getWaitingCount(), queue.getActiveCount(), queue.getFailedCount(), queue.getDelayedCount(),
+                    queue.getWaitingCount(),
+                    queue.getActiveCount(),
+                    queue.getFailedCount(),
+                    queue.getDelayedCount(),
                   ]);
-                  const job = execution.queue_job_id ? await queue.getJob(String(execution.queue_job_id)) : null;
-                  return { source: 'bullmq', waiting, active, failed, delayed, job: job ? { id: job.id, state: await job.getState(), attemptsMade: job.attemptsMade, timestamp: job.timestamp, processedOn: job.processedOn, finishedOn: job.finishedOn } : null };
+                  const job = execution.queue_job_id
+                    ? await queue.getJob(String(execution.queue_job_id))
+                    : null;
+                  return {
+                    source: 'bullmq',
+                    waiting,
+                    active,
+                    failed,
+                    delayed,
+                    job: job
+                      ? {
+                          id: job.id,
+                          state: await job.getState(),
+                          attemptsMade: job.attemptsMade,
+                          timestamp: job.timestamp,
+                          processedOn: job.processedOn,
+                          finishedOn: job.finishedOn,
+                        }
+                      : null,
+                  };
                 } catch (error) {
-                  return { source: 'bullmq', unavailable: true, reason: error instanceof Error ? error.message : String(error) };
+                  return {
+                    source: 'bullmq',
+                    unavailable: true,
+                    reason: error instanceof Error ? error.message : String(error),
+                  };
                 } finally {
                   await queue.close().catch(() => undefined);
                 }
@@ -161,7 +218,10 @@ function asIso(value: unknown): string | null {
             ]);
 
             const status = String(execution.status);
-            const stuck = ['running', 'dispatched', 'queued', 'reclaimable'].includes(status) && execution.lease_expires_at && new Date(execution.lease_expires_at).getTime() < Date.now();
+            const stuck =
+              ['running', 'dispatched', 'queued', 'reclaimable'].includes(status) &&
+              execution.lease_expires_at &&
+              new Date(execution.lease_expires_at).getTime() < Date.now();
             return {
               execution: {
                 id: execution.id,
@@ -179,12 +239,18 @@ function asIso(value: unknown): string | null {
                 attempt: Number(execution.attempt ?? 0),
                 reclaimCount: Number(execution.reclaim_count ?? 0),
                 timestamps: {
-                  createdAt: asIso(execution.created_at), updatedAt: asIso(execution.updated_at),
-                  startedAt: asIso(execution.started_at), completedAt: asIso(execution.completed_at),
-                  leaseExpiresAt: asIso(execution.lease_expires_at), reclaimedAt: asIso(execution.reclaimed_at),
+                  createdAt: asIso(execution.created_at),
+                  updatedAt: asIso(execution.updated_at),
+                  startedAt: asIso(execution.started_at),
+                  completedAt: asIso(execution.completed_at),
+                  leaseExpiresAt: asIso(execution.lease_expires_at),
+                  reclaimedAt: asIso(execution.reclaimed_at),
                   cancellationRequestedAt: asIso(execution.cancellation_requested_at),
                 },
-                error: execution.error_code || execution.error_message ? { code: execution.error_code, message: execution.error_message } : null,
+                error:
+                  execution.error_code || execution.error_message
+                    ? { code: execution.error_code, message: execution.error_message }
+                    : null,
                 stuck: Boolean(stuck),
                 reclaimable: status === 'reclaimable' || Boolean(stuck),
               },
@@ -194,33 +260,50 @@ function asIso(value: unknown): string | null {
               timeline: rows(outbox),
               outbox: rows(outbox),
               dlq: rows(dlq),
-              sources: { logs: { availableInServiceLogs: true, filterBy: { executionId, traceId: execution.trace_id } } },
+              sources: {
+                logs: {
+                  availableInServiceLogs: true,
+                  filterBy: { executionId, traceId: execution.trace_id },
+                },
+              },
             };
           },
-          observeTrace: async (tenantId, traceId) => {
-            const [execs, events, dlqEntries] = await Promise.all([
-              db.execute(sql`
-                SELECT id, tenant_id, agent_id, status, state, run_id, trace_id, queue_job_id, worker_id,
-                       attempt, reclaim_count, created_at, started_at, completed_at, error_code, error_message
-                FROM executions
-                WHERE tenant_id=${tenantId} AND trace_id=${traceId}
-                ORDER BY created_at ASC
-              `),
-              db.execute(sql`
+          observeTrace: async (principal, traceId) => {
+            const tenantId = principal.tenantId;
+            const execs = await db.execute(sql`
+              SELECT id, tenant_id, agent_id, status, state, run_id, trace_id, queue_job_id, worker_id,
+                     attempt, reclaim_count, created_at, started_at, completed_at, error_code, error_message
+              FROM executions
+              WHERE tenant_id=${tenantId} AND trace_id=${traceId}
+              ORDER BY created_at ASC
+            `);
+            const executionRows = rows(execs);
+            for (const execution of executionRows) {
+              await hierarchy.assertCanAccessExecution(principal, String(execution.id));
+            }
+            const executionIds = executionRows.map((row) => String(row.id));
+            const [events, dlqEntries] =
+              executionIds.length > 0
+                ? await Promise.all([
+                    db.execute(sql`
                 SELECT id, aggregate_id, event_type, sequence, payload_json, published_at, dead_lettered_at, created_at
                 FROM outbox_events
                 WHERE tenant_id=${tenantId}
-                  AND ((payload_json->_meta->>'traceId')=${traceId} OR (payload_json->>'traceId')=${traceId})
+                  AND aggregate_type='execution'
+                  AND aggregate_id IN (${sqlIn(executionIds)})
+                  AND ((payload_json->'_meta'->>'traceId')=${traceId} OR (payload_json->>'traceId')=${traceId})
                 ORDER BY created_at ASC, sequence ASC
               `),
-              db.execute(sql`
+                    db.execute(sql`
                 SELECT id, execution_id, reason, attempts_made, queue_name, queue_job_id, trace_id, run_id, created_at, resolved_at
                 FROM execution_dlq
-                WHERE tenant_id=${tenantId} AND trace_id=${traceId}
+                WHERE tenant_id=${tenantId}
+                  AND trace_id=${traceId}
+                  AND execution_id IN (${sqlIn(executionIds)})
                 ORDER BY created_at ASC
               `),
-            ]);
-            const executionRows = rows(execs);
+                  ])
+                : [emptyRows(), emptyRows()];
             return {
               traceId,
               tenantId,
@@ -228,7 +311,12 @@ function asIso(value: unknown): string | null {
               timeline: rows(events),
               outbox: rows(events),
               dlq: rows(dlqEntries),
-              queueJobs: executionRows.map((row) => ({ executionId: row.id, queueJobId: row.queue_job_id, workerId: row.worker_id, status: row.status })),
+              queueJobs: executionRows.map((row) => ({
+                executionId: row.id,
+                queueJobId: row.queue_job_id,
+                workerId: row.worker_id,
+                status: row.status,
+              })),
               logs: { availableInServiceLogs: true, filterBy: { traceId } },
               unavailableSources: [],
             };
@@ -243,7 +331,7 @@ function asIso(value: unknown): string | null {
             return row ? { executionId: row.id, state: row.state, reset: true } : null;
           },
         }),
-      inject: [F1StatusService],
+      inject: [F1StatusService, HierarchyAccessService],
     },
   ],
 })
