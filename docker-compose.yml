@@ -392,8 +392,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     volumes:
       - ./docker/litellm/config.yaml:/app/config.yaml:ro
-    ports:
-      - '${LITELLM_PORT:-4000}:4000'
+    expose:
+      - '4000'
     depends_on:
       postgres:
         condition: service_healthy
