@@ -12,6 +12,11 @@ function token(payload: object) {
 }
 
 describe('JwtAuthGuard', () => {
+
+  it('fails closed when JWT_SIGNING_KEYS is missing', () => {
+    delete process.env.JWT_SIGNING_KEYS;
+    expect(() => new JwtKeyStoreService()).toThrowError('AUTH_CONFIG_INVALID: JWT_SIGNING_KEYS is required');
+  });
   it('accepts valid jwt and injects user', () => {
     process.env.JWT_SIGNING_KEYS = '[{"kid":"dev-hs256","algorithm":"HS256","isActive":true,"secret":"dev-secret"}]';
     const guard = new JwtAuthGuard(new Reflector(), new JwtKeyStoreService());
