@@ -48,6 +48,7 @@ REQUIRED_CLOSE_CHECKS=(
   "Docker reproducibility and hardening gate"
   "compose up for full F1 stack"
   "strict public web+API smoke (console, status, health, metadata, execution, outbox, workers)"
+  "F1 queue workers durable smoke (scheduler, reclaimer, outbox)"
   "Agent Graph F1 smoke"
 )
 
@@ -339,6 +340,7 @@ run_close_gate() {
   REPORT_URLS+=("API health ready URL: ${API_URL}/health/ready")
   REPORT_URLS+=("API version URL: ${API_URL}/health/version")
   run_close_check "strict public web+API smoke (console, status, health, metadata, execution, outbox, workers)" env DATABASE_URL="$F1_COMPOSE_DATABASE_URL" REDIS_URL="$F1_COMPOSE_REDIS_URL" F1_WEB_URL="$F1_WEB_URL" F1_PUBLIC_URL="$F1_PUBLIC_URL" API_URL="$API_URL" API_ROOT_URL="$API_ROOT_URL" bash scripts/f1-smoke.sh --strict
+  run_close_check "F1 queue workers durable smoke (scheduler, reclaimer, outbox)" env DATABASE_URL="$F1_HOST_DATABASE_URL" REDIS_URL="$F1_HOST_REDIS_URL" F1_HOST_DATABASE_URL="$F1_HOST_DATABASE_URL" F1_HOST_REDIS_URL="$F1_HOST_REDIS_URL" API_URL="$API_URL" API_ROOT_URL="$API_ROOT_URL" RUNTIME_PUBLIC_URL="http://localhost:8000" SCHEDULER_PUBLIC_URL="http://localhost:3003" OUTBOX_PUBLIC_URL="http://localhost:3010" RECLAIMER_PUBLIC_URL="http://localhost:3011" JWT_SECRET="${JWT_SECRET}" JWT_KID="${JWT_KID}" bash scripts/f1-queue-workers-smoke.sh
   run_close_check "Agent Graph F1 smoke" env API_URL="http://localhost:3001/api" JWT_SECRET="${JWT_SECRET}" JWT_KID="${JWT_KID}" bash scripts/f1-agent-graph-smoke.sh
 
   REPORT_DECISION="PASS"

@@ -324,6 +324,8 @@ services:
         condition: service_completed_successfully
     networks:
       - octonet
+    ports:
+      - '${SCHEDULER_HEALTH_PORT:-3003}:3003'
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3003/health/ready']
       interval: 30s

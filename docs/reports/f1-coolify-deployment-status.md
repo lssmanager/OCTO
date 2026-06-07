@@ -139,7 +139,7 @@ Interpretacion: esto no es un fallo por si mismo. El endpoint esta protegido y r
 |---|---:|---|
 | Backend | 92% | API publica viva, rutas F1 cargadas, pero falta smoke publico de Agent Graph con JWT y contrato completo. |
 | Runtime Foundation | 55% | No demostrado por esta evidencia; rutas de runtime en API no prueban `runtime-worker` vivo. |
-| Queues | 82% | Redis y `execution.dispatch` estan `ok`; faltan workers, dispatch durable, reclaim y outbox. |
+| Queues | 82% | Redis y `execution.dispatch` estan `ok`; el repo ahora exige `pnpm f1:queue-workers-smoke` para demostrar workers vivos, dispatch durable, reclaim y outbox; falta ejecutarlo con evidencia Coolify. |
 | DB | 92% | Postgres y migraciones/API DB connectivity avanzan fuerte; falta runtime DB role smoke y aislamiento. |
 | LLM Integration | 55% | LiteLLM esta demostrado como fallando readiness. |
 | Infra | 82% | Coolify despliega API publica, pero `/status` 404 y `/` como `octo-api` confirman que todavia no demuestra el stack F1 completo. |
@@ -166,9 +166,9 @@ F1 no debe declararse al 100% mientras se cumpla cualquiera de estas condiciones
 - LiteLLM no aparezca `ok` en readiness.
 - Solo exista evidencia de API publica y no del stack F1 completo o una decision formal API-first.
 - No haya smoke publico de Agent Graph contra `https://agents.socialstudies.cloud/api`.
-- No haya validacion de runtime-worker, workers de queue, outbox y runtime DB role.
+- No haya validacion de runtime-worker, workers de queue, outbox y runtime DB role; para queues, la evidencia requerida es `pnpm f1:queue-workers-smoke` o `pnpm f1:close-gate` en PASS usando `F1_HOST_DATABASE_URL`/`F1_HOST_REDIS_URL` desde el host.
 - `docs/reports/f1-close-report.md` no muestre `Final decision: PASS`.
 
 ## Siguiente paso recomendado
 
-Reconfigurar #286 como recurso Coolify Docker Compose usando `docker-compose.yml`, con `web:3000` como superficie publica y `/api/*` hacia `api:3001`. En paralelo, resolver #287 porque LiteLLM es el bloqueo directo de readiness. Despues ejecutar los smokes/gates de #288, #289, #290 y #291, y finalmente cerrar #281 con `pnpm f1:close-gate` en PASS.
+Reconfigurar #286 como recurso Coolify Docker Compose usando `docker-compose.yml`, con `web:3000` como superficie publica y `/api/*` hacia `api:3001`. En paralelo, resolver #287 porque LiteLLM es el bloqueo directo de readiness. Despues ejecutar los smokes/gates de #288, #289, #290 y #291. Para #289, ejecutar `pnpm f1:queue-workers-smoke` contra el stack Coolify/Compose completo y conservar evidencia de scheduler, reclaimer, outbox, dispatch durable, handoff runtime, reclaim y outbox publication. Finalmente cerrar #281 con `pnpm f1:close-gate` en PASS.
