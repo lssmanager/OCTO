@@ -1,54 +1,70 @@
 import { z } from 'zod';
+import { isUnsafeProductionJwtSecret } from './jwt-secrets';
 
 const postgresUrlRefine = (v: string) =>
   v.startsWith('postgresql://') || v.startsWith('postgres://');
 
 const postgresUrlMessage = 'DATABASE_URL must start with postgresql:// or postgres://';
 
-export const apiConfigSchema = z.object({
-  // Server
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
-  PORT: z.coerce.number().int().min(1024).max(65535).default(3001),
-  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
+export const apiConfigSchema = z
+  .object({
+    // Server
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
+    PORT: z.coerce.number().int().min(1024).max(65535).default(3001),
+    LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 
-  // Database
-  DATABASE_URL: z.string().url().refine(postgresUrlRefine, { message: postgresUrlMessage }),
-  DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(20),
+    // Database
+    DATABASE_URL: z.string().url().refine(postgresUrlRefine, { message: postgresUrlMessage }),
+    DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(20),
 
-  // Redis
-  REDIS_URL: z
-    .string()
-    .url()
-    .refine((v) => v.startsWith('redis://'), {
-      message: 'REDIS_URL must start with redis://',
-    }),
+    // Redis
+    REDIS_URL: z
+      .string()
+      .url()
+      .refine((v) => v.startsWith('redis://'), {
+        message: 'REDIS_URL must start with redis://',
+      }),
 
-  // JWT
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
-  JWT_SIGNING_KEYS: z.string().optional(),
-  JWT_EXPIRES_IN: z.string().default('24h'),
+    // JWT
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+    JWT_SIGNING_KEYS: z.string().optional(),
+    JWT_EXPIRES_IN: z.string().default('24h'),
 
-  // LiteLLM
-  LITELLM_BASE_URL: z.string().url().default('http://litellm:4000'),
-  LITELLM_MASTER_KEY: z.string().min(16, 'LITELLM_MASTER_KEY must be at least 16 characters'),
+    // LiteLLM
+    LITELLM_BASE_URL: z.string().url().default('http://litellm:4000'),
+    LITELLM_MASTER_KEY: z.string().min(16, 'LITELLM_MASTER_KEY must be at least 16 characters'),
 
-  // Internal/admin and inter-service authentication
-  RUNTIME_WORKER_URL: z.string().url().default('http://runtime-worker:8000'),
-  INTERNAL_SECRET: z.string().min(32, 'INTERNAL_SECRET must be at least 32 characters'),
+    // Internal/admin and inter-service authentication
+    RUNTIME_WORKER_URL: z.string().url().default('http://runtime-worker:8000'),
+    INTERNAL_SECRET: z.string().min(32, 'INTERNAL_SECRET must be at least 32 characters'),
 
-  // OTEL
-  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().default('http://otel-collector:4318'),
-  OTEL_SERVICE_NAME: z.string().default('octo-api'),
+    // OTEL
+    OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().default('http://otel-collector:4318'),
+    OTEL_SERVICE_NAME: z.string().default('octo-api'),
 
-  // CORS — comma-separated origins, e.g. "http://localhost:3000,https://app.octo.ai"
-  CORS_ORIGINS: z.string().default('http://localhost:3000'),
+    // CORS — comma-separated origins, e.g. "http://localhost:3000,https://app.octo.ai"
+    CORS_ORIGINS: z.string().default('http://localhost:3000'),
 
-  // Build info — injected by CI, safe defaults for local
-  BUILD_VERSION: z.string().default('0.1.0-f1'),
-  BUILD_COMMIT: z.string().default('local'),
-  BUILD_PHASE: z.string().default('F1'),
-  BUILD_TIME: z.string().default('local'),
-});
+    // Build info — injected by CI, safe defaults for local
+    BUILD_VERSION: z.string().default('0.1.0-f1'),
+    BUILD_COMMIT: z.string().default('local'),
+    BUILD_PHASE: z.string().default('F1'),
+    BUILD_TIME: z.string().default('local'),
+  })
+  .superRefine((config, ctx) => {
+    if (
+      config.NODE_ENV === 'production' &&
+      !config.JWT_SIGNING_KEYS &&
+      isUnsafeProductionJwtSecret(config.JWT_SECRET)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_SECRET'],
+        message:
+          'JWT_SECRET placeholder must be replaced before production startup when JWT_SIGNING_KEYS is unset',
+      });
+    }
+  });
 
 export type ApiConfig = z.infer<typeof apiConfigSchema>;
 
