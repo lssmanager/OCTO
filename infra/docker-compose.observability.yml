@@ -5,9 +5,9 @@ services:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     command: ['--config=/etc/otel-collector-config.yaml']
     ports:
-      - '4317:4317'
-      - '4318:4318'
-      - '8889:8889'
+      - '127.0.0.1:4317:4317'
+      - '127.0.0.1:4318:4318'
+      - '127.0.0.1:8889:8889'
 
   prometheus:
     image: prom/prometheus:v2.55.0
@@ -18,25 +18,25 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
-    ports: ['9090:9090']
+    ports: ['127.0.0.1:9090:9090']
 
   grafana:
     image: grafana/grafana:11.3.0
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?Set GRAFANA_PASSWORD to a strong non-default secret}
       GF_INSTALL_PLUGINS: grafana-clock-panel
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/alerting:/etc/grafana/provisioning/alerting:ro
-    ports: ['3100:3000']
+    ports: ['127.0.0.1:3100:3000']
     depends_on: [prometheus, loki]
 
   loki:
     image: grafana/loki:3.2.0
     volumes:
       - loki_data:/loki
-    ports: ['3200:3100']
+    ports: ['127.0.0.1:3200:3100']
 
 volumes:
   prometheus_data:
