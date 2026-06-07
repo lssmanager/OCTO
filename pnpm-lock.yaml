@@ -343,6 +343,9 @@ importers:
       '@octo/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@octo/runtime-state':
+        specifier: workspace:*
+        version: link:../../packages/runtime-state
       ioredis:
         specifier: 5.11.0
         version: 5.11.0

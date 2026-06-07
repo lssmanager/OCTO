@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "build": "tsup src/main.ts --format cjs --dts",
+    "build": "tsup src/main.ts --format cjs --no-dts",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
@@ -12,7 +12,8 @@
     "@octo/database": "workspace:*",
     "@octo/events": "workspace:*",
     "@octo/observability": "workspace:*",
-    "ioredis": "5.11.0"
+    "ioredis": "5.11.0",
+    "@octo/runtime-state": "workspace:*"
   },
   "devDependencies": {
     "@octo/config": "workspace:*",

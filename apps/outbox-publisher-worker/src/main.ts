@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import Redis from 'ioredis';
-import { createPostgresOutboxPublisherDb } from '@octo/database';
+import { createPostgresOutboxPublisherDb, getDb } from '@octo/database';
+import { upsertWorkerHeartbeat } from '@octo/runtime-state';
 import {
   OUTBOX_BATCH_SIZE,
   OUTBOX_POLL_INTERVAL_MS,
@@ -26,10 +27,43 @@ const stream = process.env['OUTBOX_STREAM_KEY'] ?? 'octo.events';
 let ready = false;
 let stopping = false;
 let lastError: string | null = null;
+let heartbeatTimer: NodeJS.Timeout | null = null;
+const workerInstanceId = process.env['WORKER_INSTANCE_ID'] ?? `outbox-publisher-${process.pid}`;
+const startedAt = new Date();
 
 const redis = new Redis(redisUrl, { maxRetriesPerRequest: null });
 const db = createPostgresOutboxPublisherDb();
 const redisTransport = createOutboxRedisTransport(redis as never);
+const heartbeatDb = getDb();
+
+function startHeartbeat(): void {
+  const intervalMs = Number(process.env['WORKER_HEARTBEAT_INTERVAL_MS'] ?? '30000');
+  const beat = async () => {
+    try {
+      await upsertWorkerHeartbeat(heartbeatDb, {
+        workerType: 'outbox-publisher-worker',
+        instanceId: workerInstanceId,
+        status: lastError ? 'degraded' : 'ok',
+        startedAt,
+        version: process.env['BUILD_VERSION'],
+        commitSha: process.env['BUILD_COMMIT'],
+        metadata: { stream, batchSize, pollIntervalMs, maxAttempts },
+        error: lastError,
+      });
+    } catch (error) {
+      console.error('outbox_publisher_heartbeat_failed', { error: String(error) });
+    }
+    heartbeatTimer = setTimeout(() => void beat(), intervalMs);
+  };
+  void beat();
+}
+
+function stopHeartbeat(): void {
+  if (heartbeatTimer) {
+    clearTimeout(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
 
 const metrics = {
   setPendingTotal: (value: number) => outboxPendingTotal.set(value),
@@ -44,7 +78,14 @@ const metrics = {
 async function publishLoop(): Promise<void> {
   while (!stopping) {
     try {
-      await publishOutboxBatch({ db, redis: redisTransport, metrics, batchSize, maxAttempts, stream });
+      await publishOutboxBatch({
+        db,
+        redis: redisTransport,
+        metrics,
+        batchSize,
+        maxAttempts,
+        stream,
+      });
       lastError = null;
       ready = true;
     } catch (error) {
@@ -80,7 +121,17 @@ const server = createServer(async (req, res) => {
   }
   if (req.url === '/status') {
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ ready, lastError }));
+    res.end(
+      JSON.stringify({
+        ready,
+        lastError,
+        workerInstanceId,
+        stream,
+        batchSize,
+        pollIntervalMs,
+        maxAttempts,
+      })
+    );
     return;
   }
   res.statusCode = 404;
@@ -90,6 +141,7 @@ const server = createServer(async (req, res) => {
 async function shutdown(): Promise<void> {
   stopping = true;
   ready = false;
+  stopHeartbeat();
   await redis.quit();
   server.close();
 }
@@ -97,8 +149,16 @@ async function shutdown(): Promise<void> {
 process.on('SIGTERM', () => void shutdown().finally(() => process.exit(0)));
 process.on('SIGINT', () => void shutdown().finally(() => process.exit(0)));
 
+startHeartbeat();
+
 server.listen(port, () => {
-  console.log('outbox_publisher_worker_started', { port, stream, batchSize, pollIntervalMs, maxAttempts });
+  console.log('outbox_publisher_worker_started', {
+    port,
+    stream,
+    batchSize,
+    pollIntervalMs,
+    maxAttempts,
+  });
 });
 
 void publishLoop();

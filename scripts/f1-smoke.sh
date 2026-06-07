@@ -35,6 +35,8 @@ JWT_KID="${JWT_KID:-dev-hs256}"
 OUTBOX_STREAM_KEY="${OUTBOX_STREAM_KEY:-octo.events}"
 SMOKE_TIMEOUT_SECONDS="${F1_SMOKE_TIMEOUT_SECONDS:-90}"
 POLL_SECONDS="${F1_SMOKE_POLL_SECONDS:-2}"
+DATABASE_URL="${DATABASE_URL:-${F1_HOST_DATABASE_URL:-}}"
+REDIS_URL="${REDIS_URL:-${F1_HOST_REDIS_URL:-redis://localhost:6379}}"
 
 log() { printf '\n==> %s\n' "$*"; }
 fail() { echo "F1 smoke failed: $*" >&2; diagnostics >&2; exit 1; }
@@ -218,7 +220,11 @@ wait_http() {
 }
 
 compose_psql() {
-  docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-octo}" -d "${POSTGRES_DB:-octo}" "$@"
+  if [[ -n "${DATABASE_URL:-}" ]] && command -v psql >/dev/null 2>&1; then
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 "$@"
+  else
+    docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-octo}" -d "${POSTGRES_DB:-octo}" "$@"
+  fi
 }
 
 sql_value() {
@@ -326,6 +332,47 @@ wait_sql_count() {
   done
 }
 
+
+assert_dispatch_queue_job() {
+  local execution_id="$1" expected_state="${2:-completed}"
+  log "checking BullMQ execution.dispatch job ${execution_id} expected state ${expected_state}"
+  REDIS_URL="$REDIS_URL" EXECUTION_ID="$execution_id" EXPECTED_STATE="$expected_state" node <<'NODE'
+const { Queue } = require('bullmq');
+const IORedis = require('ioredis');
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const executionId = process.env.EXECUTION_ID;
+const expectedState = process.env.EXPECTED_STATE;
+(async () => {
+  const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+  const queue = new Queue('execution.dispatch', { connection });
+  try {
+    const failed = await queue.getFailedCount();
+    if (failed !== 0) {
+      throw new Error(`execution.dispatch has ${failed} failed jobs`);
+    }
+    const job = await queue.getJob(executionId);
+    if (!job) throw new Error(`missing deterministic jobId ${executionId}`);
+    const state = await job.getState();
+    if (state !== expectedState) throw new Error(`job ${executionId} state=${state}, expected=${expectedState}`);
+    if (job.data?.executionId !== executionId) throw new Error(`job payload executionId mismatch: ${job.data?.executionId}`);
+  } finally {
+    await queue.close();
+    await connection.quit();
+  }
+})().catch((err) => {
+  console.error(err.message || err);
+  process.exit(1);
+});
+NODE
+}
+
+assert_queue_job_id_persisted() {
+  local execution_id="$1"
+  local persisted
+  persisted="$(sql_value "SELECT queue_job_id FROM executions WHERE tenant_id='${TENANT_ID}' AND id='${execution_id}'" | tr -d '[:space:]')"
+  [[ "$persisted" == "$execution_id" ]] || fail "execution ${execution_id} queue_job_id=${persisted:-missing}, expected deterministic jobId ${execution_id}"
+}
+
 create_execution_via_api() {
   local output_file execution_body
   output_file="$(mktemp)"
@@ -371,6 +418,8 @@ NODE
   wait_sql_count "checkpoint rows for ${execution_id}" "SELECT count(*) FROM execution_checkpoints WHERE tenant_id='${TENANT_ID}' AND execution_id='${execution_id}'" 2
   wait_sql_count "checkpoint write rows for ${execution_id}" "SELECT count(*) FROM execution_checkpoint_writes WHERE tenant_id='${TENANT_ID}' AND task_id='${execution_id}'" 1
   wait_sql_count "tool invocation rows for ${execution_id}" "SELECT count(*) FROM tool_invocations WHERE tenant_id='${TENANT_ID}' AND execution_id='${execution_id}' AND status='COMPLETED'" 1
+  assert_queue_job_id_persisted "$execution_id"
+  assert_dispatch_queue_job "$execution_id" completed
   wait_sql_count "published outbox rows for ${execution_id}" "SELECT count(*) FROM outbox_events WHERE tenant_id='${TENANT_ID}' AND aggregate_id='${execution_id}' AND published_at IS NOT NULL" 5
 
   local ops_file trace_file
@@ -444,6 +493,8 @@ wait_reclaim_completed() {
   done
   wait_sql_count "reclaim dispatch event for ${RECLAIM_EXECUTION_ID}" "SELECT count(*) FROM outbox_events WHERE tenant_id='${TENANT_ID}' AND aggregate_id='${RECLAIM_EXECUTION_ID}' AND event_type='ExecutionDispatched' AND payload_json->>'mode'='reclaim'" 1
   wait_sql_count "published reclaim outbox rows for ${RECLAIM_EXECUTION_ID}" "SELECT count(*) FROM outbox_events WHERE tenant_id='${TENANT_ID}' AND aggregate_id='${RECLAIM_EXECUTION_ID}' AND published_at IS NOT NULL" 4
+  assert_queue_job_id_persisted "$RECLAIM_EXECUTION_ID"
+  assert_dispatch_queue_job "$RECLAIM_EXECUTION_ID" completed
 }
 
 run_health_smoke() {
@@ -472,6 +523,7 @@ run_strict_smoke() {
   wait_sql_count "fresh scheduler heartbeat" "SELECT count(*) FROM worker_heartbeats WHERE worker_type='scheduler-worker' AND last_heartbeat_at > NOW() - interval '30 seconds'" 1
   wait_sql_count "fresh runtime heartbeat" "SELECT count(*) FROM worker_heartbeats WHERE worker_type='runtime-worker' AND last_heartbeat_at > NOW() - interval '30 seconds'" 1
   wait_sql_count "fresh reclaimer heartbeat" "SELECT count(*) FROM worker_heartbeats WHERE worker_type='reclaimer-worker' AND last_heartbeat_at > NOW() - interval '30 seconds'" 1
+  wait_sql_count "fresh outbox publisher heartbeat" "SELECT count(*) FROM worker_heartbeats WHERE worker_type='outbox-publisher-worker' AND last_heartbeat_at > NOW() - interval '30 seconds'" 1
 
   TOKEN="$(make_jwt)"
   export TOKEN

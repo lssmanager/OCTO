@@ -3,7 +3,11 @@ import type { getDb } from '@octo/database';
 
 type Db = ReturnType<typeof getDb>;
 
-export type WorkerType = 'runtime-worker' | 'scheduler-worker' | 'reclaimer-worker';
+export type WorkerType =
+  | 'runtime-worker'
+  | 'scheduler-worker'
+  | 'reclaimer-worker'
+  | 'outbox-publisher-worker';
 export type WorkerHeartbeatStatus = 'starting' | 'ok' | 'degraded' | 'stopping' | 'error';
 
 export interface WorkerHeartbeatInput {

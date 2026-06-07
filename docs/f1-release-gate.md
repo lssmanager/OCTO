@@ -80,3 +80,23 @@ The script only writes `PASS` after every close check has passed. Any failed che
 ## F1/F2 boundary
 
 Agent Graph belongs to F1 for `Agency → Department → Workspace → Agent` persistence, guarded CRUD, hierarchy projection and effective policy/capability projection. Runtime execution beyond the foundation smoke path, streaming responses, flow editing, SubAgent runtime orchestration and F2/F3 execution behavior remain outside F1.
+
+## Actualización #289 — Queue/workers smoke durable
+
+F1 ya no acepta `redis.status=ok`, `queue.status=ok` y `queue.name=execution.dispatch` como evidencia suficiente. El cierre exige `pnpm f1:queue-workers-smoke`, integrado dentro de `pnpm f1:close-gate`, después de `compose up` del stack completo.
+
+El smoke usa URLs publicadas del host (`API_URL`, `RUNTIME_PUBLIC_URL`, `SCHEDULER_PUBLIC_URL`, `OUTBOX_PUBLIC_URL`, `RECLAIMER_PUBLIC_URL`), `DATABASE_URL=$F1_HOST_DATABASE_URL` para SQL desde el host y `REDIS_URL=$F1_HOST_REDIS_URL` para BullMQ desde el host. No usa `F1_COMPOSE_DATABASE_URL` para `psql` host-side.
+
+La validación cubre:
+
+- readiness real de `scheduler-worker`, `reclaimer-worker` y `outbox-publisher-worker`;
+- heartbeats frescos en PostgreSQL para scheduler, reclaimer y outbox publisher, de modo que un heartbeat viejo no cuenta como worker vivo;
+- visibilidad de workers desde `/api/v1/ops/f1/status`;
+- Redis/BullMQ alcanzable con cero jobs fallidos inesperados en `execution.dispatch`;
+- creación de ejecución vía API, persistencia durable en PostgreSQL y `queue_job_id = execution.id`;
+- job BullMQ con `jobId` determinístico igual al `execution.id`;
+- consumo por scheduler y handoff HTTP aceptado por runtime-worker;
+- timeline durable y outbox publicado;
+- reclaim controlado de una ejecución zombie, re-encolado sin duplicar efectos observables y publicación outbox de reclaim.
+
+PostgreSQL es la fuente de verdad. Redis/BullMQ solo es transporte/coordinación; si PostgreSQL contiene estado durable y BullMQ pierde el job, el reconciliador/worker debe repararlo o el gate falla.

@@ -4,6 +4,7 @@ export const workerTypeEnum = pgEnum('worker_type', [
   'runtime-worker',
   'scheduler-worker',
   'reclaimer-worker',
+  'outbox-publisher-worker',
 ]);
 
 export const workerHeartbeatStatusEnum = pgEnum('worker_heartbeat_status', [
