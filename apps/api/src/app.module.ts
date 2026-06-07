@@ -20,6 +20,7 @@ import { HealthModule } from './health/health.module';
 import { OpsModule } from './ops/ops.module';
 import { MetricsController } from './metrics.controller';
 import { PublicStatusController } from './public-status.controller';
+import { PublicF1ClosureStatusService } from './public-f1-closure-status.service';
 import { ExecutionModule } from './execution/execution.module';
 import { AgentModule } from './agents/agent.module';
 import { JwtAuthModule } from './auth/jwt-auth.module';
@@ -48,6 +49,7 @@ export const CONFIG_TOKEN = Symbol('CONFIG_TOKEN');
     // Guard declared in root scope — same class identity as APP_GUARD below.
     // Imported from local file, not from @octo/security pnpm store.
     InternalSecretGuard,
+    PublicF1ClosureStatusService,
     {
       provide: APP_GUARD,
       useExisting: InternalSecretGuard,
