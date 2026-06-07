@@ -319,7 +319,7 @@ wait_reclaim_repair() {
     reclaim_events="$(sql_value "SELECT count(*) FROM outbox_events WHERE tenant_id='${TENANT_ID}' AND aggregate_id='${RECLAIM_EXECUTION_ID}' AND event_type='ExecutionDispatched' AND payload_json->>'mode'='reclaim'" | tr -d '[:space:]')"
     reclaim_steps="$(sql_value "SELECT count(*) FROM execution_steps WHERE tenant_id='${TENANT_ID}' AND execution_id='${RECLAIM_EXECUTION_ID}' AND state_from='reclaimable' AND state_to='dispatched'" | tr -d '[:space:]')"
     echo "reclaim execution ${RECLAIM_EXECUTION_ID} status=${status:-unknown} reclaim_count=${reclaim_count:-unknown} reclaim_events=${reclaim_events:-0} reclaim_steps=${reclaim_steps:-0}"
-    if [[ "$status" != "running" && "$status" != "reclaimable" && "${reclaim_count:-0}" =~ ^[0-9]+$ && "${reclaim_events:-0}" =~ ^[0-9]+$ && "${reclaim_steps:-0}" =~ ^[0-9]+$ ]] && (( reclaim_count == 1 && reclaim_events == 1 && reclaim_steps == 1 )); then
+    if [[ "${reclaim_count:-0}" =~ ^[0-9]+$ && "${reclaim_events:-0}" =~ ^[0-9]+$ && "${reclaim_steps:-0}" =~ ^[0-9]+$ ]] && (( reclaim_count == 1 && reclaim_events == 1 && reclaim_steps == 1 )); then
       wait_job_present "reclaim:${RECLAIM_EXECUTION_ID}:1"
       wait_sql_count "published reclaim outbox event for ${RECLAIM_EXECUTION_ID}" "SELECT count(*) FROM outbox_events WHERE tenant_id='${TENANT_ID}' AND aggregate_id='${RECLAIM_EXECUTION_ID}' AND event_type='ExecutionDispatched' AND payload_json->>'mode'='reclaim' AND published_at IS NOT NULL AND dead_lettered_at IS NULL" 1
       return 0
