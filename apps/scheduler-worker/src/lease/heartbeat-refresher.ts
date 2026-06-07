@@ -54,16 +54,20 @@ export interface HeartbeatRefresherDeps {
  */
 export class HeartbeatRefresher {
   private timer: ReturnType<typeof setInterval> | null = null;
+  private lostError: HeartbeatLostError | null = null;
 
   constructor(
     private readonly deps: HeartbeatRefresherDeps,
     private readonly executionId: string,
-    private readonly workerId: string
+    private readonly workerId: string,
+    private readonly onLeaseLost?: (error: HeartbeatLostError) => void
   ) {}
 
   start(): void {
     if (this.timer !== null) return; // idempotent
-    this.timer = setInterval(() => void this.refresh(), HEARTBEAT_INTERVAL_MS);
+    this.timer = setInterval(() => {
+      void this.refresh();
+    }, HEARTBEAT_INTERVAL_MS);
   }
 
   stop(): void {
@@ -72,15 +76,26 @@ export class HeartbeatRefresher {
     this.timer = null;
   }
 
+  getLastError(): HeartbeatLostError | null {
+    return this.lostError;
+  }
+
   private async refresh(): Promise<void> {
     try {
       const affected = await this.deps.refreshHeartbeat(this.executionId, this.workerId);
       if (affected === 0) {
         this.stop();
-        throw new HeartbeatLostError(this.executionId, this.workerId);
+        const error = new HeartbeatLostError(this.executionId, this.workerId);
+        this.lostError = error;
+        this.onLeaseLost?.(error);
+        return;
       }
     } catch (err) {
-      if (err instanceof HeartbeatLostError) throw err;
+      if (err instanceof HeartbeatLostError) {
+        this.lostError = err;
+        this.onLeaseLost?.(err);
+        return;
+      }
       // Transient DB error -- log and keep trying; do not abort yet.
       console.error('[heartbeat] transient failure', { executionId: this.executionId, err });
     }
