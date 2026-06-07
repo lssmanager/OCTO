@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -30,7 +31,15 @@ class ProviderHealthMetricsWorker:
             if self.logger is not None:
                 self.logger.warning("provider_health_metrics_unconfigured")
             return
-        rows = await self.prometheus_client.collect()
+        try:
+            rows = await asyncio.wait_for(
+                self.prometheus_client.collect(),
+                timeout=self.config.provider_health_query_timeout_ms / 1000,
+            )
+        except TimeoutError:
+            if self.logger is not None:
+                self.logger.warning("provider_health_metrics_timeout")
+            return
         for row in rows:
             key = f"octo:{row['tenant_id']}:provider_health:{row['provider'].replace('/','_')}:{row['model'].replace('/','_')}"
             payload = {
@@ -52,7 +61,6 @@ class ProviderHealthMetricsWorker:
             await self.redis.set(key, json.dumps(payload), ex=self.config.provider_health_redis_ttl_seconds)
 
     async def run_forever(self) -> None:
-        import asyncio
         while True:
             await self.run_once()
             await asyncio.sleep(self.config.provider_health_refresh_seconds)
