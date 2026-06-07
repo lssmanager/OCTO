@@ -23,7 +23,6 @@ function asNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-
 export function deriveDispatchQueueStatus(waiting: number, threshold: number): 'ok' | 'degraded' {
   return waiting > threshold ? 'degraded' : 'ok';
 }
@@ -40,16 +39,21 @@ export function calculateF1Rates(input: {
   const terminal = input.succeeded + input.failed + input.cancelled;
   return {
     successRate: terminal > 0 ? input.succeeded / terminal : null,
-    reclaimRate: terminal + input.active + input.queued > 0
-      ? input.reclaimed / (terminal + input.active + input.queued)
-      : null,
+    reclaimRate:
+      terminal + input.active + input.queued > 0
+        ? input.reclaimed / (terminal + input.active + input.queued)
+        : null,
     dlqRate: terminal + input.dlq > 0 ? input.dlq / (terminal + input.dlq) : null,
   };
 }
 
 function getRows(result: unknown): any[] {
   if (Array.isArray(result)) return result;
-  if (result && typeof result === 'object' && Array.isArray((result as { rows?: unknown[] }).rows)) {
+  if (
+    result &&
+    typeof result === 'object' &&
+    Array.isArray((result as { rows?: unknown[] }).rows)
+  ) {
     return (result as { rows: any[] }).rows;
   }
   return [];
@@ -58,9 +62,10 @@ function getRows(result: unknown): any[] {
 @Injectable()
 export class F1StatusService {
   async getStatus(tenantId: string, windowMinutes = DEFAULT_WINDOW_MINUTES) {
-    const normalizedWindow = Number.isFinite(windowMinutes) && windowMinutes > 0
-      ? Math.floor(windowMinutes)
-      : DEFAULT_WINDOW_MINUTES;
+    const normalizedWindow =
+      Number.isFinite(windowMinutes) && windowMinutes > 0
+        ? Math.floor(windowMinutes)
+        : DEFAULT_WINDOW_MINUTES;
 
     const [queue, metrics, workers] = await Promise.all([
       this.getQueueStatus(),
@@ -101,7 +106,7 @@ export class F1StatusService {
     const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
     const threshold = Number(
       process.env['OPS_EXECUTION_DISPATCH_BACKLOG_DEGRADED_THRESHOLD'] ??
-      DEFAULT_BACKLOG_DEGRADED_THRESHOLD
+        DEFAULT_BACKLOG_DEGRADED_THRESHOLD
     );
     const degradedThreshold = Number.isFinite(threshold)
       ? threshold
@@ -141,7 +146,8 @@ export class F1StatusService {
   }
 
   private async getExecutionMetrics(tenantId: string, windowMinutes: number) {
-    const aggregateRows = getRows(await db.execute(sql`
+    const aggregateRows = getRows(
+      await db.execute(sql`
       WITH scoped AS (
         SELECT status, created_at, started_at, completed_at, updated_at, reclaimed_at, reclaim_count
         FROM executions
@@ -163,7 +169,8 @@ export class F1StatusService {
         COUNT(*) FILTER (WHERE reclaimed_at IS NOT NULL OR reclaim_count > 0 OR status = 'reclaimable')::int AS reclaimed_executions,
         (SELECT COUNT(*)::int FROM dlq_scoped)::int AS dlq_executions
       FROM scoped
-    `));
+    `)
+    );
 
     const row = aggregateRows[0] ?? {};
     const active = asNumber(row.active_executions);
@@ -174,7 +181,8 @@ export class F1StatusService {
     const reclaimed = asNumber(row.reclaimed_executions);
     const dlq = asNumber(row.dlq_executions);
 
-    const latencyRows = getRows(await db.execute(sql`
+    const latencyRows = getRows(
+      await db.execute(sql`
       SELECT
         EXTRACT(EPOCH FROM (started_at - created_at)) * 1000 AS dispatch_to_start_ms,
         EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000 AS execution_duration_ms
@@ -186,7 +194,8 @@ export class F1StatusService {
           OR (started_at IS NOT NULL AND completed_at IS NOT NULL)
         )
       LIMIT 5000
-    `));
+    `)
+    );
 
     const dispatchToStart = latencyRows
       .map((r) => Number(r.dispatch_to_start_ms))
@@ -214,7 +223,8 @@ export class F1StatusService {
       ? staleSeconds
       : DEFAULT_HEARTBEAT_STALE_SECONDS;
 
-    const rows = getRows(await db.execute(sql`
+    const rows = getRows(
+      await db.execute(sql`
       SELECT DISTINCT ON (worker_type)
         worker_type,
         instance_id,
@@ -226,7 +236,8 @@ export class F1StatusService {
         error
       FROM worker_heartbeats
       ORDER BY worker_type, last_heartbeat_at DESC
-    `));
+    `)
+    );
 
     const byType = new Map<string, any>();
     for (const row of rows) byType.set(String(row.worker_type), row);
@@ -235,6 +246,10 @@ export class F1StatusService {
       runtime: this.projectWorker(byType.get('runtime-worker'), normalizedStaleSeconds),
       scheduler: this.projectWorker(byType.get('scheduler-worker'), normalizedStaleSeconds),
       reclaimer: this.projectWorker(byType.get('reclaimer-worker'), normalizedStaleSeconds),
+      outboxPublisher: this.projectWorker(
+        byType.get('outbox-publisher-worker'),
+        normalizedStaleSeconds
+      ),
     };
   }
 
@@ -253,13 +268,26 @@ export class F1StatusService {
       lastHeartbeatAt: row.last_heartbeat_at,
       version: row.version,
       commitSha: row.commit_sha,
-      reason: stale ? 'heartbeat_stale' : row.error ?? undefined,
+      reason: stale ? 'heartbeat_stale' : (row.error ?? undefined),
     };
   }
 
-  private deriveOverallStatus(queue: { status: QueueStatus }, workers: { runtime: { status: WorkerStatus }; scheduler: { status: WorkerStatus }; reclaimer: { status: WorkerStatus } }): OverallStatus {
+  private deriveOverallStatus(
+    queue: { status: QueueStatus },
+    workers: {
+      runtime: { status: WorkerStatus };
+      scheduler: { status: WorkerStatus };
+      reclaimer: { status: WorkerStatus };
+      outboxPublisher: { status: WorkerStatus };
+    }
+  ): OverallStatus {
     if (queue.status === 'error') return 'not_ready';
-    const workerStatuses = [workers.runtime.status, workers.scheduler.status, workers.reclaimer.status];
+    const workerStatuses = [
+      workers.runtime.status,
+      workers.scheduler.status,
+      workers.reclaimer.status,
+      workers.outboxPublisher.status,
+    ];
     if (workerStatuses.includes('error')) return 'degraded';
     if (workerStatuses.includes('degraded')) return 'degraded';
     if (workerStatuses.includes('unknown')) return 'degraded';

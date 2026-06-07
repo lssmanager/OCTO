@@ -219,3 +219,32 @@ Cobertura del smoke actualizada:
 - Patch de node, patch de Agent, activation/archive, reparent valido, jerarquia invalida, self-parent/cycle, parent inexistente, rechazo cross-tenant y delete del Agent seleccionado.
 
 Estado de cierre #290: pendiente hasta que el commit con esta correccion este desplegado y `API_URL=https://agents.socialstudies.cloud/api pnpm f1:agent-graph-smoke` termine con exit code `0` usando credenciales JWT reales del despliegue.
+
+## Actualización #289 — Validación queue workers F1
+
+Se agregó una validación reproducible para cerrar el hueco donde `/api/health/ready` reportaba Redis y `execution.dispatch` en `ok` sin demostrar consumidores vivos.
+
+Nuevo comando preparado para Compose/Coolify:
+
+```bash
+pnpm f1:queue-workers-smoke
+```
+
+El comando se ejecuta desde `pnpm f1:close-gate` después del `compose up` completo. Debe correr desde host con:
+
+- `DATABASE_URL`/`F1_HOST_DATABASE_URL` apuntando al PostgreSQL publicado del stack;
+- `REDIS_URL`/`F1_HOST_REDIS_URL` apuntando al Redis publicado del stack;
+- URLs host publicadas para API, runtime-worker, scheduler-worker, outbox-publisher-worker y reclaimer-worker.
+
+Evidencia requerida antes de considerar #289 cerrado en Coolify:
+
+- scheduler, reclaimer y outbox publisher responden readiness/status o tienen heartbeat fresco verificable;
+- `/api/v1/ops/f1/status` ve los workers y marca heartbeat no stale;
+- `execution.dispatch` no tiene jobs fallidos inesperados;
+- una ejecución F1 creada por API queda persistida en PostgreSQL con `queue_job_id = execution.id`;
+- BullMQ contiene el job determinístico y el scheduler lo consume;
+- el scheduler hace handoff HTTP aceptado por runtime-worker;
+- outbox publisher publica/marca eventos;
+- reclaimer detecta una ejecución zombie y la recupera/re-encola sin duplicar efectos.
+
+Esta actualización no convierte la evidencia pública previa en PASS por sí sola. El PASS real sigue requiriendo desplegar Compose completo en Coolify y ejecutar `pnpm f1:close-gate` hasta `Final decision: PASS`.
