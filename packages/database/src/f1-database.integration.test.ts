@@ -475,6 +475,57 @@ runIfDatabase('F1 database integration', () => {
       })
     ).rejects.toThrow();
   });
+  it('isolates outbox_publish_dlq with transaction-local tenant context and tenant-scoped FK', async () => {
+    await sql.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_tenant', 'tenant-a', true)`;
+      await tx`
+        INSERT INTO "outbox_events"
+          ("id", "tenant_id", "aggregate_type", "aggregate_id", "event_type", "sequence", "payload_json")
+        VALUES
+          ('f1-test-outbox-dlq-event-a', 'tenant-a', 'execution', 'f1-test-execution-dlq-a', 'ExecutionStarted', 10, '{}'::jsonb)
+        ON CONFLICT ("id") DO NOTHING
+      `;
+      await tx`
+        INSERT INTO "outbox_publish_dlq"
+          ("id", "outbox_event_id", "tenant_id", "event_type", "payload_json", "error_message", "attempts")
+        VALUES
+          ('f1-test-outbox-publish-dlq-a', 'f1-test-outbox-dlq-event-a', 'tenant-a', 'ExecutionStarted', '{}'::jsonb, 'invalid payload', 10)
+      `;
+    });
+
+    const tenantA = await sql.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_tenant', 'tenant-a', true)`;
+      return tx<{ id: string }[]>`
+        SELECT "id" FROM "outbox_publish_dlq" WHERE "id" = 'f1-test-outbox-publish-dlq-a'
+      `;
+    });
+    const tenantB = await sql.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_tenant', 'tenant-b', true)`;
+      return tx<{ id: string }[]>`
+        SELECT "id" FROM "outbox_publish_dlq" WHERE "id" = 'f1-test-outbox-publish-dlq-a'
+      `;
+    });
+    const noTenant = await sql<{ id: string }[]>`
+      SELECT "id" FROM "outbox_publish_dlq" WHERE "id" = 'f1-test-outbox-publish-dlq-a'
+    `;
+
+    expect(tenantA).toHaveLength(1);
+    expect(tenantB).toHaveLength(0);
+    expect(noTenant).toHaveLength(0);
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`SELECT set_config('app.current_tenant', 'tenant-b', true)`;
+        await tx`
+          INSERT INTO "outbox_publish_dlq"
+            ("id", "outbox_event_id", "tenant_id", "event_type", "payload_json", "error_message", "attempts")
+          VALUES
+            ('f1-test-outbox-publish-dlq-cross', 'f1-test-outbox-dlq-event-a', 'tenant-b', 'ExecutionStarted', '{}'::jsonb, 'cross tenant', 10)
+        `;
+      })
+    ).rejects.toThrow();
+  });
+
   it('does not grant BYPASSRLS to the current database role', async () => {
     const [role] = await sql<{ rolbypassrls: boolean }[]>`
       SELECT "rolbypassrls"
@@ -490,6 +541,7 @@ async function cleanupTenant(sql: Sql, tenantId: string) {
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('app.current_tenant', ${tenantId}, true)`;
     await tx`DELETE FROM "tool_invocations" WHERE "id" LIKE 'f1-test-%'`;
+    await tx`DELETE FROM "outbox_publish_dlq" WHERE "id" LIKE 'f1-test-%'`;
     await tx`DELETE FROM "approvals" WHERE "id" LIKE 'f1-test-%'`;
     await tx`DELETE FROM "outbox_events" WHERE "id" LIKE 'f1-test-%'`;
     await tx`DELETE FROM "execution_checkpoint_writes" WHERE "id" LIKE 'f1-test-%'`;

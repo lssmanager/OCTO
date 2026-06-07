@@ -179,6 +179,7 @@ describe('F1 database migrations contract', () => {
       'tool_invocations_approval_tenant_fk',
       'execution_events_execution_tenant_fk',
       'execution_dlq_execution_tenant_fk',
+      'outbox_publish_dlq_event_tenant_fk',
       'hierarchy_nodes_parent_tenant_fk',
     ];
 
@@ -189,7 +190,19 @@ describe('F1 database migrations contract', () => {
     for (const constraint of expectedConstraints) {
       expect(sql).toContain(`"${constraint}"`);
     }
+    expect(sql).toContain('outbox_events_tenant_id_id_unique');
+    expect(sql).toContain('outbox_publish_dlq_tenant_id_id_unique');
     expect(sql).toContain('NOT VALID');
+    expect(sql).toContain("conrelid = 'public.outbox_publish_dlq'::regclass");
+  });
+
+  it('keeps outbox publisher hardening checks idempotent per table', () => {
+    const sql = readMigration('202605240001_f1_outbox_publisher_hardening.sql');
+
+    expect(sql).toContain("conrelid = 'public.outbox_events'::regclass");
+    expect(sql).toContain("conrelid = 'public.outbox_publish_dlq'::regclass");
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "outbox_publish_dlq"');
+    expect(sql).toContain('CREATE INDEX IF NOT EXISTS "idx_outbox_publish_dlq_tenant_moved_at"');
   });
 
   it('documents all tenant-scoped RLS tables in security docs', () => {

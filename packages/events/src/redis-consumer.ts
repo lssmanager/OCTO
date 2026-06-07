@@ -5,15 +5,32 @@ export const OCTO_EVENT_GROUPS = {
   audit: 'octo.events.audit',
 } as const;
 
+export const OCTO_CONSUMER_GROUP_START_ID = '0';
+
 export interface RedisGroupClient {
-  xgroup: (subcommand: 'CREATE', key: string, group: string, id: '$', mkstream: 'MKSTREAM') => Promise<unknown>;
-  set: (key: string, value: string, mode: 'EX', ttlSeconds: number, nx: 'NX') => Promise<'OK' | null>;
+  xgroup: (
+    subcommand: 'CREATE',
+    key: string,
+    group: string,
+    id: string,
+    mkstream: 'MKSTREAM'
+  ) => Promise<unknown>;
+  set: (
+    key: string,
+    value: string,
+    mode: 'EX',
+    ttlSeconds: number,
+    nx: 'NX'
+  ) => Promise<'OK' | null>;
 }
 
-export async function ensureConsumerGroups(redis: RedisGroupClient, stream = OCTO_EVENTS_STREAM): Promise<void> {
+export async function ensureConsumerGroups(
+  redis: RedisGroupClient,
+  stream = OCTO_EVENTS_STREAM
+): Promise<void> {
   for (const group of Object.values(OCTO_EVENT_GROUPS)) {
     try {
-      await redis.xgroup('CREATE', stream, group, '$', 'MKSTREAM');
+      await redis.xgroup('CREATE', stream, group, OCTO_CONSUMER_GROUP_START_ID, 'MKSTREAM');
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       if (!msg.includes('BUSYGROUP')) throw error;
@@ -33,7 +50,19 @@ export async function shouldProcessEventIdempotent(
 }
 
 export const OCTO_EVENT_CONSUMER_GROUPS = OCTO_EVENT_GROUPS;
-export async function ensureEventConsumerGroups(redis: RedisGroupClient): Promise<void> { return ensureConsumerGroups(redis); }
-export async function markEventProcessedOnce(params: { redis: RedisGroupClient; tenantId: string; eventId: string; ttlSeconds?: number; }): Promise<boolean> {
-  return shouldProcessEventIdempotent(params.redis, params.tenantId, params.eventId, params.ttlSeconds ?? 3600);
+export async function ensureEventConsumerGroups(redis: RedisGroupClient): Promise<void> {
+  return ensureConsumerGroups(redis);
+}
+export async function markEventProcessedOnce(params: {
+  redis: RedisGroupClient;
+  tenantId: string;
+  eventId: string;
+  ttlSeconds?: number;
+}): Promise<boolean> {
+  return shouldProcessEventIdempotent(
+    params.redis,
+    params.tenantId,
+    params.eventId,
+    params.ttlSeconds ?? 3600
+  );
 }

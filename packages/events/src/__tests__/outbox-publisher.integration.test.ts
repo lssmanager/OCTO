@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { publishOutboxBatch, type OutboxPublisherDb, type OutboxRow } from '../outbox-publisher';
 
-const makeRow = (id: string, sequence: number, createdAt = new Date('2026-05-29T00:00:00.000Z')): OutboxRow => ({
+const makeRow = (
+  id: string,
+  sequence: number,
+  createdAt = new Date('2026-05-29T00:00:00.000Z')
+): OutboxRow => ({
   id,
   tenantId: 'tenant-1',
   aggregateType: 'execution',
@@ -53,26 +57,49 @@ describe('outbox publisher integration contract', () => {
   it('publishes successfully to Redis Stream and marks published only after xadd', async () => {
     const calls: string[] = [];
     const store = db([makeRow('550e8400-e29b-41d4-a716-446655440000', 1)], {
-      markPublished: vi.fn(async () => { calls.push('markPublished'); }),
+      markPublished: vi.fn(async () => {
+        calls.push('markPublished');
+      }),
     });
-    const redis = { xadd: vi.fn(async () => { calls.push('xadd'); return '1-0'; }) };
+    const redis = {
+      xadd: vi.fn(async () => {
+        calls.push('xadd');
+        return '1-0';
+      }),
+    };
 
     const result = await publishOutboxBatch({ db: store, redis, metrics: metrics() });
 
     expect(result.published).toBe(1);
     expect(redis.xadd).toHaveBeenCalledOnce();
-    expect(store.markPublished).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440000');
+    expect(store.markPublished).toHaveBeenCalledWith(
+      '550e8400-e29b-41d4-a716-446655440000',
+      'tenant-1'
+    );
     expect(calls).toEqual(['xadd', 'markPublished']);
   });
 
   it('temporary publish failure increments attempts and does not mark published', async () => {
     const store = db([makeRow('550e8400-e29b-41d4-a716-446655440001', 1)]);
-    const redis = { xadd: vi.fn(async () => { throw new Error('redis unavailable'); }) };
+    const redis = {
+      xadd: vi.fn(async () => {
+        throw new Error('redis unavailable');
+      }),
+    };
 
-    const result = await publishOutboxBatch({ db: store, redis, metrics: metrics(), maxAttempts: 3 });
+    const result = await publishOutboxBatch({
+      db: store,
+      redis,
+      metrics: metrics(),
+      maxAttempts: 3,
+    });
 
     expect(result.failed).toBe(1);
-    expect(store.recordFailure).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440001', 'redis unavailable');
+    expect(store.recordFailure).toHaveBeenCalledWith(
+      '550e8400-e29b-41d4-a716-446655440001',
+      'redis unavailable',
+      'tenant-1'
+    );
     expect(store.markPublished).not.toHaveBeenCalled();
     expect(store.moveToDlq).not.toHaveBeenCalled();
   });
@@ -80,7 +107,11 @@ describe('outbox publisher integration contract', () => {
   it('terminal publish failure moves event to DLQ after max attempts', async () => {
     const row = makeRow('550e8400-e29b-41d4-a716-446655440002', 1);
     const store = db([row], { recordFailure: vi.fn(async () => 3) });
-    const redis = { xadd: vi.fn(async () => { throw new Error('bad payload'); }) };
+    const redis = {
+      xadd: vi.fn(async () => {
+        throw new Error('bad payload');
+      }),
+    };
 
     await publishOutboxBatch({ db: store, redis, metrics: metrics(), maxAttempts: 3 });
 
@@ -88,7 +119,10 @@ describe('outbox publisher integration contract', () => {
   });
 
   it('preserves per-aggregate event order from claimed rows', async () => {
-    const rows = [makeRow('550e8400-e29b-41d4-a716-446655440003', 1), makeRow('550e8400-e29b-41d4-a716-446655440004', 2)];
+    const rows = [
+      makeRow('550e8400-e29b-41d4-a716-446655440003', 1),
+      makeRow('550e8400-e29b-41d4-a716-446655440004', 2),
+    ];
     const seenSequences: string[] = [];
     const redis = {
       xadd: vi.fn(async (_stream: string, _id: '*', ...fields: string[]) => {

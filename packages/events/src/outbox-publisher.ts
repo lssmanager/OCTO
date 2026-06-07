@@ -24,8 +24,8 @@ export interface OutboxRow {
 export interface OutboxPublisherDb {
   tryAdvisoryLock: (id: number) => Promise<boolean>;
   fetchUnpublished: (limit: number) => Promise<OutboxRow[]>;
-  markPublished: (id: string) => Promise<void>;
-  recordFailure: (id: string, error: string) => Promise<number>;
+  markPublished: (id: string, tenantId?: string) => Promise<void>;
+  recordFailure: (id: string, error: string, tenantId?: string) => Promise<number>;
   moveToDlq: (row: OutboxRow, error: string, attempts: number) => Promise<void>;
   pendingCount: () => Promise<number>;
   oldestUnpublishedAgeMs?: () => Promise<number>;
@@ -33,14 +33,16 @@ export interface OutboxPublisherDb {
 }
 
 export class RedisStreamOutboxPublisher {
-  constructor(private readonly redis: OutboxPublisherRedis, private readonly stream = OUTBOX_STREAM_KEY) {}
+  constructor(
+    private readonly redis: OutboxPublisherRedis,
+    private readonly stream = OUTBOX_STREAM_KEY
+  ) {}
 
   async publish(event: EventEnvelope): Promise<string> {
     const fields = eventEnvelopeToRedisFields(event);
     return this.redis.xadd(this.stream, '*', ...fields);
   }
 }
-
 
 export interface OutboxPublisherRedis {
   xadd: (stream: string, id: '*', ...fields: string[]) => Promise<string>;
@@ -58,7 +60,9 @@ export interface OutboxPublisherMetrics {
 
 export function outboxRowToEnvelope(row: OutboxRow): EventEnvelope {
   const meta = (row.payloadJson._meta ?? {}) as Record<string, unknown>;
-  const occurredAt = String(meta.occurredAt ?? row.occurredAt ?? row.createdAt?.toISOString() ?? new Date().toISOString());
+  const occurredAt = String(
+    meta.occurredAt ?? row.occurredAt ?? row.createdAt?.toISOString() ?? new Date().toISOString()
+  );
   return EventEnvelopeSchema.parse({
     eventId: row.id,
     eventType: row.eventType,
@@ -118,19 +122,67 @@ export async function publishOutboxBatch(deps: {
       const envelope = outboxRowToEnvelope(row);
       const fields = eventEnvelopeToRedisFields(envelope);
       await deps.redis.xadd(deps.stream ?? OUTBOX_STREAM_KEY, '*', ...fields);
-      await deps.db.markPublished(row.id);
-      deps.metrics.observePublishLatencyMs(row.createdAt ? Date.now() - row.createdAt.getTime() : Date.now() - start);
-      console.log(JSON.stringify({ msg: 'outbox_event_published', eventId: row.id, tenantId: row.tenantId, executionId: row.aggregateId, eventType: row.eventType, traceId: envelope.traceId, correlationId: (envelope.payload as any)?._meta?.correlationId, stream: deps.stream ?? OUTBOX_STREAM_KEY }));
+      await deps.db.markPublished(row.id, row.tenantId);
+      deps.metrics.observePublishLatencyMs(
+        row.createdAt ? Date.now() - row.createdAt.getTime() : Date.now() - start
+      );
+      console.log(
+        JSON.stringify({
+          msg: 'outbox_event_published',
+          eventId: row.id,
+          tenantId: row.tenantId,
+          executionId: row.aggregateId,
+          eventType: row.eventType,
+          traceId: envelope.traceId,
+          correlationId: (envelope.payload as any)?._meta?.correlationId,
+          stream: deps.stream ?? OUTBOX_STREAM_KEY,
+        })
+      );
       published += 1;
     } catch (error) {
       failed += 1;
       deps.metrics.incPublishFailed();
-      console.error(JSON.stringify({ msg: 'outbox_event_publish_failed', eventId: row.id, tenantId: row.tenantId, executionId: row.aggregateId, eventType: row.eventType, traceId: (row.payloadJson._meta as any)?.traceId, correlationId: (row.payloadJson._meta as any)?.correlationId, error: error instanceof Error ? error.message : String(error) }));
-      const attempts = await deps.db.recordFailure(row.id, error instanceof Error ? error.message : String(error));
-      if (attempts >= (deps.maxAttempts ?? MAX_PUBLISH_ATTEMPTS)) {
-        await deps.db.moveToDlq(row, error instanceof Error ? error.message : String(error), attempts);
-        console.error(JSON.stringify({ msg: 'outbox_event_dead_lettered', eventId: row.id, tenantId: row.tenantId, executionId: row.aggregateId, eventType: row.eventType, attempts }));
-        deps.metrics.incDlqTotal();
+      console.error(
+        JSON.stringify({
+          msg: 'outbox_event_publish_failed',
+          eventId: row.id,
+          tenantId: row.tenantId,
+          executionId: row.aggregateId,
+          eventType: row.eventType,
+          traceId: (row.payloadJson._meta as any)?.traceId,
+          correlationId: (row.payloadJson._meta as any)?.correlationId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      try {
+        const attempts = await deps.db.recordFailure(row.id, errorMessage, row.tenantId);
+        if (attempts >= (deps.maxAttempts ?? MAX_PUBLISH_ATTEMPTS)) {
+          await deps.db.moveToDlq(row, errorMessage, attempts);
+          console.error(
+            JSON.stringify({
+              msg: 'outbox_event_dead_lettered',
+              eventId: row.id,
+              tenantId: row.tenantId,
+              executionId: row.aggregateId,
+              eventType: row.eventType,
+              attempts,
+            })
+          );
+          deps.metrics.incDlqTotal();
+        }
+      } catch (failureError) {
+        console.error(
+          JSON.stringify({
+            msg: 'outbox_event_failure_record_failed',
+            eventId: row.id,
+            tenantId: row.tenantId,
+            executionId: row.aggregateId,
+            eventType: row.eventType,
+            originalError: errorMessage,
+            error: failureError instanceof Error ? failureError.message : String(failureError),
+          })
+        );
       }
     }
   }

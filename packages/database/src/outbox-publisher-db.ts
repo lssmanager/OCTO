@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { OutboxPublisherDb, OutboxRow } from '@octo/events';
-import { db } from './client';
+import { db, withTenantTx } from './client';
 import { outboxEvents, outboxPublishDlq } from './schema';
 
 function mapOutboxRow(row: any): OutboxRow {
@@ -41,25 +41,37 @@ export function createPostgresOutboxPublisherDb(): OutboxPublisherDb {
       return rows.map(mapOutboxRow);
     },
 
-    async markPublished(id: string): Promise<void> {
-      await db.update(outboxEvents).set({ publishedAt: new Date(), lastError: null }).where(sql`${outboxEvents.id} = ${id} AND ${outboxEvents.deadLetteredAt} IS NULL`);
+    async markPublished(id: string, tenantId?: string): Promise<void> {
+      if (!tenantId) throw new Error('tenantId is required to mark outbox events as published');
+      await withTenantTx(tenantId, async (tx) => {
+        await tx
+          .update(outboxEvents)
+          .set({ publishedAt: new Date(), lastError: null })
+          .where(
+            sql`${outboxEvents.id} = ${id} AND ${outboxEvents.tenantId} = ${tenantId} AND ${outboxEvents.deadLetteredAt} IS NULL`
+          );
+      });
     },
 
-    async recordFailure(id: string, error: string): Promise<number> {
-      const result = await db.execute(sql`
-        UPDATE outbox_events
-        SET publish_attempts = publish_attempts + 1,
-            last_error = ${error}
-        WHERE id = ${id}
-          AND published_at IS NULL
-          AND dead_lettered_at IS NULL
-        RETURNING publish_attempts
-      `);
-      return Number((result as any).rows?.[0]?.publish_attempts ?? 0);
+    async recordFailure(id: string, error: string, tenantId?: string): Promise<number> {
+      if (!tenantId) throw new Error('tenantId is required to record outbox publish failures');
+      return withTenantTx(tenantId, async (tx) => {
+        const result = await tx.execute(sql`
+          UPDATE outbox_events
+          SET publish_attempts = publish_attempts + 1,
+              last_error = ${error}
+          WHERE id = ${id}
+            AND tenant_id = ${tenantId}
+            AND published_at IS NULL
+            AND dead_lettered_at IS NULL
+          RETURNING publish_attempts
+        `);
+        return Number((result as any).rows?.[0]?.publish_attempts ?? 0);
+      });
     },
 
     async moveToDlq(row: OutboxRow, error: string, attempts: number): Promise<void> {
-      await db.transaction(async (tx) => {
+      await withTenantTx(row.tenantId, async (tx) => {
         await tx.insert(outboxPublishDlq).values({
           id: randomUUID(),
           outboxEventId: row.id,
@@ -69,12 +81,19 @@ export function createPostgresOutboxPublisherDb(): OutboxPublisherDb {
           errorMessage: error,
           attempts,
         });
-        await tx.update(outboxEvents).set({ deadLetteredAt: new Date(), lastError: error, publishAttempts: attempts }).where(sql`${outboxEvents.id} = ${row.id} AND ${outboxEvents.publishedAt} IS NULL`);
+        await tx
+          .update(outboxEvents)
+          .set({ deadLetteredAt: new Date(), lastError: error, publishAttempts: attempts })
+          .where(
+            sql`${outboxEvents.id} = ${row.id} AND ${outboxEvents.tenantId} = ${row.tenantId} AND ${outboxEvents.publishedAt} IS NULL`
+          );
       });
     },
 
     async pendingCount(): Promise<number> {
-      const result = await db.execute(sql`SELECT COUNT(*)::int AS count FROM outbox_events WHERE published_at IS NULL AND dead_lettered_at IS NULL`);
+      const result = await db.execute(
+        sql`SELECT COUNT(*)::int AS count FROM outbox_events WHERE published_at IS NULL AND dead_lettered_at IS NULL`
+      );
       return Number((result as any).rows?.[0]?.count ?? 0);
     },
 

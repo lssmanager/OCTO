@@ -10,7 +10,15 @@ const row: OutboxRow = {
   eventType: 'ExecutionStarted',
   sequence: 1,
   publishAttempts: 0,
-  payloadJson: { executionId: 'e1', _meta: { traceId: 'tr', spanId: 'sp', occurredAt: '2026-01-01T00:00:00Z', schemaVersion: '1.0' } },
+  payloadJson: {
+    executionId: 'e1',
+    _meta: {
+      traceId: 'tr',
+      spanId: 'sp',
+      occurredAt: '2026-01-01T00:00:00Z',
+      schemaVersion: '1.0',
+    },
+  },
 };
 
 describe('Outbox publisher (fake bus first)', () => {
@@ -24,14 +32,20 @@ describe('Outbox publisher (fake bus first)', () => {
       pendingCount: vi.fn().mockResolvedValue(0),
     };
     const bus = { publish: vi.fn().mockResolvedValue(undefined) };
-    const metrics = { setPendingTotal: vi.fn(), observePublishLatencyMs: vi.fn(), observeBatchSize: vi.fn(), incPublishFailed: vi.fn(), incDlqTotal: vi.fn() };
+    const metrics = {
+      setPendingTotal: vi.fn(),
+      observePublishLatencyMs: vi.fn(),
+      observeBatchSize: vi.fn(),
+      incPublishFailed: vi.fn(),
+      incDlqTotal: vi.fn(),
+    };
 
     const publisher = buildOutboxPublisher({ db, bus, metrics });
     const res = await publisher.publishOnce();
 
     expect(res.published).toBe(1);
     expect(bus.publish).toHaveBeenCalledOnce();
-    expect(db.markPublished).toHaveBeenCalledWith(row.id);
+    expect(db.markPublished).toHaveBeenCalledWith(row.id, row.tenantId);
   });
 
   it('does not mark published when fake bus fails and retries are tracked', async () => {
@@ -44,13 +58,19 @@ describe('Outbox publisher (fake bus first)', () => {
       pendingCount: vi.fn().mockResolvedValue(1),
     };
     const bus = { publish: vi.fn().mockRejectedValue(new Error('fake bus down')) };
-    const metrics = { setPendingTotal: vi.fn(), observePublishLatencyMs: vi.fn(), observeBatchSize: vi.fn(), incPublishFailed: vi.fn(), incDlqTotal: vi.fn() };
+    const metrics = {
+      setPendingTotal: vi.fn(),
+      observePublishLatencyMs: vi.fn(),
+      observeBatchSize: vi.fn(),
+      incPublishFailed: vi.fn(),
+      incDlqTotal: vi.fn(),
+    };
 
     const publisher = buildOutboxPublisher({ db, bus, metrics });
     const res = await publisher.publishOnce();
 
     expect(res.failed).toBe(1);
     expect(db.markPublished).not.toHaveBeenCalled();
-    expect(db.recordFailure).toHaveBeenCalled();
+    expect(db.recordFailure).toHaveBeenCalledWith(row.id, 'fake bus down', row.tenantId);
   });
 });
