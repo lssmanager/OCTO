@@ -114,6 +114,9 @@ class ExecutionFSM:
                     if lease_owner is not None
                     else "lease_expires_at"
                 )
+                expected_lease_owner = (
+                    lease_owner if expected_state == "running" and next_state != "reclaimable" else None
+                )
                 update_query = f"""
                 UPDATE executions
                 SET status = $1,
@@ -126,6 +129,7 @@ class ExecutionFSM:
                   AND tenant_id = $3
                   AND status = $5
                   AND version = $6
+                  AND ($8::text IS NULL OR lease_owner IS NOT DISTINCT FROM $8::text)
                 RETURNING version
                 """
                 updated = await conn.fetchrow(
@@ -137,6 +141,7 @@ class ExecutionFSM:
                     expected_state,
                     expected_version,
                     lease_duration_seconds,
+                    expected_lease_owner,
                 )
 
                 if updated is None:
@@ -149,6 +154,7 @@ class ExecutionFSM:
                             "expected_state": expected_state,
                             "next_state": next_state,
                             "expected_version": expected_version,
+                            "expected_lease_owner": expected_lease_owner,
                             "cas_conflict": True,
                         },
                     )
