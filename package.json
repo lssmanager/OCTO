@@ -48,6 +48,7 @@
     "f2:agent-graph-smoke": "bash scripts/f2-agent-graph-smoke.sh",
     "f1:workspace-type-gate": "pnpm --filter @octo/events build && pnpm --filter @octo/database build && pnpm --filter @octo/api typecheck && pnpm build && pnpm typecheck",
     "f1:runtime-db-role-smoke": "bash scripts/f1-runtime-db-role-smoke.sh --strict",
+    "f1:runtime-handoff-smoke": "bash scripts/f1-runtime-handoff-smoke.sh",
     "f1:queue-workers-smoke": "bash scripts/f1-queue-workers-smoke.sh"
   },
   "devDependencies": {
