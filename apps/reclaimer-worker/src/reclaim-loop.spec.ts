@@ -8,11 +8,32 @@ const mocks = vi.hoisted(() => ({
   reclaimedCounter: { add: vi.fn() },
   alreadyTakenCounter: { add: vi.fn() },
   reclaimErrorCounter: { add: vi.fn() },
+  withTenantTx: vi.fn(async () => ({
+    id: 'exec-1',
+    tenantId: 'tenant-1',
+    agentId: 'agent-1',
+    status: 'running',
+    attempt: 2,
+    reclaimCount: 0,
+    traceId: 'trace-1',
+    runId: 'run-1',
+    leaseToken: 'lease-1',
+    queueJobId: 'job-1',
+  })),
+  insertOutboxEvent: vi.fn(async () => undefined),
 }));
 
 vi.mock('@octo/queue', () => ({
   QUEUES: { EXECUTION_DISPATCH: 'execution.dispatch' },
   createQueue: mocks.createQueue,
+}));
+
+vi.mock('@octo/database', () => ({
+  executions: {},
+  executionDlq: {},
+  getDb: vi.fn(),
+  insertOutboxEvent: mocks.insertOutboxEvent,
+  withTenantTx: mocks.withTenantTx,
 }));
 
 vi.mock('./cas-reclaim', () => ({ casReclaim: mocks.casReclaim }));
@@ -33,6 +54,7 @@ describe('reclaim loop', () => {
     mocks.add.mockClear();
     mocks.createQueue.mockClear();
     mocks.casReclaim.mockClear();
+    mocks.withTenantTx.mockClear();
   });
 
   afterEach(async () => {

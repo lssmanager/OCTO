@@ -19,6 +19,7 @@ import { TenantScopeGuard } from '../auth/guards/tenant-scope.guard';
 import { RbacGuard } from '../auth/guards/rbac.guard';
 import { RequireScopes } from '../auth/decorators/require-scopes.decorator';
 import { HierarchyAccessGuard } from '../auth/guards/hierarchy-access.guard';
+import { Public as PublicApiRoute } from '../admin/internal-secret.guard';
 import { HierarchyContextMeta } from '../auth/decorators/hierarchy-context.decorator';
 import type { OctoRequest } from '../auth/types/octo-request';
 
@@ -37,6 +38,7 @@ function parseLimit(limit?: string): number {
 }
 
 @Controller('/v1/agents')
+@PublicApiRoute()
 @UseGuards(JwtAuthGuard, TenantScopeGuard, RbacGuard, HierarchyAccessGuard)
 export class AgentController {
   constructor(private readonly service: AgentService) {}

@@ -208,6 +208,7 @@ services:
     tmpfs: ['/tmp:rw,noexec,nosuid,size=64m']
     restart: unless-stopped
     networks: [octonet]
+    ports: ['3011:3011']
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:3011/health/ready >/dev/null || exit 1']
       interval: 30s

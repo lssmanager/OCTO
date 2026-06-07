@@ -47,7 +47,8 @@ The close gate records each required check in `docs/reports/f1-close-report.md`:
 13. Tenant isolation tests across API, DB/RLS, queues/workers, scheduler, reclaimer and outbox.
 14. F1 observability tests for executionId/traceId reconstruction.
 15. Full F1 compose build and compose up.
-16. Strict public web+API smoke through `scripts/f1-smoke.sh --strict`, including:
+16. Runtime Worker F1 handoff smoke through `scripts/f1-runtime-handoff-smoke.sh`. This smoke runs from the host after `compose up`, so HTTP checks use the published host ports (`API_URL=http://localhost:3001/api` and `RUNTIME_WORKER_URL=http://localhost:8000`), direct SQL heartbeat verification uses `DATABASE_URL=$F1_HOST_DATABASE_URL`, and Compose services continue using `F1_COMPOSE_*` URLs internally. The runtime-worker container itself must keep using `RUNTIME_DATABASE_URL` with the least-privilege runtime role; the host admin `DATABASE_URL` is only for the smoke's optional direct `worker_heartbeats` read. The smoke validates `/health/live`, `/health/ready`, `/health/status`, `workerType=runtime-worker`, phase `F1`, `database.runtimeDatabaseUrlConfigured=true`, `database.credential=RUNTIME_DATABASE_URL`, HTTP handoff `202 Accepted`, JSON `status=accepted`, API worker visibility and a fresh heartbeat when host-side `psql` is available.
+17. Strict public web+API smoke through `scripts/f1-smoke.sh --strict`, including:
     - web `/` is HTTP 200, renders `Agent Graph Console`, contains `F1` / `Agent Graph System`, and does not return `Cannot GET /`;
     - web `/status` is HTTP 200 and renders foundation/service status;
     - web `/api/health` is HTTP 200 for the Next.js service healthcheck;
@@ -60,7 +61,20 @@ The close gate records each required check in `docs/reports/f1-close-report.md`:
 
 The close gate fails if documentation, compose or smoke disagree about this web+API contract; CLOSE mode must build and start the `web` service and must not silently fall back to an API-only surface.
 
-17. Agent Graph F1 smoke through `scripts/f1-agent-graph-smoke.sh` against `/api/v1/agents/*`, covering full `Agency → Department → Workspace → Agent` creation, inherited `effectiveCapabilities`, inherited tool `allow`/`deny` policy projection, rejection of Agent creation through `/nodes`, node detail, patch, activation/archive, valid Department/Workspace/Agent reparent, invalid hierarchy/self-parent/cycle/missing-parent/cross-tenant failures and selected Agent deletion.
+### Queue/workers closure rule for #289
+
+F1 queue closure is a live-system proof, not a Redis connectivity proof. `/api/health/ready` may report `redis.status = ok`, `queue.status = ok` and `queue.name = execution.dispatch` while every consumer is dead. Therefore #289 is closed only by `pnpm f1:queue-workers-smoke` passing inside the close gate against the running Docker/Compose/Coolify stack. PostgreSQL remains the source of truth for executions, outbox rows and worker heartbeats; Redis/BullMQ is only the transport/coordination layer.
+
+18. F1 queue workers durable smoke through `scripts/f1-queue-workers-smoke.sh`, using host-side `F1_HOST_DATABASE_URL` and `F1_HOST_REDIS_URL` after the full compose stack is healthy. This check proves that `redis.status=ok` and `queue.status=ok` are not sufficient by requiring:
+    - `scheduler-worker`, `reclaimer-worker` and `outbox-publisher-worker` readiness/status endpoints to answer from the host;
+    - fresh durable heartbeats for `scheduler-worker`, `reclaimer-worker` and `runtime-worker` in PostgreSQL, with stale heartbeats rejected;
+    - API `/api/v1/ops/f1/status` to see `execution.dispatch` and the durable worker heartbeats;
+    - creation of a minimal F1 execution through the Control Plane API, persisted in PostgreSQL with deterministic `queue_job_id = execution.id`;
+    - the corresponding BullMQ job in `execution.dispatch`, scheduler consumption, durable `ExecutionDispatched` evidence and HTTP handoff to the runtime-worker without requiring F2 completion semantics;
+    - outbox rows to be marked `published_at` by `outbox-publisher-worker` and emitted to the configured Redis stream;
+    - a controlled expired lease/zombie execution to be reclaimed exactly once and re-dispatched through `execution.dispatch` with no duplicate observable reclaim effects.
+
+19. Agent Graph F1 smoke through `scripts/f1-agent-graph-smoke.sh` against `/api/v1/agents/*`, covering JWT rejection for missing credentials, unknown `kid`, bad signature and missing scopes; full `Agency → Department → Workspace → Agent` creation; inherited `effectiveCapabilities`; inherited tool `allow`/`deny` policy projection; rejection of Agent creation through `/nodes`; node detail; patch; activation/archive; valid Department/Workspace/Agent reparent; invalid hierarchy/self-parent/cycle/missing-parent/cross-tenant failures; and selected Agent deletion.
 
 ## Lint boundaries and format decision
 

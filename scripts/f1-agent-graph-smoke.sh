@@ -12,7 +12,10 @@ OTHER_TENANT_ID="${F1_AGENT_GRAPH_SMOKE_OTHER_TENANT_ID:-tenant-f1-agent-graph-o
 make_token() {
   local tenant_id="$1"
   local user_id="$2"
-  JWT_SECRET="$JWT_SECRET" JWT_KID="$JWT_KID" TENANT_ID="$tenant_id" USER_ID="$user_id" node - <<'NODE'
+  local secret="${3:-$JWT_SECRET}"
+  local kid="${4:-$JWT_KID}"
+  local scopes_json="${5:-[\"agents:read\",\"agents:write\"]}"
+  JWT_SECRET="$secret" JWT_KID="$kid" TENANT_ID="$tenant_id" USER_ID="$user_id" SCOPES_JSON="$scopes_json" node - <<'NODE'
 const crypto = require('crypto');
 const enc = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
 const now = Math.floor(Date.now() / 1000);
@@ -21,7 +24,7 @@ const payload = enc({
   sub: process.env.USER_ID,
   tenant_id: process.env.TENANT_ID,
   roles: ['tenant_admin'],
-  scopes: ['agents:read', 'agents:write'],
+  scopes: JSON.parse(process.env.SCOPES_JSON || '[]'),
   iss: 'octo-f1-agent-graph-smoke',
   aud: 'octo-api',
   iat: now,
@@ -35,6 +38,9 @@ NODE
 
 TOKEN="$(make_token "$TENANT_ID" "$USER_ID")"
 OTHER_TOKEN="$(make_token "$OTHER_TENANT_ID" "${USER_ID}-other")"
+UNKNOWN_KID_TOKEN="$(make_token "$TENANT_ID" "${USER_ID}-unknown-kid" "$JWT_SECRET" "${JWT_KID}-missing")"
+WRONG_SECRET_TOKEN="$(make_token "$TENANT_ID" "${USER_ID}-wrong-secret" "${JWT_SECRET}-wrong" "$JWT_KID")"
+NO_SCOPE_TOKEN="$(make_token "$TENANT_ID" "${USER_ID}-no-scope" "$JWT_SECRET" "$JWT_KID" '[]')"
 RUN_ID="$(date +%s)-$$"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -78,6 +84,9 @@ expect_status() {
 echo "F1 Agent Graph smoke: validating CRUD hierarchy against $API_URL for tenant $TENANT_ID"
 
 expect_status 401 POST /v1/agents/nodes ''
+expect_status 401 POST /v1/agents/nodes "$UNKNOWN_KID_TOKEN" '{"name":"Invalid Kid","level":"agency"}'
+expect_status 401 POST /v1/agents/nodes "$WRONG_SECRET_TOKEN" '{"name":"Wrong Secret","level":"agency"}'
+expect_status 403 GET /v1/agents/graph "$NO_SCOPE_TOKEN"
 
 post_json /v1/agents/nodes "{\"name\":\"F1 Smoke Agency ${RUN_ID}\",\"level\":\"agency\",\"capabilities\":[\"smoke.agency\"],\"toolPolicy\":{\"allow\":[\"builtin.echo\",\"danger.tool\"]}}" > "$tmp/agency.json"
 agency_id="$(json_field "$tmp/agency.json" '.id')"

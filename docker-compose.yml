@@ -221,6 +221,8 @@ services:
         BUILD_PHASE: ${BUILD_PHASE:-F1}
     container_name: octo-runtime-worker
     environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 8000
       # Inter-service auth (debe coincidir con RUNTIME_API_SECRET de la API)
       API_INTERNAL_SECRET: ${RUNTIME_API_SECRET:?RUNTIME_API_SECRET is required}
       API_URL: ${API_URL:-http://api:3001/api}
@@ -231,6 +233,9 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379}
       REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-10}
       # LiteLLM
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
+      # Backward-compatible aliases used by existing runtime-worker code/tests.
       LITELLM_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
       LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       # OTEL
@@ -324,6 +329,8 @@ services:
         condition: service_completed_successfully
     networks:
       - octonet
+    ports:
+      - '${SCHEDULER_HEALTH_PORT:-3003}:3003'
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3003/health/ready']
       interval: 30s
