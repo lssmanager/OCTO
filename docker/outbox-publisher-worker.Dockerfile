@@ -1,6 +1,6 @@
 FROM node:22.22.2-alpine3.22 AS builder
 WORKDIR /app
-RUN apk add --no-cache libc6-compat && corepack enable
+RUN apk add --no-cache libc6-compat && npm install -g pnpm@11.2.2
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps ./apps
 COPY packages ./packages
@@ -8,6 +8,13 @@ RUN HUSKY=0 pnpm install --frozen-lockfile
 RUN pnpm turbo build --filter=@octo/outbox-publisher-worker
 
 FROM node:22.22.2-alpine3.22 AS runtime
+# The runtime image does not need npm; removing it drops bundled npm dependency scan findings.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/npm-cli.js \
+    /usr/local/bin/npx-cli.js \
+    /usr/local/bin/npm-prefix.js
 ARG VERSION=0.0.0
 ARG REVISION=unknown
 ARG CREATED=unknown
