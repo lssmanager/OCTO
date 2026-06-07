@@ -8,18 +8,41 @@ const mocks = vi.hoisted(() => ({
   reclaimedCounter: { add: vi.fn() },
   alreadyTakenCounter: { add: vi.fn() },
   reclaimErrorCounter: { add: vi.fn() },
-  withTenantTx: vi.fn(async () => ({
-    id: 'exec-1',
-    tenantId: 'tenant-1',
-    agentId: 'agent-1',
-    status: 'running',
-    attempt: 2,
-    reclaimCount: 0,
-    traceId: 'trace-1',
-    runId: 'run-1',
-    leaseToken: 'lease-1',
-    queueJobId: 'job-1',
-  })),
+  withTenantTx: vi.fn(
+    async (_tenantId: string, callback: (tx: any) => Promise<unknown>) =>
+      await callback({
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [
+                {
+                  id: 'exec-1',
+                  tenantId: 'tenant-1',
+                  agentId: 'agent-1',
+                  status: 'running',
+                  attempt: 2,
+                  reclaimCount: 0,
+                  traceId: 'trace-1',
+                  runId: 'run-1',
+                  leaseToken: 'lease-1',
+                  queueJobId: 'job-1',
+                },
+              ]),
+            })),
+          })),
+        })),
+        update: vi.fn(() => ({
+          set: vi.fn(() => ({
+            where: vi.fn(() => ({
+              returning: vi.fn(async () => [{ id: 'exec-1' }]),
+            })),
+          })),
+        })),
+        insert: vi.fn(() => ({
+          values: vi.fn(async () => undefined),
+        })),
+      })
+  ),
   insertOutboxEvent: vi.fn(async () => undefined),
 }));
 
