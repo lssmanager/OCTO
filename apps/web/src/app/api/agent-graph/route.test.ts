@@ -47,7 +47,9 @@ describe('F1 Agent Graph route URL contract', () => {
     expect(routeSource).not.toContain('revalidate: 15');
   });
 
-  it('does not reference browser-public console write secrets', () => {
+  it('does not reference browser-public or server-token write bypass secrets', () => {
+    expect(routeSource).not.toContain('OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES');
+    expect(routeSource).not.toContain('OCTO_WEB_CONSOLE_TOKEN');
     expect(routeSource).not.toContain('NEXT_PUBLIC_OCTO_CONSOLE_TOKEN');
     expect(routeSource).not.toMatch(/NEXT_PUBLIC_[A-Z0-9_]*TOKEN/);
   });
