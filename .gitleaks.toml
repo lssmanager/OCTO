@@ -25,16 +25,13 @@ title = "OCTO Gitleaks Config"
     '''PLACEHOLDER''',
   ]
 
-[[rules]]
-  id = "generic-api-key"
-
-  [[rules.allowlists]]
-    description = "Allow runtime-worker tests to pass the configured internal secret variable as an HTTP header; no literal secret is stored."
-    condition = "AND"
-    regexTarget = "line"
-    paths = [
-      '''apps/runtime-worker/tests/unit/test_execution_canonical_path\.py''',
-    ]
-    regexes = [
-      '''x-internal-secret''',
-    ]
+[[allowlists]]
+  description = "Allow the runtime-worker test to assert the internal-secret HTTP header name only; no literal secret value is stored."
+  condition = "AND"
+  regexTarget = "line"
+  paths = [
+    '''apps/runtime-worker/tests/unit/test_execution_canonical_path\.py''',
+  ]
+  regexes = [
+    '''x-internal-secret''',
+  ]

@@ -4,7 +4,7 @@ set -euo pipefail
 # Fail if Docker image history contains names that indicate runtime secrets.
 # Keep this pattern intentionally broad: concrete OCTO variables plus future
 # variants containing SECRET, TOKEN, or PASSWORD must never enter build layers.
-SENSITIVE_DOCKER_HISTORY_PATTERN='(^|[^[:alnum:]_])([[:alnum:]_]*(SECRET|TOKEN|PASSWORD)[[:alnum:]_]*|DATABASE_URL|REDIS_URL|API_KEY|LITELLM_MASTER_KEY)([^[:alnum:]_]|$)'
+SENSITIVE_DOCKER_HISTORY_PATTERN='(^|[^[:alnum:]_])([[:alnum:]_]*(SECRET|TOKEN|PASSWORD)[[:alnum:]_]*|DATABASE_URL|REDIS_URL|POSTGRES_PASSWORD|JWT_SECRET|API_KEY|LITELLM_MASTER_KEY|RUNTIME_API_SECRET)([^[:alnum:]_]|$)'
 
 usage() {
   cat <<'USAGE'

@@ -1,6 +1,7 @@
 # CI Pipeline (Issue #89 - F1 Quality Gate)
 
 Required checks for merge to `main`/`develop`:
+- Secret Scan (blocking merge/release gate)
 - lint
 - typecheck
 - contracts-check
@@ -12,6 +13,25 @@ Required checks for merge to `main`/`develop`:
 Main-only release checks:
 - docker-build
 - docker-scan
+
+
+## Secret Scan blocking gate
+
+The `Secret Scan` workflow is a required blocking gate for merge and release. It must remain enabled for pull requests to `main` and for protected branch pushes; do not bypass it for release candidates.
+
+The gate has three parts:
+
+1. Gitleaks runs with `.gitleaks.toml`, which explicitly uses `[extend] useDefault = true` so OCTO keeps the full built-in Gitleaks ruleset while adding only narrow, documented allowlists.
+2. `scripts/verify-secret-scan-gate.sh` performs controlled self-tests: it checks the config inheritance, verifies a clean Docker-history fixture passes, verifies Docker-history fixtures with `TOKEN`/`PASSWORD`/`DATABASE_URL` indicators fail, and verifies a synthetic live-key-shaped fixture is rejected when the Gitleaks CLI is available.
+3. `scripts/audit-docker-history-secrets.sh` scans `docker history --no-trunc` for concrete runtime secret names and future variable variants containing `SECRET`, `TOKEN`, or `PASSWORD` before the image can be promoted.
+
+If this gate fails, treat it as a security release blocker. Prefer removing the secret from Git history or Docker build inputs. Add allowlists only when the value is demonstrably a placeholder or header/key name rather than a secret value, and keep each allowlist scoped to the smallest path and line pattern possible.
+
+Local validation:
+
+```bash
+pnpm security:secret-scan-gate
+```
 
 ## Local commands
 - `pnpm f1:workspace-type-gate` - reproducible F1/F2 handoff gate for `@octo/events`, `@octo/database`, `@octo/api`, then full workspace `build` and `typecheck`.
