@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.adapters.llm.provider_params import canonical_model_identifier, canonical_model_set, resolve_provider
+
 
 class GovernedLLMError(RuntimeError):
     """Runtime-visible LLM policy/budget error with an F1 governance code."""
@@ -180,20 +182,20 @@ def resolve_effective_policy(snapshot: dict[str, Any], env_default: str = "") ->
         policy_allowed = set()
         policy_registered = set()
 
-    chain = _unique([primary, *fallbacks])
+    chain = _unique(canonical_model_identifier(model) for model in [primary, *fallbacks])
     if not chain:
         raise GovernedLLMError("LLM_MODEL_POLICY_MISSING", "No LLM model policy resolved")
     primary = chain[0]
     fallbacks = chain[1:]
 
-    registered = (
+    registered = canonical_model_set(
         policy_registered
         or _model_set_from(snapshot.get("registeredModels"))
         or _model_set_from(snapshot.get("modelRegistry"))
         or _model_set_from(_get_path(snapshot, "governance", "registeredModels"))
         or _model_set_from(_get_path(snapshot, "governance", "modelRegistry"))
     )
-    allowed = (
+    allowed = canonical_model_set(
         policy_allowed
         or _model_set_from(snapshot.get("allowedModels"))
         or _model_set_from(_get_path(snapshot, "governance", "allowedModels"))
@@ -219,7 +221,7 @@ def resolve_models_from_snapshot(snapshot: dict[str, Any], env_default: str) -> 
 
 
 def _provider_from_model(model: str) -> str:
-    return model.split("/", 1)[0] if "/" in model else "unknown"
+    return resolve_provider(canonical_model_identifier(model))
 
 
 def _check_budget(policy: EffectiveLLMPolicy, projected_spend: Decimal, *, model: str) -> None:

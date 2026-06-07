@@ -11,6 +11,7 @@ class MCPDescriptorVerifier:
             raise MCPToolNotFoundError(remote_name)
         probe = tool_def.model_copy(deep=True)
         probe.input_schema = found.get("inputSchema") or found.get("input_schema") or probe.input_schema
+        probe.output_schema = found.get("outputSchema") or found.get("output_schema") or probe.output_schema
         probe.description = found.get("description", probe.description)
         h = compute_descriptor_hash(probe)
         if h != tool_def.descriptor_hash:

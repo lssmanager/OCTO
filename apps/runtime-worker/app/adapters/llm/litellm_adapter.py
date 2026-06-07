@@ -8,7 +8,7 @@ from typing import Any, AsyncIterator
 from app.adapters.llm.base import LLMCanonicalError
 from app.adapters.llm.error_mapper import map_http_error
 from app.adapters.llm.prompt_cache import apply_prompt_cache
-from app.adapters.llm.provider_params import allowlisted_provider_params, resolve_provider
+from app.adapters.llm.provider_params import allowlisted_provider_params, canonical_model_identifier, resolve_provider
 from app.contracts.llm import ChatCompletionRequest, ChatCompletionResponse, ChatUsage, ILLMProvider, StreamDelta
 
 try:
@@ -34,9 +34,10 @@ class LiteLLMAdapter(ILLMProvider):
         self.rate_limiter = rate_limiter
 
     def _build_payload(self, req: ChatCompletionRequest) -> dict[str, Any]:
-        provider = resolve_provider(req.model)
+        effective_model = canonical_model_identifier(req.model)
+        provider = resolve_provider(effective_model)
         payload: dict[str, Any] = {
-            "model": req.model,
+            "model": effective_model,
             "messages": [m.model_dump(exclude_none=True) for m in req.messages],
             "stream": req.stream,
             "timeout": req.timeout_ms / 1000,
@@ -51,7 +52,7 @@ class LiteLLMAdapter(ILLMProvider):
             },
         }
         if req.tool_choice == "required" and not req.tools:
-            raise LLMCanonicalError("LLM_BAD_REQUEST", "tool_choice=required needs tools", False, model=req.model)
+            raise LLMCanonicalError("LLM_BAD_REQUEST", "tool_choice=required needs tools", False, model=effective_model)
         if req.tools and req.tool_choice != "none":
             payload["tools"] = [{"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.input_schema}} for t in req.tools]
             payload["tool_choice"] = req.tool_choice
@@ -67,7 +68,7 @@ class LiteLLMAdapter(ILLMProvider):
             elif provider == "gemini":
                 payload["thinking_config"] = {"thinking_budget": 1024}
 
-        payload.update(allowlisted_provider_params(req.model, req.provider_params))
+        payload.update(allowlisted_provider_params(effective_model, req.provider_params))
         apply_prompt_cache(req, provider, payload)
         return {k: v for k, v in payload.items() if v is not None}
 
@@ -86,7 +87,7 @@ class LiteLLMAdapter(ILLMProvider):
         reasoning_tokens = int(usage_dict.get("completion_tokens_details", {}).get("reasoning_tokens", 0) or 0)
         cached_input_tokens = int(usage_dict.get("prompt_tokens_details", {}).get("cached_tokens", 0) or 0)
         finish = choice.finish_reason if choice.finish_reason in {"stop", "tool_calls", "length", "content_filter"} else "error"
-        provider = resolve_provider(req.model)
+        provider = resolve_provider(canonical_model_identifier(req.model))
         return ChatCompletionResponse(
             id=raw.id,
             content=message.content or "",
@@ -106,17 +107,18 @@ class LiteLLMAdapter(ILLMProvider):
         )
 
     async def chat(self, req: ChatCompletionRequest) -> ChatCompletionResponse:
-        provider = resolve_provider(req.model)
+        effective_model = canonical_model_identifier(req.model)
+        provider = resolve_provider(effective_model)
         start = time.perf_counter()
         try:
             if self.circuit_registry is not None:
-                cb = self.circuit_registry.get(req.tenant_id, provider, req.model)
+                cb = self.circuit_registry.get(req.tenant_id, provider, effective_model)
                 if not await cb.can_attempt():
-                    raise LLMCanonicalError("LLM_CIRCUIT_OPEN", "circuit open", True, provider=provider, model=req.model)
+                    raise LLMCanonicalError("LLM_CIRCUIT_OPEN", "circuit open", True, provider=provider, model=effective_model)
             if self.rate_limiter is not None:
-                allowed = await self.rate_limiter.acquire(req.tenant_id, req.model, max(1, req.max_output_tokens), 100000, 1000.0)
+                allowed = await self.rate_limiter.acquire(req.tenant_id, effective_model, max(1, req.max_output_tokens), 100000, 1000.0)
                 if not allowed:
-                    raise LLMCanonicalError("LLM_RATE_LIMITED", "local rate limiter", True, provider=provider, model=req.model)
+                    raise LLMCanonicalError("LLM_RATE_LIMITED", "local rate limiter", True, provider=provider, model=effective_model)
             payload = self._build_payload(req)
             raw = await self.client.chat.completions.create(**payload)
             res = self._normalize(req, raw)
@@ -124,28 +126,28 @@ class LiteLLMAdapter(ILLMProvider):
                 try:
                     json.loads(res.content or "{}")
                 except Exception as exc:
-                    raise LLMCanonicalError("LLM_STRUCTURED_OUTPUT_INVALID", "invalid json output", False, provider=provider, model=req.model) from exc
+                    raise LLMCanonicalError("LLM_STRUCTURED_OUTPUT_INVALID", "invalid json output", False, provider=provider, model=effective_model) from exc
             if self.circuit_registry is not None:
-                await self.circuit_registry.get(req.tenant_id, provider, req.model).record_success()
-            self._emit("success", provider, req.model, res, int((time.perf_counter() - start) * 1000), None)
+                await self.circuit_registry.get(req.tenant_id, provider, effective_model).record_success()
+            self._emit("success", provider, effective_model, res, int((time.perf_counter() - start) * 1000), None)
             return res
         except (RateLimitError,) as exc:
-            err = LLMCanonicalError("LLM_RATE_LIMITED", str(exc), True, provider=provider, model=req.model, raw_error_type=type(exc).__name__)
+            err = LLMCanonicalError("LLM_RATE_LIMITED", str(exc), True, provider=provider, model=effective_model, raw_error_type=type(exc).__name__)
         except (APITimeoutError,) as exc:
-            err = LLMCanonicalError("LLM_TIMEOUT", str(exc), True, provider=provider, model=req.model, raw_error_type=type(exc).__name__)
+            err = LLMCanonicalError("LLM_TIMEOUT", str(exc), True, provider=provider, model=effective_model, raw_error_type=type(exc).__name__)
         except (APIConnectionError,) as exc:
-            err = LLMCanonicalError("LLM_PROVIDER_UNAVAILABLE", str(exc), True, provider=provider, model=req.model, raw_error_type=type(exc).__name__)
+            err = LLMCanonicalError("LLM_PROVIDER_UNAVAILABLE", str(exc), True, provider=provider, model=effective_model, raw_error_type=type(exc).__name__)
         except (AuthenticationError,) as exc:
-            err = LLMCanonicalError("LLM_PROVIDER_AUTH_FAILED", str(exc), False, provider=provider, model=req.model, raw_error_type=type(exc).__name__)
+            err = LLMCanonicalError("LLM_PROVIDER_AUTH_FAILED", str(exc), False, provider=provider, model=effective_model, raw_error_type=type(exc).__name__)
         except (BadRequestError,) as exc:
-            err = LLMCanonicalError("LLM_BAD_REQUEST", str(exc), False, provider=provider, model=req.model, raw_error_type=type(exc).__name__)
+            err = LLMCanonicalError("LLM_BAD_REQUEST", str(exc), False, provider=provider, model=effective_model, raw_error_type=type(exc).__name__)
         except APIError as exc:
-            err = map_http_error(getattr(exc, "status_code", 500) or 500, str(exc), provider=provider, model=req.model)
+            err = map_http_error(getattr(exc, "status_code", 500) or 500, str(exc), provider=provider, model=effective_model)
         except LLMCanonicalError as exc:
             err = exc
         if self.circuit_registry is not None:
-            await self.circuit_registry.get(req.tenant_id, provider, req.model).record_failure(getattr(err, "canonical_code", "ERR"), getattr(err, "retryable", False))
-        self._emit("error", provider, req.model, None, int((time.perf_counter() - start) * 1000), err)
+            await self.circuit_registry.get(req.tenant_id, provider, effective_model).record_failure(getattr(err, "canonical_code", "ERR"), getattr(err, "retryable", False))
+        self._emit("error", provider, effective_model, None, int((time.perf_counter() - start) * 1000), err)
         raise err
 
     async def stream(self, req: ChatCompletionRequest) -> AsyncIterator[StreamDelta]:

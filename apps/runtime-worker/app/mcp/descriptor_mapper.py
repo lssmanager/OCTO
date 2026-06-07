@@ -25,6 +25,7 @@ class MCPDescriptorMapper:
             source="mcp",
             source_ref=server.server_id,
             descriptor_hash=descriptor.descriptor_hash,
+            version=server.version,
             status=ToolStatus.PENDING_REVIEW,
             enabled=False,
         )

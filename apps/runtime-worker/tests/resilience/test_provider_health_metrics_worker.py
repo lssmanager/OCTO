@@ -23,6 +23,10 @@ class FakeRedis:
     async def get(self, k: str):
         return self.d.get(k)
 
+    async def delete(self, k: str):
+        self.d.pop(k, None)
+        return 1
+
 
 class FakeProm:
     async def collect(self):
@@ -48,3 +52,31 @@ async def test_collector_reads_snapshot() -> None:
     cands = [ModelCandidate(model="openai/gpt-4.1-mini", provider="openai", source_level="agent", priority=0)]
     out = await collector.enrich_candidates("t1", cands)
     assert out[0].observed_latency_ms_p50 == 100
+
+
+class HangingProm:
+    async def collect(self):
+        import asyncio
+        await asyncio.sleep(10)
+
+
+class FailingProm:
+    async def collect(self):
+        raise RuntimeError("prometheus down")
+
+
+@pytest.mark.asyncio
+async def test_worker_timeout_releases_lock_without_writing_backpressure() -> None:
+    redis = FakeRedis()
+    w = ProviderHealthMetricsWorker(redis, HangingProm(), None, ProviderHealthWorkerConfig(provider_health_query_timeout_ms=10))
+    await w.run_once()
+    assert "octo:infra:provider_health_worker:lock" not in redis.d
+    assert not [k for k in redis.d if k.startswith("octo:t1:provider_health:")]
+
+
+@pytest.mark.asyncio
+async def test_worker_collect_failure_releases_lock() -> None:
+    redis = FakeRedis()
+    w = ProviderHealthMetricsWorker(redis, FailingProm(), None, ProviderHealthWorkerConfig(provider_health_query_timeout_ms=10))
+    await w.run_once()
+    assert "octo:infra:provider_health_worker:lock" not in redis.d

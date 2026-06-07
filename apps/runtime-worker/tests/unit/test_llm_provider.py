@@ -255,3 +255,31 @@ def test_budget_reconciliation_blocks_overrun_after_usage(monkeypatch: pytest.Mo
         asyncio.run(call_llm("t1", "e1", "a1", [{"role": "user", "content": "hi"}], snapshot))
 
     assert exc.value.code == "LLM_BUDGET_RECONCILIATION_EXCEEDED"
+
+
+def test_model_allowlist_checks_canonical_final_identifier() -> None:
+    policy = resolve_effective_policy(
+        {
+            "modelPolicy": {
+                "primaryModel": "gpt-4.1-mini",
+                "registeredModels": ["openai/gpt-4.1-mini"],
+                "allowedModels": ["openai/gpt-4.1-mini"],
+            }
+        }
+    )
+
+    assert policy.primary_model == "openai/gpt-4.1-mini"
+
+
+def test_model_allowlist_rejects_unknown_alias_even_if_provider_prefix_allowed() -> None:
+    with pytest.raises(GovernedLLMError) as exc:
+        resolve_effective_policy(
+            {
+                "modelPolicy": {
+                    "primaryModel": "custom-safe-alias",
+                    "registeredModels": ["openai/gpt-4.1-mini"],
+                    "allowedModels": ["openai/gpt-4.1-mini"],
+                }
+            }
+        )
+    assert exc.value.code == "LLM_MODEL_NOT_REGISTERED"
