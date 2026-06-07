@@ -1,5 +1,7 @@
+import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentController } from './agent.controller';
+import { HIERARCHY_CONTEXT_KEY } from '../auth/decorators/hierarchy-context.decorator';
 
 describe('AgentController', () => {
   it('propagates tenant/user from principal', async () => {
@@ -41,6 +43,16 @@ describe('AgentController', () => {
     const c = new AgentController(service);
     await c.graph({ user: { tenant_id: 'tenant-1', sub: 'user-1', agency_ids: ['agency-1'], workspace_ids: ['workspace-1'] } } as any);
     expect(service.graph).toHaveBeenCalledWith('tenant-1', { agencyIds: ['agency-1'], workspaceIds: ['workspace-1'] });
+  });
+
+  it('declares hierarchy metadata for node endpoints', () => {
+    expect(Reflect.getMetadata(HIERARCHY_CONTEXT_KEY, AgentController.prototype.nodeDetail)).toEqual({ nodeIdPath: 'nodeId' });
+    expect(Reflect.getMetadata(HIERARCHY_CONTEXT_KEY, AgentController.prototype.createNode)).toEqual({ parentNodeIdPath: 'parentId' });
+    expect(Reflect.getMetadata(HIERARCHY_CONTEXT_KEY, AgentController.prototype.patchNode)).toEqual({ nodeIdPath: 'nodeId' });
+    expect(Reflect.getMetadata(HIERARCHY_CONTEXT_KEY, AgentController.prototype.reparentNode)).toEqual({
+      nodeIdPath: 'nodeId',
+      parentNodeIdPath: 'parentId',
+    });
   });
 
   it('throws when principal missing', async () => {

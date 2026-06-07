@@ -7,6 +7,8 @@ export type HierarchyContext = {
   workspaceIdPath?: string;
   agentIdPath?: string;
   executionIdPath?: string;
+  nodeIdPath?: string;
+  parentNodeIdPath?: string;
 };
 
 export const HierarchyContextMeta = (ctx: HierarchyContext) => SetMetadata(HIERARCHY_CONTEXT_KEY, ctx);
