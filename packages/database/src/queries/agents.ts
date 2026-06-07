@@ -1,17 +1,22 @@
-import { eq, desc } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { getDb } from '../client';
 import { agents, type NewAgent } from '../schema/agents';
 
-export async function getAgentById(id: string) {
+export async function getAgentById(id: string, tenantId: string) {
   const db = getDb();
   return db.query.agents.findFirst({
-    where: eq(agents.id, id),
+    where: and(eq(agents.id, id), eq(agents.tenantId, tenantId)),
   });
 }
 
-export async function listAgents(limit = 50) {
+export async function listAgents(tenantId: string, limit = 50) {
   const db = getDb();
-  return db.select().from(agents).orderBy(desc(agents.createdAt)).limit(limit);
+  return db
+    .select()
+    .from(agents)
+    .where(eq(agents.tenantId, tenantId))
+    .orderBy(desc(agents.createdAt))
+    .limit(limit);
 }
 
 export async function createAgent(data: NewAgent) {
@@ -20,12 +25,12 @@ export async function createAgent(data: NewAgent) {
   return created;
 }
 
-export async function updateAgentStatus(id: string, status: NewAgent['status']) {
+export async function updateAgentStatus(id: string, tenantId: string, status: NewAgent['status']) {
   const db = getDb();
   const [updated] = await db
     .update(agents)
     .set({ status, updatedAt: new Date() })
-    .where(eq(agents.id, id))
+    .where(and(eq(agents.id, id), eq(agents.tenantId, tenantId)))
     .returning();
   return updated;
 }

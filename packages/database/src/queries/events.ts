@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { getDb } from '../client';
 import { executionEvents, type NewExecutionEvent } from '../schema/events';
 
@@ -12,11 +12,11 @@ export async function insertEvent(data: Omit<NewExecutionEvent, 'id'>) {
  * Returns the full event timeline for an execution in chronological order.
  * Uses the bigint PK natural sort — no explicit orderBy needed, but added for clarity.
  */
-export async function getExecutionTimeline(executionId: string) {
+export async function getExecutionTimeline(executionId: string, tenantId: string) {
   const db = getDb();
   return db
     .select()
     .from(executionEvents)
-    .where(eq(executionEvents.executionId, executionId))
+    .where(and(eq(executionEvents.executionId, executionId), eq(executionEvents.tenantId, tenantId)))
     .orderBy(executionEvents.createdAt);
 }
