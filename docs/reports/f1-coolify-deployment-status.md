@@ -184,13 +184,13 @@ Revalidacion publica sin secreto interno:
 
 Cambios operacionales preparados para cerrar #288 cuando #286 despliegue Compose completo:
 
-- `docker-compose.yml` mantiene el servicio `runtime-worker` en el stack F1, sin inyectar `DATABASE_URL`, y ahora declara explicitamente `NODE_ENV=production`, `PORT=8000`, `RUNTIME_DATABASE_URL`, `API_URL`, `API_INTERNAL_SECRET`, Redis, LiteLLM (`LITELLM_BASE_URL`/`LITELLM_MASTER_KEY` y aliases compatibles), phase/version/commit y healthcheck propio en `/health/live`.
+- `docker-compose.yml` mantiene el servicio `runtime-worker` en el stack F1, sin inyectar `DATABASE_URL`, y ahora declara explicitamente `NODE_ENV=production`, `PORT=8000`, `RUNTIME_DATABASE_URL`, `API_URL`, `INTERNAL_SECRET`, Redis, LiteLLM (`LITELLM_BASE_URL`/`LITELLM_MASTER_KEY` y aliases compatibles), phase/version/commit y healthcheck propio en `/health/live`.
 - `runtime-worker` ahora resuelve su DSN operativo desde `RUNTIME_DATABASE_URL` en production/F1 close; `DATABASE_URL` queda solo como fallback no productivo para tests locales legacy.
 - `/health/status` queda como endpoint operativo interno para evidencia F1: worker type, env, phase, version, commit, conectividad DB usando `RUNTIME_DATABASE_URL` y ultimo heartbeat de `worker_heartbeats`.
 - `scripts/f1-runtime-handoff-smoke.sh` queda agregado para validar `/health/live`, `/health/ready`, `/health/status`, handoff HTTP F1 directo con `202 Accepted`, visibilidad del worker desde el API runtime surface y evidencia en `worker_heartbeats` cuando hay `DATABASE_URL` administrativo disponible; en el close gate ese `DATABASE_URL` debe ser `F1_HOST_DATABASE_URL` porque el smoke corre desde el host, no dentro de Compose.
 - `scripts/f1-verify.sh --close` ejecuta el smoke de runtime-worker despues de levantar el stack completo y antes del smoke publico estricto, usando `API_URL=http://localhost:3001/api`, `RUNTIME_WORKER_URL=http://localhost:8000` y `DATABASE_URL=$F1_HOST_DATABASE_URL` para evitar depender del DNS interno `postgres` desde el host.
 
-Esta actualizacion no marca `docs/reports/f1-close-report.md` como PASS. El cierre real requiere desplegar el Compose/resource correcto en Coolify, configurar secretos reales (`RUNTIME_API_SECRET`, `RUNTIME_POSTGRES_PASSWORD`, `RUNTIME_DATABASE_URL`, Redis y LiteLLM), ejecutar `scripts/f1-runtime-db-role-smoke.sh --strict`, ejecutar `pnpm f1:runtime-handoff-smoke` y finalmente `pnpm f1:close-gate` hasta PASS.
+Esta actualizacion no marca `docs/reports/f1-close-report.md` como PASS. El cierre real requiere desplegar el Compose/resource correcto en Coolify, configurar secretos reales (`INTERNAL_SECRET`, `RUNTIME_POSTGRES_PASSWORD`, `RUNTIME_DATABASE_URL`, Redis y LiteLLM), ejecutar `scripts/f1-runtime-db-role-smoke.sh --strict`, ejecutar `pnpm f1:runtime-handoff-smoke` y finalmente `pnpm f1:close-gate` hasta PASS.
 
 ## Actualizacion #290 — Agent Graph F1 public smoke (2026-06-07 01:28 UTC)
 

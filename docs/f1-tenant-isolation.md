@@ -45,7 +45,7 @@ pnpm test:tenant-isolation
 pnpm f1:close-gate
 ```
 
-The close gate sets safe test defaults for local compose (`JWT_SECRET`, `JWT_SIGNING_KEYS`, `RUNTIME_API_SECRET`, fake LLM keys) when they are absent. CI logs must never print secret values.
+The close gate sets safe test defaults for local compose (`JWT_SECRET`, `JWT_SIGNING_KEYS`, `INTERNAL_SECRET`, fake LLM keys) when they are absent. CI logs must never print secret values.
 
 ## Coolify staging
 
@@ -59,8 +59,7 @@ Set the existing Coolify variables below on the services that consume them. Docu
 | `REDIS_URL` | Redis/BullMQ connection for dispatch queues, ops, outbox, workers, and tests. | `redis://:<password>@redis:6379` | API, scheduler-worker, reclaimer-worker, outbox-publisher-worker, tests | Yes |
 | `JWT_SECRET` | HS256 JWT signing/validation secret used by guards and the test JWT helper. | `change-me-with-32-plus-random-chars` | API, tests | Yes |
 | `JWT_SIGNING_KEYS` | Active JWT verification key set for the API guard. | `[{"kid":"tenant-isolation-test","algorithm":"HS256","isActive":true,"secret":"change-me"}]` | API, tests | Yes when JWT auth uses key store |
-| `RUNTIME_API_SECRET` | Internal API-runtime authentication secret. | `runtime-secret-32-plus-random-chars` | API, runtime-worker | Yes for runtime calls |
-| `INTERNAL_SECRET` | Internal-service authentication alias/separate secret when enabled. | `internal-secret-32-plus-random-chars` | API/admin/internal routes, workers if configured | Optional unless enabled |
+| `INTERNAL_SECRET` | Canonical internal/admin and inter-service authentication secret. | `internal-secret-32-plus-random-chars` | API, runtime-worker, scheduler-worker, BullBoard | Yes |
 | `API_URL` | Internal/external API URL for workers or staging HTTP tests. | `https://octo-api-staging.example.invalid` | workers, staging tests | Optional for local DB-mode suite |
 | `RUNTIME_WORKER_URL` | Internal runtime-worker URL for scheduler handoff. | `http://runtime-worker:8000` | scheduler-worker, API if configured | Required for full stack smoke |
 | `LITELLM_MASTER_KEY` | LiteLLM gateway key. | `sk-staging-placeholder` | runtime-worker/LiteLLM integration | Required outside fake LLM mode |

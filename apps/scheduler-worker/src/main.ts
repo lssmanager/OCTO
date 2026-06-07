@@ -10,7 +10,18 @@ import { reconcileQueuedDispatchGaps } from './reconciliation/execution-reconcil
 const workerId = process.env['SCHEDULER_WORKER_ID'] ?? `scheduler-${process.pid}`;
 const leaseSeconds = Number(process.env['EXECUTION_LEASE_SECONDS'] ?? '90');
 const runtimeUrl = process.env['RUNTIME_WORKER_URL'] ?? 'http://localhost:8000/api/v1/execute';
-const runtimeSecret = process.env['API_INTERNAL_SECRET'] ?? 'dev-secret';
+function getRequiredInternalSecret(): string {
+  const secret = process.env['INTERNAL_SECRET'];
+  if (!secret || secret.length < 32) {
+    console.error(
+      'scheduler_config_invalid INTERNAL_SECRET must be set and at least 32 characters long'
+    );
+    process.exit(1);
+  }
+  return secret;
+}
+
+const runtimeSecret = getRequiredInternalSecret();
 const runtimeInvokeTimeoutMs = Number(process.env['RUNTIME_INVOKE_TIMEOUT_MS'] ?? '10000');
 const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
 const dispatchReconcilerIntervalMs = Number(

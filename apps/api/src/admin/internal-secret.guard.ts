@@ -25,6 +25,11 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { createLogger } from '@octo/observability';
+import {
+  getRequiredInternalSecret,
+  INTERNAL_SECRET_HEADER,
+  internalSecretsMatch,
+} from './internal-secret.config';
 
 /** Decorator key for marking public (unauthenticated) routes. */
 export const IS_PUBLIC_KEY = 'IS_PUBLIC';
@@ -32,6 +37,9 @@ export const IS_PUBLIC_KEY = 'IS_PUBLIC';
 /**
  * Marks a controller or handler as publicly accessible.
  * Routes decorated with @Public() skip InternalSecretGuard.
+ *
+ * Startup fails closed when INTERNAL_SECRET is missing or too short;
+ * NODE_ENV never disables this guard for protected routes.
  */
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
@@ -39,7 +47,11 @@ const logger = createLogger({ service: 'internal-secret-guard' });
 
 @Injectable()
 export class InternalSecretGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  private readonly expectedSecret: string;
+
+  constructor(private readonly reflector: Reflector) {
+    this.expectedSecret = getRequiredInternalSecret();
+  }
 
   canActivate(context: ExecutionContext): boolean {
     // Skip guard for @Public() routes
@@ -49,39 +61,20 @@ export class InternalSecretGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    // Development bypass
-    const nodeEnv = process.env['NODE_ENV'] ?? 'development';
-    if (nodeEnv === 'development') {
-      logger.warn({
-        event: 'guard_dev_bypass',
-        trace_id: 'security',
-        msg: 'InternalSecretGuard bypassed in development mode.',
-      });
-      return true;
-    }
+    const request = context
+      .switchToHttp()
+      .getRequest<{ headers: Record<string, string | string[] | undefined> }>();
+    const rawProvided = request.headers?.[INTERNAL_SECRET_HEADER];
+    const provided = Array.isArray(rawProvided) ? rawProvided[0] : rawProvided;
 
-    // Production enforcement
-    const expected = process.env['INTERNAL_SECRET'];
-    if (!expected) {
-      logger.error({
-        event: 'guard_no_secret_configured',
-        trace_id: 'security',
-        msg: 'INTERNAL_SECRET env var is not set. All requests will be rejected.',
-      });
-      throw new UnauthorizedException('Service misconfigured: INTERNAL_SECRET not set');
-    }
-
-    const request = context.switchToHttp().getRequest<{ headers: Record<string, string> }>();
-    const provided = request.headers?.['x-internal-secret'];
-
-    if (!provided || provided !== expected) {
+    if (!internalSecretsMatch(provided, this.expectedSecret)) {
       logger.warn({
         event: 'guard_unauthorized',
         trace_id: 'security',
-        msg: 'Rejected request — missing or invalid X-Internal-Secret header',
+        msg: `Rejected request — missing or invalid ${INTERNAL_SECRET_HEADER} header`,
         has_header: !!provided,
       });
-      throw new UnauthorizedException('Missing or invalid X-Internal-Secret header');
+      throw new UnauthorizedException(`Missing or invalid ${INTERNAL_SECRET_HEADER} header`);
     }
 
     return true;

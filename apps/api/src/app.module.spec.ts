@@ -2,11 +2,13 @@ import { Test } from '@nestjs/testing';
 import { describe, expect, it, beforeAll } from 'vitest';
 
 beforeAll(() => {
-  process.env['DATABASE_URL'] = process.env['DATABASE_URL'] ?? 'postgresql://octo:octo@localhost:5432/octo_test';
+  process.env['DATABASE_URL'] =
+    process.env['DATABASE_URL'] ?? 'postgresql://octo:octo@localhost:5432/octo_test';
   process.env['REDIS_URL'] = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
   process.env['JWT_SECRET'] = process.env['JWT_SECRET'] ?? 'dev-secret-dev-secret-dev-secret';
   process.env['LITELLM_MASTER_KEY'] = process.env['LITELLM_MASTER_KEY'] ?? 'litellm-master-key-dev';
-  process.env['RUNTIME_API_SECRET'] = process.env['RUNTIME_API_SECRET'] ?? 'runtime-secret-dev-runtime-secret-dev';
+  process.env['INTERNAL_SECRET'] =
+    process.env['INTERNAL_SECRET'] ?? 'internal-secret-dev-internal-secret-dev';
 });
 
 describe('Auth module DI wiring', () => {

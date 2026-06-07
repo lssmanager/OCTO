@@ -47,9 +47,11 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     environment:
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:?INTERNAL_SECRET is required}
       LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       LITELLM_HEALTH_ENDPOINT: ${LITELLM_HEALTH_ENDPOINT:-/health/readiness}
@@ -105,7 +107,7 @@ services:
       REDIS_URL: ${REDIS_URL}
       # Required for F1 durable execution writes; use a least-privilege runtime role.
       DATABASE_URL: ${DATABASE_URL}
-      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:?INTERNAL_SECRET is required}
     ports: ['8000:8000']
     depends_on:
       migrate:
@@ -168,7 +170,7 @@ services:
       REDIS_URL: ${REDIS_URL}
       # Required for scheduler dispatch/lease database updates.
       DATABASE_URL: ${DATABASE_URL}
-      API_INTERNAL_SECRET: ${RUNTIME_API_SECRET}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:?INTERNAL_SECRET is required}
       RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute}
     ports: ['3003:3003']
     depends_on:

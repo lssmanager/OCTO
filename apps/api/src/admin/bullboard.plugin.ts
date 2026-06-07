@@ -12,8 +12,8 @@
  * app.init() but BEFORE app.listen().
  *
  * Security:
- *   The Fastify plugin registers a preHandler hook that validates
- *   X-Internal-Secret in non-development environments.
+ *   The Fastify plugin registers a preHandler hook that always validates
+ *   X-Internal-Secret with the canonical INTERNAL_SECRET configuration.
  */
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
@@ -21,11 +21,18 @@ import { createBullBoard } from '@bull-board/api';
 import { FastifyAdapter as BullBoardFastifyAdapter } from '@bull-board/fastify';
 import { Queue } from 'bullmq';
 import { createBullMqConnection, MONITORED_QUEUES } from '@octo/queue';
+import {
+  getRequiredInternalSecret,
+  INTERNAL_SECRET_HEADER,
+  internalSecretsMatch,
+} from './internal-secret.config';
 
 export const BULLBOARD_BASEPATH = '/admin/queues/board';
 
 export class FastifyBullBoardPlugin {
   static async register(app: NestFastifyApplication): Promise<void> {
+    const expectedInternalSecret = getRequiredInternalSecret();
+
     // PATCH 2: single REDIS_URL — matches all other system consumers.
     // Uses the shared BullMQ connection helper to avoid pnpm type drift.
     const redisUrl = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
@@ -51,19 +58,18 @@ export class FastifyBullBoardPlugin {
       logLevel: 'warn',
     });
 
-    // Enforce X-Internal-Secret on all BullBoard routes outside development
+    // Enforce X-Internal-Secret on all BullBoard routes in every environment.
     fastifyInstance.addHook(
       'preHandler',
       async (
-        request: { url: string; headers: Record<string, string | undefined> },
+        request: { url: string; headers: Record<string, string | string[] | undefined> },
         reply: { code: (n: number) => { send: (b: unknown) => void } }
       ) => {
         if (!request.url.startsWith(BULLBOARD_BASEPATH)) return;
-        if (process.env['NODE_ENV'] === 'development') return;
 
-        const secret = request.headers['x-internal-secret'];
-        const expected = process.env['API_INTERNAL_SECRET'];
-        if (!expected || secret !== expected) {
+        const rawSecret = request.headers[INTERNAL_SECRET_HEADER];
+        const secret = Array.isArray(rawSecret) ? rawSecret[0] : rawSecret;
+        if (!internalSecretsMatch(secret, expectedInternalSecret)) {
           reply.code(401).send({ message: 'Invalid internal secret' });
         }
       }

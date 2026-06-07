@@ -265,7 +265,7 @@ export_close_defaults() {
   export JWT_SECRET="${JWT_SECRET:-dev-secret}"
   export JWT_KID="${JWT_KID:-dev-hs256}"
   export JWT_SIGNING_KEYS="${JWT_SIGNING_KEYS:-[{\"kid\":\"dev-hs256\",\"algorithm\":\"HS256\",\"isActive\":true,\"secret\":\"dev-secret\"}]}"
-  export RUNTIME_API_SECRET="${RUNTIME_API_SECRET:-test-runtime-secret-minimum-32-chars}"
+  export INTERNAL_SECRET="${INTERNAL_SECRET:-test-internal-secret-minimum-32-chars}"
   export LITELLM_MASTER_KEY="${LITELLM_MASTER_KEY:-sk-f1-close-gate-minimum-16}"
   export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-f1-close-gate-fake-openai-key}"
   export OCTO_TEST_LLM_FAKE="${OCTO_TEST_LLM_FAKE:-tool_echo}"
@@ -329,7 +329,7 @@ run_close_gate() {
   run_close_check "compose build for full F1 stack" compose build api web runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker
   run_close_check "Docker reproducibility and hardening gate" pnpm docker:verify-hardening
   run_close_check "compose up for full F1 stack" compose up -d api web runtime-worker scheduler-worker reclaimer-worker outbox-publisher-worker litellm
-  run_close_check "runtime-worker F1 health, 202 handoff and heartbeat smoke" env DATABASE_URL="$F1_HOST_DATABASE_URL" API_URL="http://localhost:3001/api" RUNTIME_WORKER_URL="http://localhost:8000" RUNTIME_API_SECRET="$RUNTIME_API_SECRET" bash scripts/f1-runtime-handoff-smoke.sh
+  run_close_check "runtime-worker F1 health, 202 handoff and heartbeat smoke" env DATABASE_URL="$F1_HOST_DATABASE_URL" API_URL="http://localhost:3001/api" RUNTIME_WORKER_URL="http://localhost:8000" INTERNAL_SECRET="$INTERNAL_SECRET" bash scripts/f1-runtime-handoff-smoke.sh
   run_close_check "F1 queue workers durable dispatch, reclaim and outbox smoke" env DATABASE_URL="$F1_HOST_DATABASE_URL" REDIS_URL="$F1_HOST_REDIS_URL" F1_HOST_DATABASE_URL="$F1_HOST_DATABASE_URL" F1_HOST_REDIS_URL="$F1_HOST_REDIS_URL" API_URL="http://localhost:3001/api" RUNTIME_PUBLIC_URL="http://localhost:8000" SCHEDULER_PUBLIC_URL="http://localhost:3003" OUTBOX_PUBLIC_URL="http://localhost:3010" RECLAIMER_PUBLIC_URL="http://localhost:3011" JWT_SECRET="$JWT_SECRET" JWT_KID="$JWT_KID" bash scripts/f1-queue-workers-smoke.sh
 
   REPORT_URLS+=("F1 public surface = web+api")

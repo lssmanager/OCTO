@@ -7,7 +7,7 @@ const postgresUrlMessage = 'DATABASE_URL must start with postgresql:// or postgr
 
 export const apiConfigSchema = z.object({
   // Server
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
   PORT: z.coerce.number().int().min(1024).max(65535).default(3001),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 
@@ -32,9 +32,9 @@ export const apiConfigSchema = z.object({
   LITELLM_BASE_URL: z.string().url().default('http://litellm:4000'),
   LITELLM_MASTER_KEY: z.string().min(16, 'LITELLM_MASTER_KEY must be at least 16 characters'),
 
-  // Runtime Worker inter-service
+  // Internal/admin and inter-service authentication
   RUNTIME_WORKER_URL: z.string().url().default('http://runtime-worker:8000'),
-  RUNTIME_API_SECRET: z.string().min(32, 'RUNTIME_API_SECRET must be at least 32 characters'),
+  INTERNAL_SECRET: z.string().min(32, 'INTERNAL_SECRET must be at least 32 characters'),
 
   // OTEL
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().default('http://otel-collector:4318'),

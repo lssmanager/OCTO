@@ -27,9 +27,9 @@ class Settings(BaseSettings):
     workers: int = Field(default=1, ge=1, le=16)
 
     # ── Control Plane inter-service secret ────────────────────────────────────
-    # NO default — must be explicitly set. Matches RUNTIME_API_SECRET on API side.
+    # NO default — must be explicitly set from canonical INTERNAL_SECRET.
     # Architecture Principle #1: Execution Plane never self-authorizes.
-    api_internal_secret: str = Field(min_length=32)
+    api_internal_secret: str = Field(min_length=32, validation_alias="INTERNAL_SECRET")
 
     # ── Control Plane URL ─────────────────────────────────────────────────────
     # Required for health check connectivity probe towards the API.

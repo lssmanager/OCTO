@@ -3,7 +3,7 @@ set -euo pipefail
 
 API_URL="${API_URL:-http://localhost:3001/api}"
 RUNTIME_WORKER_URL="${RUNTIME_WORKER_URL:-${RUNTIME_PUBLIC_URL:-http://localhost:8000}}"
-RUNTIME_API_SECRET="${RUNTIME_API_SECRET:-${API_INTERNAL_SECRET:-}}"
+INTERNAL_SECRET="${INTERNAL_SECRET:-}"
 DATABASE_URL="${DATABASE_URL:-}"
 TENANT_ID="${F1_HANDOFF_TENANT_ID:-tenant-f1-handoff-smoke}"
 AGENT_ID="${F1_HANDOFF_AGENT_ID:-agent-f1-handoff-smoke}"
@@ -15,7 +15,7 @@ log() { printf '\n==> %s\n' "$*"; }
 fail() { echo "F1 runtime handoff smoke failed: $*" >&2; exit 1; }
 
 require_secret() {
-  [[ -n "$RUNTIME_API_SECRET" ]] || fail "RUNTIME_API_SECRET or API_INTERNAL_SECRET is required"
+  [[ -n "$INTERNAL_SECRET" ]] || fail "INTERNAL_SECRET is required"
 }
 
 json_field() {
@@ -31,7 +31,7 @@ internal_get_json() {
   local url="$1" output="$2" status deadline
   deadline=$((SECONDS + TIMEOUT_SECONDS))
   while true; do
-    status="$(curl -sS -o "$output" -w '%{http_code}' -H "X-Internal-Secret: ${RUNTIME_API_SECRET}" "$url" || true)"
+    status="$(curl -sS -o "$output" -w '%{http_code}' -H "X-Internal-Secret: ${INTERNAL_SECRET}" "$url" || true)"
     if [[ "$status" == "200" ]]; then
       return 0
     fi
@@ -134,7 +134,7 @@ JSON
   log "posting direct F1 HTTP handoff to runtime-worker"
   status="$(curl -sS -o "$response_file" -w '%{http_code}' \
     -H 'Content-Type: application/json' \
-    -H "X-Internal-Secret: ${RUNTIME_API_SECRET}" \
+    -H "X-Internal-Secret: ${INTERNAL_SECRET}" \
     --data-binary "@$request_file" \
     "${RUNTIME_WORKER_URL%/}/api/v1/execute" || true)"
   [[ "$status" == "202" ]] || { cat "$response_file" >&2 || true; fail "runtime-worker handoff returned HTTP ${status:-curl-error}, expected 202"; }
