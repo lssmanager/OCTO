@@ -20,8 +20,19 @@ if (!baseUrl) {
   process.exit(1);
 }
 
+function matcherTargetsCritical(m: Matcher): boolean {
+  if (m.name !== 'severity' || !m.value) return false;
+  if (!m.isRegex) return m.value === 'critical';
+
+  try {
+    return new RegExp(m.value).test('critical');
+  } catch {
+    return false;
+  }
+}
+
 function hasCriticalMatcher(s: Silence): boolean {
-  return (s.matchers ?? []).some((m) => m.name === 'severity' && m.value === 'critical');
+  return (s.matchers ?? []).some(matcherTargetsCritical);
 }
 
 function hasApprovalLabel(s: Silence): boolean {
