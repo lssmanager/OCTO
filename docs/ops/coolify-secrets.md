@@ -200,7 +200,7 @@ Build Variables) on the compose resource:
 | `RUNTIME_POSTGRES_PASSWORD` | Runtime-worker least-privilege database role password, distinct from `POSTGRES_PASSWORD`. |
 | `LITELLM_MASTER_KEY` | LiteLLM master key used by API/runtime readiness and calls. |
 | `OPENAI_API_KEY` | Real provider key or a controlled fake key only when the F1 environment intentionally uses fake LLM mode. |
-| `OCTO_WEB_CONSOLE_TOKEN` | Server-side token for web console writes when enabled; never `NEXT_PUBLIC_*`. |
+| `OCTO_WEB_CONSOLE_TOKEN` | Do not configure on the public web service for F1 console writes; graph reads/writes must use authenticated `octo_console_token` sessions, and secrets must never be exposed as `NEXT_PUBLIC_*`. |
 
 Configure these non-secret metadata variables for F1 close deploys. They may be
 Build Variables and must also be available to compose service runtime environments
