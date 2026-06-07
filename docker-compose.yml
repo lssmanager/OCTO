@@ -161,8 +161,8 @@ services:
   # ────────────────────────────────────────────────────────────────
   # PRESENTATION PLANE — Next.js Web Console
   # F1 public surface: / = Agent Graph Console, /status = foundation status.
-  # The web service talks to the API over the internal octonet network so
-  # console tokens remain server-side and are never exposed as NEXT_PUBLIC_*.
+  # The web service talks to the API over the internal octonet network and
+  # forwards only authenticated browser session tokens to Agent Graph APIs.
   # ────────────────────────────────────────────────────────────────
   web:
     build:
@@ -180,8 +180,6 @@ services:
       PORT: 3000
       API_URL: ${WEB_API_URL:-http://api:3001/api}
       RUNTIME_WORKER_URL: ${WEB_RUNTIME_WORKER_URL:-http://runtime-worker:8000}
-      OCTO_WEB_CONSOLE_TOKEN: ${OCTO_WEB_CONSOLE_TOKEN:-}
-      OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES: ${OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES:-false}
       BUILD_VERSION: ${BUILD_VERSION:-0.1.0-f1}
       BUILD_COMMIT: ${BUILD_COMMIT:-${SOURCE_COMMIT:-local}}
       BUILD_PHASE: ${BUILD_PHASE:-F1}

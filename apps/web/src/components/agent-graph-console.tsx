@@ -136,7 +136,7 @@ export function AgentGraphConsole({ initialNodes, writesConfigured, initialError
 
   async function submit(action: ConsoleAction, body: Record<string, unknown> = {}, ids: { nodeId?: string; agentId?: string } = {}) {
     if (!writesConfigured) {
-      setError('Authenticated F1 Agent Graph console writes are not configured; reads remain available through the server projection.');
+      setError('Authenticated F1 Agent Graph console writes require a valid console session.');
       return;
     }
     setLoading(true);
