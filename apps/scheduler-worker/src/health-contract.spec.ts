@@ -15,12 +15,15 @@ const SENSITIVE_PUBLIC_TERMS = [
 ];
 
 describe('scheduler health contract', () => {
-  it('keeps public probe bodies minimal', () => {
+  it('keeps public probe bodies minimal and non-enumerative', () => {
     expect(schedulerPublicProbeBody(true)).toBe('ready');
     expect(schedulerPublicProbeBody(false)).toBe('not_ready');
-    expect(
-      SENSITIVE_PUBLIC_TERMS.some((term) => schedulerPublicProbeBody(true).includes(term))
-    ).toBe(false);
+
+    for (const body of [schedulerPublicProbeBody(true), schedulerPublicProbeBody(false)]) {
+      expect(SENSITIVE_PUBLIC_TERMS.some((term) => body.includes(term))).toBe(false);
+      expect(body).not.toMatch(/\d/);
+      expect(() => JSON.parse(body)).toThrow();
+    }
   });
 
   it('builds detailed status only for the authenticated internal surface', () => {

@@ -52,26 +52,33 @@ export class FastifyBullBoardPlugin {
 
     const fastifyInstance = app.getHttpAdapter().getInstance() as any;
 
-    // Register the bull-board UI as a Fastify plugin
-    await fastifyInstance.register(serverAdapter.registerPlugin(), {
-      prefix: BULLBOARD_BASEPATH,
-      logLevel: 'warn',
-    });
+    // Register BullBoard inside an authenticated Fastify encapsulation.
+    // The onRequest hook is declared before BullBoard mounts its handlers/assets,
+    // so the admin UI fails closed before any route can return useful content.
+    await fastifyInstance.register(
+      async (securedBullBoard: {
+        addHook: (
+          name: 'onRequest',
+          hook: (
+            request: { headers: Record<string, string | string[] | undefined> },
+            reply: { code: (n: number) => { send: (b: unknown) => void } }
+          ) => Promise<void>
+        ) => void;
+        register: (plugin: unknown) => Promise<void>;
+      }) => {
+        securedBullBoard.addHook('onRequest', async (request, reply) => {
+          const rawSecret = request.headers[INTERNAL_SECRET_HEADER];
+          const secret = Array.isArray(rawSecret) ? rawSecret[0] : rawSecret;
+          if (!internalSecretsMatch(secret, expectedInternalSecret)) {
+            reply.code(401).send({ message: 'Invalid internal secret' });
+          }
+        });
 
-    // Enforce X-Internal-Secret on all BullBoard routes in every environment.
-    fastifyInstance.addHook(
-      'preHandler',
-      async (
-        request: { url: string; headers: Record<string, string | string[] | undefined> },
-        reply: { code: (n: number) => { send: (b: unknown) => void } }
-      ) => {
-        if (!request.url.startsWith(BULLBOARD_BASEPATH)) return;
-
-        const rawSecret = request.headers[INTERNAL_SECRET_HEADER];
-        const secret = Array.isArray(rawSecret) ? rawSecret[0] : rawSecret;
-        if (!internalSecretsMatch(secret, expectedInternalSecret)) {
-          reply.code(401).send({ message: 'Invalid internal secret' });
-        }
+        await securedBullBoard.register(serverAdapter.registerPlugin());
+      },
+      {
+        prefix: BULLBOARD_BASEPATH,
+        logLevel: 'warn',
       }
     );
   }
