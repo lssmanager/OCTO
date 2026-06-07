@@ -39,8 +39,13 @@ async def execute_tool_call(
     name = str(tool_call.get("name", ""))
     args, input_error = _parse_args(tool_call.get("arguments_json") or "{}")
     invocation_call_id = str(tool_call.get("id") or "noid")
-    idem = f"{execution_id}:{step_index}:{name}:{invocation_call_id}"
     args_hash = _hash_json(args)
+    idem = _build_idempotency_key(
+        execution_id=execution_id,
+        tool_name=name,
+        tool_call_id=invocation_call_id,
+        arguments_hash=args_hash,
+    )
 
     duplicate = await _find_existing_invocation(conn, tenant_id, idem)
     if duplicate is not None:
@@ -77,7 +82,7 @@ async def execute_tool_call(
             policy=decision,
             arguments_hash=args_hash,
         )
-        return _failure(name, "TOOL_INPUT_INVALID", input_error, retryable=False)
+        return _failure(name, "TOOL_INPUT_INVALID", input_error, retryable=False, tool_call_id=invocation_call_id)
 
     if decision.outcome == "deny":
         await _insert_invocation(
@@ -102,6 +107,7 @@ async def execute_tool_call(
             decision.code or "TOOL_NOT_ALLOWED",
             decision.reason or "TOOL_NOT_ALLOWED",
             retryable=False,
+            tool_call_id=invocation_call_id,
         )
 
     if decision.outcome == "approval_required":
@@ -152,7 +158,7 @@ async def execute_tool_call(
             str(e),
             json.dumps({"code": "TOOL_INPUT_INVALID", "message": str(e)}),
         )
-        return _failure(name, "TOOL_INPUT_INVALID", str(e), retryable=False)
+        return _failure(name, "TOOL_INPUT_INVALID", str(e), retryable=False, tool_call_id=invocation_call_id)
 
     start = time.perf_counter()
     try:
@@ -173,7 +179,7 @@ async def execute_tool_call(
             inv_id,
             json.dumps({"code": "TOOL_TIMEOUT", "message": "tool timeout"}),
         )
-        return _failure(name, "TOOL_TIMEOUT", "tool timeout", retryable=True)
+        return _failure(name, "TOOL_TIMEOUT", "tool timeout", retryable=True, tool_call_id=invocation_call_id)
     except ToolError as exc:
         await conn.execute(
             """
@@ -187,7 +193,7 @@ async def execute_tool_call(
             str(exc),
             json.dumps({"code": exc.code, "message": str(exc), "retryable": exc.retryable}),
         )
-        return _failure(name, exc.code, str(exc), retryable=exc.retryable)
+        return _failure(name, exc.code, str(exc), retryable=exc.retryable, tool_call_id=invocation_call_id)
 
     try:
         validate(instance=result, schema=defn.output_schema)  # type: ignore[union-attr]
@@ -205,7 +211,7 @@ async def execute_tool_call(
             json.dumps(result),
             json.dumps({"code": "TOOL_OUTPUT_INVALID", "message": str(e)}),
         )
-        return _failure(name, "TOOL_OUTPUT_INVALID", str(e), retryable=False)
+        return _failure(name, "TOOL_OUTPUT_INVALID", str(e), retryable=False, tool_call_id=invocation_call_id)
 
     duration = int((time.perf_counter() - start) * 1000)
     await conn.execute(
@@ -220,7 +226,17 @@ async def execute_tool_call(
         json.dumps(result),
         duration,
     )
-    return {"type": "tool_result", "tool_name": name, "status": "succeeded", "result": result}
+    return {
+        "type": "tool_result",
+        "tool_name": name,
+        "tool_call_id": invocation_call_id,
+        "status": "succeeded",
+        "result": result,
+    }
+
+
+def _build_idempotency_key(*, execution_id: str, tool_name: str, tool_call_id: str, arguments_hash: str) -> str:
+    return f"{execution_id}:{tool_name}:{tool_call_id}:{arguments_hash}"
 
 
 def _parse_args(args_raw: Any) -> tuple[dict[str, Any], str | None]:
@@ -289,7 +305,15 @@ def _result_from_existing_invocation(row: Mapping[str, Any], fallback_name: str)
     )
 
 
-def _failure(name: str, code: str, message: str, *, retryable: bool, duplicate: bool = False) -> dict[str, Any]:
+def _failure(
+    name: str,
+    code: str,
+    message: str,
+    *,
+    retryable: bool,
+    duplicate: bool = False,
+    tool_call_id: str | None = None,
+) -> dict[str, Any]:
     result: dict[str, Any] = {
         "type": "tool_result",
         "tool_name": name,
@@ -300,6 +324,8 @@ def _failure(name: str, code: str, message: str, *, retryable: bool, duplicate: 
     }
     if duplicate:
         result["duplicate"] = True
+    if tool_call_id is not None:
+        result["tool_call_id"] = tool_call_id
     return result
 
 
