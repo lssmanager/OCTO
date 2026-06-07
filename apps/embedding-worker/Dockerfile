@@ -9,9 +9,9 @@
 
 # syntax=docker/dockerfile:1.4
 
-FROM node:22.12.0-alpine3.21 AS base
+FROM node:22.22.2-alpine3.22 AS base
 RUN apk add --no-cache libc6-compat
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+RUN npm install -g pnpm@11.2.2
 ENV PNPM_HOME="/root/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
@@ -41,7 +41,14 @@ ARG BUILD_TIME=unknown
 
 RUN pnpm turbo build --filter=@octo/embedding-worker
 
-FROM node:22.12.0-alpine3.21 AS runner
+FROM node:22.22.2-alpine3.22 AS runner
+# The runtime image does not need npm; removing it drops bundled npm dependency scan findings.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/npm-cli.js \
+    /usr/local/bin/npx-cli.js \
+    /usr/local/bin/npm-prefix.js
 RUN apk add --no-cache libc6-compat curl
 
 RUN addgroup --system --gid 1001 octo \

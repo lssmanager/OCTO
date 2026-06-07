@@ -12,7 +12,7 @@ FROM node:22.22.2-alpine3.22 AS builder
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@11.2.2 --activate
+RUN npm install -g pnpm@11.2.2
 
 # Copy workspace manifests
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
@@ -41,6 +41,13 @@ RUN pnpm --filter @octo/reclaimer-worker build
 
 # ---- runner ----
 FROM node:22.22.2-alpine3.22 AS runner
+# The runtime image does not need npm; removing it drops bundled npm dependency scan findings.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/npm-cli.js \
+    /usr/local/bin/npx-cli.js \
+    /usr/local/bin/npm-prefix.js
 ARG SOURCE_COMMIT=local
 ARG BUILD_VERSION=0.1.0-f1
 ARG BUILD_COMMIT=${SOURCE_COMMIT}

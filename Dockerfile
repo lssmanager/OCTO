@@ -81,15 +81,14 @@ RUN mkdir -p /app/deploy/packages/database \
 # Stage 3: runner — minimal final image
 # ─────────────────────────────────────────────
 FROM node:22.22.2-alpine3.22 AS runner
-RUN apk add --no-cache libc6-compat curl
-# The runtime image does not need npm; removing it drops the bundled scan findings.
+# The runtime image does not need npm; removing it drops bundled npm dependency scan findings.
 RUN rm -rf /usr/local/lib/node_modules/npm \
     /usr/local/bin/npm \
     /usr/local/bin/npx \
     /usr/local/bin/npm-cli.js \
     /usr/local/bin/npx-cli.js \
     /usr/local/bin/npm-prefix.js
-
+RUN apk add --no-cache libc6-compat curl
 RUN addgroup --system --gid 1001 octo \
  && adduser --system --uid 1001 --ingroup octo octo
 

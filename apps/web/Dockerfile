@@ -6,9 +6,9 @@
 # ─────────────────────────────────────────────
 # Stage 0: base
 # ─────────────────────────────────────────────
-FROM node:22.12.0-alpine3.21 AS base
+FROM node:22.22.2-alpine3.22 AS base
 RUN apk add --no-cache libc6-compat
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+RUN npm install -g pnpm@11.2.2
 WORKDIR /app
 
 # ─────────────────────────────────────────────
@@ -34,7 +34,14 @@ RUN pnpm turbo build --filter=@octo/web
 # ─────────────────────────────────────────────
 # Stage 3: runner — Next.js standalone
 # ─────────────────────────────────────────────
-FROM node:22.12.0-alpine3.21 AS runner
+FROM node:22.22.2-alpine3.22 AS runner
+# The runtime image does not need npm; removing it drops bundled npm dependency scan findings.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/npm-cli.js \
+    /usr/local/bin/npx-cli.js \
+    /usr/local/bin/npm-prefix.js
 RUN apk add --no-cache libc6-compat curl
 
 # Non-root user
