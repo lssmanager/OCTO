@@ -5,6 +5,8 @@ import {
   jsonb,
   index,
   pgEnum,
+  uniqueIndex,
+  foreignKey,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { hierarchyNodes } from './hierarchy-nodes';
@@ -34,6 +36,17 @@ export const agents = pgTable(
     parentIdx: index('agents_parent_id_idx').on(t.parentId),
     hierarchyNodeIdx: index('agents_hierarchy_node_id_idx').on(t.hierarchyNodeId),
     statusIdx: index('agents_status_idx').on(t.status),
+    tenantIdIdUnique: uniqueIndex('agents_tenant_id_id_unique').on(t.tenantId, t.id),
+    parentTenantFk: foreignKey({
+      name: 'agents_parent_tenant_fk',
+      columns: [t.tenantId, t.parentId],
+      foreignColumns: [t.tenantId, t.id],
+    }),
+    hierarchyNodeTenantFk: foreignKey({
+      name: 'agents_hierarchy_node_tenant_fk',
+      columns: [t.tenantId, t.hierarchyNodeId],
+      foreignColumns: [hierarchyNodes.tenantId, hierarchyNodes.id],
+    }),
   })
 );
 

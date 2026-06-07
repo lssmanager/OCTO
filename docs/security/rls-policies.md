@@ -13,6 +13,11 @@ PostgreSQL RLS is the final tenant isolation boundary for F1.
 - tool_invocations
 - approvals
 - outbox_events
+- execution_events
+- execution_dlq
+- idempotency_keys
+- outbox_publish_dlq
+- hierarchy_nodes
 
 ## Policy pattern
 
@@ -58,6 +63,16 @@ SELECT set_config('app.current_tenant', $1, true)
 ```
 
 `$1` must be parameterized (no SQL string concatenation).
+
+
+## Tenant-scoped integrity contract
+
+RLS filters visibility, but foreign keys and uniqueness must also be tenant-scoped so a child row cannot point at or probe a parent row from another tenant.
+
+- Every tenant table with externally referenced IDs keeps a unique `(tenant_id, id)` key.
+- Child-to-parent relationships use composite foreign keys that include the child `tenant_id` and the referenced parent `tenant_id`.
+- Hierarchy relationships (`hierarchy_nodes.parent_id` and `agents.hierarchy_node_id`) follow the same composite FK rule.
+- Backward-compatible hardening migrations may add these FKs as `NOT VALID`; PostgreSQL still enforces them for new writes while existing legacy drift can be audited and cleaned separately before validation.
 
 ## BYPASSRLS policy
 

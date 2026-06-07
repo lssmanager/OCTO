@@ -6,6 +6,7 @@ import {
   index,
   pgEnum,
   uniqueIndex,
+  foreignKey,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
@@ -53,6 +54,12 @@ export const hierarchyNodes = pgTable(
       t.parentId,
       t.slug
     ),
+    tenantIdIdUnique: uniqueIndex('hierarchy_nodes_tenant_id_id_unique').on(t.tenantId, t.id),
+    parentTenantFk: foreignKey({
+      name: 'hierarchy_nodes_parent_tenant_fk',
+      columns: [t.tenantId, t.parentId],
+      foreignColumns: [t.tenantId, t.id],
+    }),
   })
 );
 

@@ -36,6 +36,104 @@
       "when": 1779537660004,
       "tag": "202605230004_f1_rls_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779537660005,
+      "tag": "0001_initial",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779537660006,
+      "tag": "0004_shocking_yellow_claw",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779537660007,
+      "tag": "202605240001_f1_outbox_publisher_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779537660008,
+      "tag": "202605280001_canonical_execution_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779537660009,
+      "tag": "202605280002_worker_heartbeats",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779537660010,
+      "tag": "202605290001_f2_hierarchy_nodes",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1779537660011,
+      "tag": "202605290002_outbox_dead_lettered_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1779537660012,
+      "tag": "202605300001_f1_tool_invocation_governance",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1779537660013,
+      "tag": "202605300002_f1_runtime_db_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1779537660014,
+      "tag": "202605300003_f1_lease_token_reclaim_dlq",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1779537660015,
+      "tag": "202606010001_f1_tenant_isolation_rls_expansion",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1779537660016,
+      "tag": "202606060001_f1_hierarchy_node_capabilities",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1779537660017,
+      "tag": "202606070001_outbox_worker_heartbeat",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1779537660018,
+      "tag": "202606070002_tenant_scoped_integrity_hardening",
+      "breakpoints": true
     }
   ]
 }
