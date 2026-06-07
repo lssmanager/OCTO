@@ -1,11 +1,17 @@
+import { notFound } from 'next/navigation';
 import { SystemStatus } from '@/components/system-status';
 import { PhaseProgress } from '@/components/phase-progress';
 import { RecentEvents } from '@/components/recent-events';
 import { getSystemHealth } from '@/lib/health';
+import { hasDashboardAccess } from '@/lib/dashboard-access';
 
 export const revalidate = 30;
 
 export default async function StatusPage() {
+  if (!(await hasDashboardAccess())) {
+    notFound();
+  }
+
   const health = await getSystemHealth();
 
   const overallOk = health.api.status === 'ok' && health.runtime.status === 'ok';

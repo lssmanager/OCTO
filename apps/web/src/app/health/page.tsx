@@ -1,9 +1,15 @@
+import { notFound } from 'next/navigation';
 import { ServiceDetailCard } from '@/components/service-detail-card';
 import { getSystemHealth } from '@/lib/health';
+import { hasDashboardAccess } from '@/lib/dashboard-access';
 
 export const revalidate = 30;
 
 export default async function HealthPage() {
+  if (!(await hasDashboardAccess())) {
+    notFound();
+  }
+
   const health = await getSystemHealth();
 
   return (
