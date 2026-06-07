@@ -9,6 +9,15 @@ import { HealthService } from '../health/health.service';
 import type { Queue } from 'bullmq';
 import { createQueue, QUEUE_NAMES, type HealthJobData } from '@octo/queue';
 
+const QUEUE_STATS_TIMEOUT_MS = 500;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms)),
+  ]);
+}
+
 @Injectable()
 export class OpsService implements OnModuleInit {
   private healthQueue!: Queue<HealthJobData>;
@@ -57,13 +66,16 @@ export class OpsService implements OnModuleInit {
 
   private async getQueueStats(): Promise<OpsStatus['queues']> {
     try {
-      const [waiting, active, completed, failed, delayed] = await Promise.all([
-        this.healthQueue.getWaitingCount(),
-        this.healthQueue.getActiveCount(),
-        this.healthQueue.getCompletedCount(),
-        this.healthQueue.getFailedCount(),
-        this.healthQueue.getDelayedCount(),
-      ]);
+      const [waiting, active, completed, failed, delayed] = await withTimeout(
+        Promise.all([
+          this.healthQueue.getWaitingCount(),
+          this.healthQueue.getActiveCount(),
+          this.healthQueue.getCompletedCount(),
+          this.healthQueue.getFailedCount(),
+          this.healthQueue.getDelayedCount(),
+        ]),
+        QUEUE_STATS_TIMEOUT_MS
+      );
       return {
         [QUEUE_NAMES.HEALTH]: { waiting, active, completed, failed, delayed },
       };
