@@ -191,3 +191,31 @@ Cambios operacionales preparados para cerrar #288 cuando #286 despliegue Compose
 - `scripts/f1-verify.sh --close` ejecuta el smoke de runtime-worker despues de levantar el stack completo y antes del smoke publico estricto, usando `API_URL=http://localhost:3001/api`, `RUNTIME_WORKER_URL=http://localhost:8000` y `DATABASE_URL=$F1_HOST_DATABASE_URL` para evitar depender del DNS interno `postgres` desde el host.
 
 Esta actualizacion no marca `docs/reports/f1-close-report.md` como PASS. El cierre real requiere desplegar el Compose/resource correcto en Coolify, configurar secretos reales (`RUNTIME_API_SECRET`, `RUNTIME_POSTGRES_PASSWORD`, `RUNTIME_DATABASE_URL`, Redis y LiteLLM), ejecutar `scripts/f1-runtime-db-role-smoke.sh --strict`, ejecutar `pnpm f1:runtime-handoff-smoke` y finalmente `pnpm f1:close-gate` hasta PASS.
+
+## Actualizacion #290 — Agent Graph F1 public smoke (2026-06-07 01:28 UTC)
+
+Revalidacion contra `https://agents.socialstudies.cloud/api`:
+
+- Commit desplegado observado: `2be6f23359ef97ef40dc7efe7b6256d17b0ec993` (`GET /api/health/version`).
+- Comando ejecutado: `API_URL=https://agents.socialstudies.cloud/api pnpm f1:agent-graph-smoke`.
+- Resultado: **FAIL pendiente de redeploy/configuracion**, no PASS.
+- Primer fallo observado: el smoke ya valida tokens con `kid` inexistente, firma incorrecta y token valido sin scopes; la primera comprobacion que requiere una respuesta JWT/RBAC esperada falla porque el despliegue publico devuelve `401` con `Missing or invalid X-Internal-Secret header` en `GET /api/v1/agents/graph` antes de llegar a los guards JWT/RBAC.
+
+Lectura tecnica:
+
+- Las rutas Agent Graph estan registradas, pero el despliegue publico actualmente las trata como rutas internas por el `InternalSecretGuard` global.
+- La correccion preparada marca `AgentController` como ruta API publica solamente frente al guard de secreto interno, manteniendo intactos `JwtAuthGuard`, `TenantScopeGuard`, `RbacGuard` y `HierarchyAccessGuard`.
+- No se deshabilita JWT, no se aceptan tokens sin firma, no se elimina aislamiento por tenant y no se agrega funcionalidad F2.
+- Despues de desplegar este cambio, el smoke publico debe ejecutarse con un `JWT_SECRET`/`JWT_KID` compatible con `JWT_SIGNING_KEYS` activo en Coolify. Si el secreto real difiere del default local, el comando esperado es `API_URL=https://agents.socialstudies.cloud/api JWT_SECRET=<runtime-secret> JWT_KID=<kid-valido> pnpm f1:agent-graph-smoke`.
+
+Cobertura del smoke actualizada:
+
+- `401` sin credenciales.
+- `401` con `kid` inexistente.
+- `401` con firma/secret incorrecto.
+- `403` con token valido pero sin scopes.
+- CRUD `Agency -> Department -> Workspace -> Agent`.
+- Proyeccion de graph, detalle de node, herencia de `effectiveCapabilities` y `effectivePolicies.toolPolicy` con deny prevaleciendo sobre allow heredado.
+- Patch de node, patch de Agent, activation/archive, reparent valido, jerarquia invalida, self-parent/cycle, parent inexistente, rechazo cross-tenant y delete del Agent seleccionado.
+
+Estado de cierre #290: pendiente hasta que el commit con esta correccion este desplegado y `API_URL=https://agents.socialstudies.cloud/api pnpm f1:agent-graph-smoke` termine con exit code `0` usando credenciales JWT reales del despliegue.

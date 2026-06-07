@@ -61,7 +61,7 @@ The close gate records each required check in `docs/reports/f1-close-report.md`:
 
 The close gate fails if documentation, compose or smoke disagree about this web+API contract; CLOSE mode must build and start the `web` service and must not silently fall back to an API-only surface.
 
-18. Agent Graph F1 smoke through `scripts/f1-agent-graph-smoke.sh` against `/api/v1/agents/*`, covering full `Agency → Department → Workspace → Agent` creation, inherited `effectiveCapabilities`, inherited tool `allow`/`deny` policy projection, rejection of Agent creation through `/nodes`, node detail, patch, activation/archive, valid Department/Workspace/Agent reparent, invalid hierarchy/self-parent/cycle/missing-parent/cross-tenant failures and selected Agent deletion.
+18. Agent Graph F1 smoke through `scripts/f1-agent-graph-smoke.sh` against `/api/v1/agents/*`, covering JWT rejection for missing credentials, unknown `kid`, bad signature and missing scopes; full `Agency → Department → Workspace → Agent` creation; inherited `effectiveCapabilities`; inherited tool `allow`/`deny` policy projection; rejection of Agent creation through `/nodes`; node detail; patch; activation/archive; valid Department/Workspace/Agent reparent; invalid hierarchy/self-parent/cycle/missing-parent/cross-tenant failures; and selected Agent deletion.
 
 ## Lint boundaries and format decision
 
