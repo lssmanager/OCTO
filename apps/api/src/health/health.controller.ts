@@ -13,7 +13,6 @@ import { HealthService, type HealthStatus } from './health.service';
  * GET /api/health/ping   — enqueues a health job to validate BullMQ end-to-end
  * GET /api/health/version — service version, commit, phase
  */
-@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
@@ -29,6 +28,7 @@ export class HealthController {
    * Liveness probe.
    * Returns 200 as long as the process is alive.
    */
+  @Public()
   @Get('live')
   @HttpCode(HttpStatus.OK)
   live(): { status: string; timestamp: string } {
@@ -60,6 +60,7 @@ export class HealthController {
    * Returns 200 when bootstrap is complete.
    * Returns 503 while bootstrap is in progress.
    */
+  @Public()
   @Get('start')
   async start(@Res({ passthrough: true }) res: FastifyReply): Promise<Record<string, unknown>> {
     const booted = this.healthService.isBootstrapped();
