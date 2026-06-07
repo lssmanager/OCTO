@@ -32,8 +32,15 @@ describe('AgentController', () => {
     expect(service.create).toHaveBeenCalledWith('tenant-1', 'user-1', expect.anything());
     expect(service.list).toHaveBeenCalledWith('tenant-1', 25);
     expect(service.versions).toHaveBeenCalledWith('tenant-1', 'a1', 10);
-    expect(service.graph).toHaveBeenCalledWith('tenant-1');
+    expect(service.graph).toHaveBeenCalledWith('tenant-1', { agencyIds: undefined, workspaceIds: undefined });
     expect(service.createNode).toHaveBeenCalledWith('tenant-1', expect.anything());
+  });
+
+  it('propagates hierarchy scope from jwt principal', async () => {
+    const service = { graph: vi.fn(async () => []) } as any;
+    const c = new AgentController(service);
+    await c.graph({ user: { tenant_id: 'tenant-1', sub: 'user-1', agency_ids: ['agency-1'], workspace_ids: ['workspace-1'] } } as any);
+    expect(service.graph).toHaveBeenCalledWith('tenant-1', { agencyIds: ['agency-1'], workspaceIds: ['workspace-1'] });
   });
 
   it('throws when principal missing', async () => {

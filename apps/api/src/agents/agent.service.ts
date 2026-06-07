@@ -46,6 +46,7 @@ export type HierarchyNodeDto = {
 
 export type PatchHierarchyNodeDto = Partial<Omit<HierarchyNodeDto, 'level'>>;
 export type ReparentHierarchyNodeDto = { parentId: string | null };
+export type HierarchyAccessFilter = { agencyIds?: string[] | undefined; workspaceIds?: string[] | undefined };
 
 export type AgentGraphNode = {
   id: string;
@@ -99,7 +100,7 @@ export class AgentService {
       listAgentVersions: (tenantId: string, agentId: string, limit: number) => Promise<AgentVersionRecord[]>;
       getLatestAgentVersion: (tenantId: string, agentId: string) => Promise<AgentVersionRecord | null>;
       resolveEffectivePolicySnapshot: (tenantId: string, agentId: string) => Promise<Record<string, unknown> | null>;
-      getAgentGraph: (tenantId: string) => Promise<AgentGraphNode[]>;
+      getAgentGraph: (tenantId: string, access?: HierarchyAccessFilter) => Promise<AgentGraphNode[]>;
       getHierarchyNodeDetail: (tenantId: string, nodeId: string) => Promise<AgentGraphNode | null>;
       createHierarchyNodeTx: (tenantId: string, input: HierarchyNodeDto) => Promise<AgentGraphNode>;
       patchHierarchyNodeTx: (tenantId: string, nodeId: string, input: PatchHierarchyNodeDto) => Promise<AgentGraphNode | null>;
@@ -120,7 +121,7 @@ export class AgentService {
     return this.policyResolver.resolveEffectivePolicies(tenantId, id);
   }
   async getLatestVersionSnapshot(tenantId: string, id: string) { const v = await this.repo.getLatestAgentVersion(tenantId, id); if (!v) throw new NotFoundException('agent_not_found'); return v; }
-  graph(tenantId: string) { return this.repo.getAgentGraph(tenantId); }
+  graph(tenantId: string, access: HierarchyAccessFilter = {}) { return this.repo.getAgentGraph(tenantId, access); }
 
   async nodeDetail(tenantId: string, nodeId: string) {
     const node = await this.repo.getHierarchyNodeDetail(tenantId, nodeId);
