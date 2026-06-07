@@ -10,7 +10,7 @@ export function agentGraphApiUrl(path: string, baseUrl = normalizeAgentGraphApiU
 }
 
 const API_URL = normalizeAgentGraphApiUrl();
-const CONSOLE_COOKIE = 'octo_console_token';
+export const CONSOLE_COOKIE = 'octo_console_token';
 
 type ConsoleAction = 'createNode' | 'createAgent' | 'patchNode' | 'reparentNode' | 'patchAgent' | 'deleteAgent' | 'archiveNode' | 'setActivationState';
 
@@ -37,19 +37,14 @@ function jsonError(status: number, message: string) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function getReadToken() {
-  return process.env['OCTO_WEB_CONSOLE_TOKEN'];
+function getSessionToken(req: NextRequest) {
+  return req.cookies.get(CONSOLE_COOKIE)?.value;
 }
 
-function getWriteToken(req: NextRequest) {
-  const sessionToken = req.cookies.get(CONSOLE_COOKIE)?.value;
-  if (sessionToken) return sessionToken;
-
-  if (process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'] === 'true') {
-    return process.env['OCTO_WEB_CONSOLE_TOKEN'];
-  }
-
-  return undefined;
+function sameOriginRequest(req: NextRequest) {
+  const origin = req.headers.get('origin');
+  if (!origin) return true;
+  return origin === req.nextUrl.origin;
 }
 
 async function forward(path: string, init: RequestInit) {
@@ -67,10 +62,10 @@ async function forward(path: string, init: RequestInit) {
   return NextResponse.json(body, { status: res.status });
 }
 
-export async function GET() {
-  const token = getReadToken();
+export async function GET(req: NextRequest) {
+  const token = getSessionToken(req);
   if (!token) {
-    return jsonError(503, 'OCTO_WEB_CONSOLE_TOKEN is not configured for the authenticated F1 Agent Graph projection.');
+    return jsonError(401, 'F1 Agent Graph console reads require an authenticated octo_console_token session cookie.');
   }
 
   try {
@@ -85,12 +80,13 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const token = getWriteToken(req);
+  if (!sameOriginRequest(req)) {
+    return jsonError(403, 'F1 Agent Graph console writes require a same-origin request.');
+  }
+
+  const token = getSessionToken(req);
   if (!token) {
-    return jsonError(
-      403,
-      'F1 Agent Graph console writes require an httpOnly octo_console_token session cookie or OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES=true with server-side OCTO_WEB_CONSOLE_TOKEN.'
-    );
+    return jsonError(401, 'F1 Agent Graph console writes require an authenticated octo_console_token session cookie.');
   }
 
   let payload: ConsolePayload;

@@ -286,8 +286,6 @@ export_close_defaults() {
   export F1_PUBLIC_URL="${F1_PUBLIC_URL:-$F1_WEB_URL}"
   export API_URL="${API_URL:-http://localhost:3001/api}"
   export API_ROOT_URL="${API_ROOT_URL:-http://localhost:3001}"
-  export OCTO_WEB_CONSOLE_TOKEN="${OCTO_WEB_CONSOLE_TOKEN:-}"
-  export OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES="${OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES:-false}"
 }
 
 compose() {

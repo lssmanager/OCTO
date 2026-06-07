@@ -56,8 +56,9 @@ Use separate resources only when the routing layer is explicit:
 | `https://agents.socialstudies.cloud/api/*` or a dedicated API hostname | `api` | `3001` |
 
 The web resource must receive a server-side `API_URL` that points at the API
-origin including `/api`. Console tokens such as `OCTO_WEB_CONSOLE_TOKEN` must
-remain server-side environment variables and must not use the `NEXT_PUBLIC_`
+origin including `/api`. The public web service must authenticate console
+access with an `httpOnly` `octo_console_token` session cookie rather than a
+privileged server-side proxy token, and secrets must not use the `NEXT_PUBLIC_`
 prefix.
 
 ## Expected public results

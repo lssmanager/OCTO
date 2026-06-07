@@ -33,19 +33,18 @@ export type AgentGraphData = {
   fetchedAt: string;
 };
 
-export function writesConfigured() {
-  return Boolean(process.env['OCTO_WEB_CONSOLE_TOKEN'] && process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'] === 'true');
+export function writesConfigured(sessionToken?: string) {
+  return Boolean(sessionToken);
 }
 
-export async function getAgentGraph(): Promise<AgentGraphData> {
-  const token = process.env['OCTO_WEB_CONSOLE_TOKEN'];
-  if (!token) {
-    return { nodes: [], error: 'OCTO_WEB_CONSOLE_TOKEN is not configured for the authenticated console projection.', fetchedAt: new Date().toISOString() };
+export async function getAgentGraph(sessionToken?: string): Promise<AgentGraphData> {
+  if (!sessionToken) {
+    return { nodes: [], error: 'Sign in with an authenticated console session to view the F1 Agent Graph projection.', fetchedAt: new Date().toISOString() };
   }
   try {
     const res = await fetch(`${API_URL}/v1/agents/graph`, {
-      headers: { authorization: `Bearer ${token}` },
-      next: { revalidate: 15 },
+      headers: { authorization: `Bearer ${sessionToken}` },
+      cache: 'no-store',
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return { nodes: [], error: `API returned HTTP ${res.status}`, fetchedAt: new Date().toISOString() };
