@@ -3,7 +3,7 @@ ALTER TABLE "outbox_events"
   ADD COLUMN IF NOT EXISTS "last_error" text;
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_outbox_events_publish_attempts_nonnegative') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_outbox_events_publish_attempts_nonnegative' AND conrelid = 'public.outbox_events'::regclass) THEN
     ALTER TABLE "outbox_events"
       ADD CONSTRAINT "ck_outbox_events_publish_attempts_nonnegative"
       CHECK ("publish_attempts" >= 0);
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS "outbox_publish_dlq" (
 );
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_outbox_publish_dlq_attempts_nonnegative') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_outbox_publish_dlq_attempts_nonnegative' AND conrelid = 'public.outbox_publish_dlq'::regclass) THEN
     ALTER TABLE "outbox_publish_dlq"
       ADD CONSTRAINT "ck_outbox_publish_dlq_attempts_nonnegative"
       CHECK ("attempts" >= 0);

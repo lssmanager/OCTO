@@ -68,10 +68,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS "approvals_tenant_id_id_unique" ON "approvals"
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "hierarchy_nodes_tenant_id_id_unique" ON "hierarchy_nodes" ("tenant_id", "id");
 --> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "outbox_events_tenant_id_id_unique" ON "outbox_events" ("tenant_id", "id");
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "outbox_publish_dlq_tenant_id_id_unique" ON "outbox_publish_dlq" ("tenant_id", "id");
+--> statement-breakpoint
 DO $$
 BEGIN
   IF to_regclass('public.agents') IS NOT NULL THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agents_parent_tenant_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agents_parent_tenant_fk' AND conrelid = 'public.agents'::regclass) THEN
       ALTER TABLE "agents"
         ADD CONSTRAINT "agents_parent_tenant_fk"
         FOREIGN KEY ("tenant_id", "parent_id") REFERENCES "agents" ("tenant_id", "id")
@@ -79,7 +83,7 @@ BEGIN
     END IF;
 
     IF to_regclass('public.hierarchy_nodes') IS NOT NULL
-       AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agents_hierarchy_node_tenant_fk') THEN
+       AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agents_hierarchy_node_tenant_fk' AND conrelid = 'public.agents'::regclass) THEN
       ALTER TABLE "agents"
         ADD CONSTRAINT "agents_hierarchy_node_tenant_fk"
         FOREIGN KEY ("tenant_id", "hierarchy_node_id") REFERENCES "hierarchy_nodes" ("tenant_id", "id")
@@ -88,7 +92,7 @@ BEGIN
   END IF;
 
   IF to_regclass('public.agent_versions') IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agent_versions_agent_tenant_fk') THEN
+     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agent_versions_agent_tenant_fk' AND conrelid = 'public.agent_versions'::regclass) THEN
     ALTER TABLE "agent_versions"
       ADD CONSTRAINT "agent_versions_agent_tenant_fk"
       FOREIGN KEY ("tenant_id", "agent_id") REFERENCES "agents" ("tenant_id", "id")
@@ -96,14 +100,14 @@ BEGIN
   END IF;
 
   IF to_regclass('public.executions') IS NOT NULL THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'executions_agent_tenant_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'executions_agent_tenant_fk' AND conrelid = 'public.executions'::regclass) THEN
       ALTER TABLE "executions"
         ADD CONSTRAINT "executions_agent_tenant_fk"
         FOREIGN KEY ("tenant_id", "agent_id") REFERENCES "agents" ("tenant_id", "id")
         ON DELETE RESTRICT NOT VALID;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'executions_agent_version_tenant_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'executions_agent_version_tenant_fk' AND conrelid = 'public.executions'::regclass) THEN
       ALTER TABLE "executions"
         ADD CONSTRAINT "executions_agent_version_tenant_fk"
         FOREIGN KEY ("tenant_id", "agent_version_id") REFERENCES "agent_versions" ("tenant_id", "id")
@@ -112,7 +116,7 @@ BEGIN
   END IF;
 
   IF to_regclass('public.execution_steps') IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_steps_execution_tenant_fk') THEN
+     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_steps_execution_tenant_fk' AND conrelid = 'public.execution_steps'::regclass) THEN
     ALTER TABLE "execution_steps"
       ADD CONSTRAINT "execution_steps_execution_tenant_fk"
       FOREIGN KEY ("tenant_id", "execution_id") REFERENCES "executions" ("tenant_id", "id")
@@ -120,14 +124,14 @@ BEGIN
   END IF;
 
   IF to_regclass('public.execution_checkpoints') IS NOT NULL THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_checkpoints_execution_tenant_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_checkpoints_execution_tenant_fk' AND conrelid = 'public.execution_checkpoints'::regclass) THEN
       ALTER TABLE "execution_checkpoints"
         ADD CONSTRAINT "execution_checkpoints_execution_tenant_fk"
         FOREIGN KEY ("tenant_id", "execution_id") REFERENCES "executions" ("tenant_id", "id")
         ON DELETE CASCADE NOT VALID;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_checkpoints_parent_tenant_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_checkpoints_parent_tenant_fk' AND conrelid = 'public.execution_checkpoints'::regclass) THEN
       ALTER TABLE "execution_checkpoints"
         ADD CONSTRAINT "execution_checkpoints_parent_tenant_fk"
         FOREIGN KEY ("tenant_id", "parent_checkpoint_id") REFERENCES "execution_checkpoints" ("tenant_id", "id")
@@ -136,7 +140,7 @@ BEGIN
   END IF;
 
   IF to_regclass('public.execution_checkpoint_writes') IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_checkpoint_writes_checkpoint_tenant_fk') THEN
+     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_checkpoint_writes_checkpoint_tenant_fk' AND conrelid = 'public.execution_checkpoint_writes'::regclass) THEN
     ALTER TABLE "execution_checkpoint_writes"
       ADD CONSTRAINT "execution_checkpoint_writes_checkpoint_tenant_fk"
       FOREIGN KEY ("tenant_id", "checkpoint_id") REFERENCES "execution_checkpoints" ("tenant_id", "id")
@@ -144,14 +148,14 @@ BEGIN
   END IF;
 
   IF to_regclass('public.approvals') IS NOT NULL THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'approvals_execution_tenant_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'approvals_execution_tenant_fk' AND conrelid = 'public.approvals'::regclass) THEN
       ALTER TABLE "approvals"
         ADD CONSTRAINT "approvals_execution_tenant_fk"
         FOREIGN KEY ("tenant_id", "execution_id") REFERENCES "executions" ("tenant_id", "id")
         ON DELETE CASCADE NOT VALID;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'approvals_step_tenant_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'approvals_step_tenant_fk' AND conrelid = 'public.approvals'::regclass) THEN
       ALTER TABLE "approvals"
         ADD CONSTRAINT "approvals_step_tenant_fk"
         FOREIGN KEY ("tenant_id", "step_id") REFERENCES "execution_steps" ("tenant_id", "id")
@@ -160,21 +164,21 @@ BEGIN
   END IF;
 
   IF to_regclass('public.tool_invocations') IS NOT NULL THEN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_execution_tenant_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_execution_tenant_fk' AND conrelid = 'public.tool_invocations'::regclass) THEN
       ALTER TABLE "tool_invocations"
         ADD CONSTRAINT "tool_invocations_execution_tenant_fk"
         FOREIGN KEY ("tenant_id", "execution_id") REFERENCES "executions" ("tenant_id", "id")
         ON DELETE CASCADE NOT VALID;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_step_tenant_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_step_tenant_fk' AND conrelid = 'public.tool_invocations'::regclass) THEN
       ALTER TABLE "tool_invocations"
         ADD CONSTRAINT "tool_invocations_step_tenant_fk"
         FOREIGN KEY ("tenant_id", "step_id") REFERENCES "execution_steps" ("tenant_id", "id")
         ON DELETE RESTRICT NOT VALID;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_approval_tenant_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_approval_tenant_fk' AND conrelid = 'public.tool_invocations'::regclass) THEN
       ALTER TABLE "tool_invocations"
         ADD CONSTRAINT "tool_invocations_approval_tenant_fk"
         FOREIGN KEY ("tenant_id", "approval_id") REFERENCES "approvals" ("tenant_id", "id")
@@ -183,7 +187,7 @@ BEGIN
   END IF;
 
   IF to_regclass('public.execution_events') IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_events_execution_tenant_fk') THEN
+     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_events_execution_tenant_fk' AND conrelid = 'public.execution_events'::regclass) THEN
     ALTER TABLE "execution_events"
       ADD CONSTRAINT "execution_events_execution_tenant_fk"
       FOREIGN KEY ("tenant_id", "execution_id") REFERENCES "executions" ("tenant_id", "id")
@@ -191,15 +195,24 @@ BEGIN
   END IF;
 
   IF to_regclass('public.execution_dlq') IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_dlq_execution_tenant_fk') THEN
+     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'execution_dlq_execution_tenant_fk' AND conrelid = 'public.execution_dlq'::regclass) THEN
     ALTER TABLE "execution_dlq"
       ADD CONSTRAINT "execution_dlq_execution_tenant_fk"
       FOREIGN KEY ("tenant_id", "execution_id") REFERENCES "executions" ("tenant_id", "id")
       ON DELETE RESTRICT NOT VALID;
   END IF;
 
+  IF to_regclass('public.outbox_publish_dlq') IS NOT NULL
+     AND to_regclass('public.outbox_events') IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'outbox_publish_dlq_event_tenant_fk' AND conrelid = 'public.outbox_publish_dlq'::regclass) THEN
+    ALTER TABLE "outbox_publish_dlq"
+      ADD CONSTRAINT "outbox_publish_dlq_event_tenant_fk"
+      FOREIGN KEY ("tenant_id", "outbox_event_id") REFERENCES "outbox_events" ("tenant_id", "id")
+      ON DELETE RESTRICT NOT VALID;
+  END IF;
+
   IF to_regclass('public.hierarchy_nodes') IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'hierarchy_nodes_parent_tenant_fk') THEN
+     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'hierarchy_nodes_parent_tenant_fk' AND conrelid = 'public.hierarchy_nodes'::regclass) THEN
     ALTER TABLE "hierarchy_nodes"
       ADD CONSTRAINT "hierarchy_nodes_parent_tenant_fk"
       FOREIGN KEY ("tenant_id", "parent_id") REFERENCES "hierarchy_nodes" ("tenant_id", "id")

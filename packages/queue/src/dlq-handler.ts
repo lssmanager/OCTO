@@ -24,12 +24,15 @@ import type { QueueName } from './queue-names';
 export interface DlqHandlerOptions {
   /** Called after a job is moved to DLQ. Use for alerting or metrics. */
   onDeadJob?: (job: Job) => Promise<void>;
+  /** Test hook for injecting the already-open source queue. */
+  sourceQueue?: Pick<Queue, 'getJob' | 'close'>;
 }
 
 export class DlqHandler {
   private readonly events: QueueEvents;
   private readonly dlq: Queue;
-  private readonly redisUrl: string;
+  private readonly sourceQueue: Pick<Queue, 'getJob' | 'close'>;
+  private readonly ownsSourceQueue: boolean;
 
   constructor(
     private readonly sourceQueueName: QueueName | string,
@@ -38,7 +41,12 @@ export class DlqHandler {
     private readonly options: DlqHandlerOptions = {}
   ) {
     this.dlq = dlq;
-    this.redisUrl = redisUrl;
+    this.sourceQueue =
+      options.sourceQueue ??
+      new Queue(sourceQueueName, {
+        connection: createBullMqConnection(redisUrl),
+      });
+    this.ownsSourceQueue = !options.sourceQueue;
     this.events = new QueueEvents(sourceQueueName, {
       connection: createBullMqConnection(redisUrl),
     });
@@ -54,16 +62,11 @@ export class DlqHandler {
     _prev: string | undefined
   ): Promise<void> {
     try {
-      const sourceQueue = new Queue(this.sourceQueueName, {
-        connection: createBullMqConnection(this.redisUrl),
-      });
-
-      const job = await sourceQueue.getJob(jobId);
+      const job = await this.sourceQueue.getJob(jobId);
       if (!job) return;
 
       const maxAttempts = job.opts.attempts ?? 1;
       if (job.attemptsMade < maxAttempts) {
-        await sourceQueue.close();
         return;
       }
 
@@ -91,8 +94,6 @@ export class DlqHandler {
       if (this.options.onDeadJob) {
         await this.options.onDeadJob(job);
       }
-
-      await sourceQueue.close();
     } catch (err) {
       console.error(`[octo:dlq] Failed to move job ${jobId} to DLQ:`, err);
     }
@@ -100,5 +101,8 @@ export class DlqHandler {
 
   async close(): Promise<void> {
     await this.events.close();
+    if (this.ownsSourceQueue) {
+      await this.sourceQueue.close();
+    }
   }
 }
