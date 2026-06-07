@@ -5,7 +5,7 @@ import { Header } from '@/components/header';
 
 export const metadata: Metadata = {
   title: 'OCTO — Operational Console',
-  description: 'F2 Agent Graph Console — Hierarchy System',
+  description: 'OCTO operational status console',
   robots: 'noindex,nofollow',
 };
 

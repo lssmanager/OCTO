@@ -3,7 +3,7 @@ import { withTenantTx, agents, agentVersions, hierarchyNodes } from '@octo/datab
 import { randomUUID } from 'crypto';
 import type { HierarchyActivationState, HierarchyLevel } from '@octo/contracts';
 import { validateHierarchyRelation, type HierarchyPolicyNode } from './agent-policy-resolver.service';
-import type { AgentGraphNode, HierarchyNodeDto, PatchAgentDto, PatchHierarchyNodeDto, ReparentHierarchyNodeDto } from './agent.service';
+import type { AgentGraphNode, HierarchyAccessFilter, HierarchyNodeDto, PatchAgentDto, PatchHierarchyNodeDto, ReparentHierarchyNodeDto } from './agent.service';
 
 const DEFAULT_HIERARCHY_LEVEL: HierarchyLevel = 'agent';
 const F2_LEVELS = new Set<HierarchyLevel>(['agency', 'department', 'workspace', 'agent']);
@@ -174,8 +174,8 @@ export class PostgresAgentRepo {
     });
   }
 
-  async getAgentGraph(tenantId: string) {
-    return withTenantTx(tenantId, async (tx: any) => this.buildGraph(tx, tenantId));
+  async getAgentGraph(tenantId: string, access: HierarchyAccessFilter = {}) {
+    return withTenantTx(tenantId, async (tx: any) => this.buildGraph(tx, tenantId, access));
   }
 
   async getHierarchyNodeDetail(tenantId: string, nodeId: string) {
@@ -336,9 +336,24 @@ export class PostgresAgentRepo {
     return null;
   }
 
-  private async buildGraph(tx: any, tenantId: string): Promise<AgentGraphNode[]> {
-    const nodeRows = await tx.select().from(hierarchyNodes).where(eq(hierarchyNodes.tenantId, tenantId));
-    const agentRows = await tx.select().from(agents).where(eq(agents.tenantId, tenantId));
+  private async buildGraph(tx: any, tenantId: string, access: HierarchyAccessFilter = {}): Promise<AgentGraphNode[]> {
+    const allNodeRows = await tx.select().from(hierarchyNodes).where(eq(hierarchyNodes.tenantId, tenantId));
+    const allById = new Map(allNodeRows.map((node: any) => [node.id, node]));
+    const scopedTo = (node: any, scopeIds: string[] | undefined): boolean => {
+      if (!scopeIds?.length) return true;
+      let cursor: any | undefined = node;
+      const allowed = new Set(scopeIds);
+      const visited = new Set<string>();
+      while (cursor && !visited.has(cursor.id)) {
+        if (allowed.has(cursor.id)) return true;
+        visited.add(cursor.id);
+        cursor = cursor.parentId ? allById.get(cursor.parentId) : undefined;
+      }
+      return false;
+    };
+    const nodeRows = allNodeRows.filter((node: any) => scopedTo(node, access.agencyIds) && scopedTo(node, access.workspaceIds));
+    const visibleNodeIds = new Set(nodeRows.map((node: any) => node.id));
+    const agentRows = (await tx.select().from(agents).where(eq(agents.tenantId, tenantId))).filter((agent: any) => !agent.hierarchyNodeId || visibleNodeIds.has(agent.hierarchyNodeId));
     const agentByNode = new Map(agentRows.filter((agent: any) => agent.hierarchyNodeId).map((agent: any) => [agent.hierarchyNodeId, agent]));
     const rawById = new Map(nodeRows.map((node: any) => [node.id, node]));
 

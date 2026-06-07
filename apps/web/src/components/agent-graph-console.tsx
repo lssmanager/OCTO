@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { AgentGraphNode } from '@/lib/agent-graph';
 
-type Props = { initialNodes: AgentGraphNode[]; apiUrl: string; tokenConfigured: boolean; initialError?: string | undefined };
+type Props = { initialNodes: AgentGraphNode[]; apiUrl: string; initialError?: string | undefined };
 type Level = AgentGraphNode['level'];
 
 const nextLevel: Record<Level, Level | null> = { agency: 'department', department: 'workspace', workspace: 'agent', agent: null };
@@ -50,7 +50,7 @@ function TreeNode({ node, selectedId, onSelect, depth = 0 }: { node: AgentGraphN
   );
 }
 
-export function AgentGraphConsole({ initialNodes, apiUrl, tokenConfigured, initialError }: Props) {
+export function AgentGraphConsole({ initialNodes, apiUrl, initialError }: Props) {
   const [nodes, setNodes] = useState(initialNodes);
   const [selected, setSelected] = useState<AgentGraphNode | null>(firstNode(initialNodes));
   const [error, setError] = useState(initialError ?? '');
@@ -68,7 +68,7 @@ export function AgentGraphConsole({ initialNodes, apiUrl, tokenConfigured, initi
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${apiUrl}/v1/agents/graph`, { headers: tokenConfigured ? { authorization: `Bearer ${process.env['NEXT_PUBLIC_OCTO_CONSOLE_TOKEN'] ?? ''}` } : {} });
+      const res = await fetch(`${apiUrl}/v1/agents/graph`);
       if (!res.ok) throw new Error(`Graph refresh failed with HTTP ${res.status}`);
       const fresh = (await res.json()) as AgentGraphNode[];
       setNodes(fresh);
@@ -81,27 +81,8 @@ export function AgentGraphConsole({ initialNodes, apiUrl, tokenConfigured, initi
     }
   }
 
-  async function submit(path: string, body: Record<string, unknown>) {
-    if (!tokenConfigured) {
-      setError('Authenticated console token is not configured; writes are disabled.');
-      return;
-    }
-    const token = process.env['NEXT_PUBLIC_OCTO_CONSOLE_TOKEN'];
-    if (!token) {
-      setError('NEXT_PUBLIC_OCTO_CONSOLE_TOKEN is required for browser writes in this deployment.');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${apiUrl}${path}`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error(`Write failed with HTTP ${res.status}`);
-      const created = (await res.json()) as { id?: string; hierarchyNodeId?: string };
-      await refresh(created.hierarchyNodeId ?? created.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Write failed');
-      setLoading(false);
-    }
+  async function submit(_path: string, _body: Record<string, unknown>) {
+    setError('Browser writes are disabled in the unauthenticated web console. Use the authenticated API instead.');
   }
 
   const childLevel = selectedParent ? nextLevel[selectedParent.level] : null;

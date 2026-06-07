@@ -71,7 +71,7 @@ export function Header() {
         <nav className="hidden sm:flex items-center gap-6">
           {(
             [
-              ['/', 'Agent Graph'],
+              ['/', 'Status'],
               ['/status', 'Status'],
               ['/health', 'Health'],
               ['/version', 'Version'],
