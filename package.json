@@ -44,6 +44,7 @@
     "test:observability": "vitest run apps/api/src/ops/f1-observability.integration.test.ts apps/api/src/ops/ops-v1.service.spec.ts",
     "f1:observability": "pnpm test:observability",
     "security:vitest": "node scripts/verify-vitest-security.mjs",
+    "security:secret-scan-gate": "bash scripts/verify-secret-scan-gate.sh",
     "f1:agent-graph-smoke": "bash scripts/f1-agent-graph-smoke.sh",
     "f2:agent-graph-smoke": "bash scripts/f2-agent-graph-smoke.sh",
     "f1:workspace-type-gate": "pnpm --filter @octo/events build && pnpm --filter @octo/database build && pnpm --filter @octo/api typecheck && pnpm build && pnpm typecheck",

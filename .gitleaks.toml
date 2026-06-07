@@ -5,7 +5,12 @@
 
 title = "OCTO Gitleaks Config"
 
-[allowlist]
+[extend]
+  # Preserve the full built-in Gitleaks ruleset; local entries below only add
+  # narrowly scoped allowlists for known false-positive paths.
+  useDefault = true
+
+[[allowlists]]
   description = "Allow test fixtures, acceptance log stubs, and docs"
   paths = [
     # F0 acceptance evidence — placeholder log stubs, not real secrets
@@ -19,3 +24,17 @@ title = "OCTO Gitleaks Config"
     # Placeholder tokens used in test fixtures and docs
     '''PLACEHOLDER''',
   ]
+
+[[rules]]
+  id = "generic-api-key"
+
+  [[rules.allowlists]]
+    description = "Allow runtime-worker tests to pass the configured internal secret variable as an HTTP header; no literal secret is stored."
+    condition = "AND"
+    regexTarget = "line"
+    paths = [
+      '''apps/runtime-worker/tests/unit/test_execution_canonical_path\.py''',
+    ]
+    regexes = [
+      '''x-internal-secret''',
+    ]
