@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.adapters.llm.provider_params import allowlisted_provider_params, resolve_provider
+from app.adapters.llm.provider_params import allowlisted_provider_params, canonical_model_identifier, resolve_provider
 from app.cache.qdrant_semantic_cache import QdrantSemanticCache
 from app.contracts.llm import CanonicalChatMessage, ChatCompletionRequest
 from app.tools.descriptor_hash import compute_descriptor_hash
@@ -79,3 +79,20 @@ def test_tool_idempotency_key_is_stable_across_reclaim() -> None:
     )
 
     assert first == second
+
+
+def test_canonical_model_identifier_closes_known_alias_bypass() -> None:
+    assert canonical_model_identifier("gpt-4.1-mini") == "openai/gpt-4.1-mini"
+    assert canonical_model_identifier("openai/gpt-4.1-mini") == "openai/gpt-4.1-mini"
+
+
+def test_semantic_cache_key_separates_tenant_model_and_prompt_shape() -> None:
+    cache = QdrantSemanticCache()
+    base = _request("same")
+    other_tenant = base.model_copy(update={"tenant_id": "tenant-b"})
+    other_model = base.model_copy(update={"model": "anthropic/claude-3-5-sonnet"})
+    other_shape = base.model_copy(update={"output_schema": {"type": "object"}})
+
+    assert cache._key(base) != cache._key(other_tenant)
+    assert cache._key(base) != cache._key(other_model)
+    assert cache._key(base) != cache._key(other_shape)

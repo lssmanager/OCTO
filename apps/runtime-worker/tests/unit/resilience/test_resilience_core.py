@@ -18,6 +18,7 @@ from app.resilience.models import CircuitBreakerConfig, CircuitBreakerState, Mod
 class FakeRedis:
     def __init__(self) -> None:
         self.d: dict[str, str] = {}
+        self.eval_calls: list[tuple] = []
 
     async def get(self, k: str):
         return self.d.get(k)
@@ -37,6 +38,10 @@ class FakeRedis:
 
     async def delete(self, k: str):
         self.d.pop(k, None)
+
+    async def eval(self, *args):
+        self.eval_calls.append(args)
+        return 1
 
 
 @pytest.mark.asyncio
@@ -60,6 +65,7 @@ async def test_rate_limiter_tenant_scoped() -> None:
     rl = TokenBucketRateLimiter(FakeRedis())
     ok = await rl.acquire("tenantA", "openai/gpt-4", 5, 10, 1.0)
     assert ok
+    assert rl.redis.eval_calls
 
 
 @pytest.mark.asyncio

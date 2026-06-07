@@ -91,3 +91,10 @@ def test_prompt_cache_key_added() -> None:
     req = _req(prompt_cache=PromptCachePolicy(enabled=True, strategy="provider"))
     payload = adapter._build_payload(req)
     assert "prompt_cache_key" in payload
+
+
+def test_build_payload_sends_canonical_model_for_known_alias() -> None:
+    adapter = object.__new__(LiteLLMAdapter)
+    payload = adapter._build_payload(_req(model="gpt-4.1-mini", provider_params={"top_p": 0.5}))
+    assert payload["model"] == "openai/gpt-4.1-mini"
+    assert payload["top_p"] == 0.5

@@ -45,7 +45,8 @@ class TokenBucketRateLimiter:
 
     def _mk(self, tenant_id: str, model: str, name: str) -> str:
         sm = re.sub(r"[^a-zA-Z0-9_.-]", "_", model)
-        return f"octo:{tenant_id}:rl:{sm}:{name}"
+        st = re.sub(r"[^a-zA-Z0-9_.-]", "_", tenant_id)
+        return f"octo:{st}:rl:{sm}:{name}"
 
     async def acquire(
         self,
@@ -58,8 +59,15 @@ class TokenBucketRateLimiter:
         tk = self._mk(tenant_id, model, "tokens")
         lk = self._mk(tenant_id, model, "last_refill")
         now = time.time()
-        if hasattr(self.redis, "eval"):
-            result = await self.redis.eval(
+        eval_fn = getattr(self.redis, "eval", None)
+        if eval_fn is None:
+            if self.logger is not None:
+                self.logger.error("rate_limiter_non_atomic_backend")
+            if self.metrics is not None:
+                self.metrics.increment("octo_rate_limiter_fail_closed_total", {"reason": "missing_eval"})
+            return False
+        try:
+            result = await eval_fn(
                 _BUCKET_SCRIPT,
                 2,
                 tk,
@@ -70,18 +78,10 @@ class TokenBucketRateLimiter:
                 tokens_needed,
                 120,
             )
-            return bool(int(result))
-
-        tokens_raw = await self.redis.get(tk)
-        last_raw = await self.redis.get(lk)
-        tokens = float(tokens_raw) if tokens_raw is not None else float(capacity)
-        last = float(last_raw) if last_raw is not None else now
-        tokens = min(float(capacity), tokens + (now - last) * refill_rate_per_second)
-        if tokens < tokens_needed:
-            await self.redis.set(tk, tokens, ex=120)
-            await self.redis.set(lk, now, ex=120)
+        except Exception:
+            if self.logger is not None:
+                self.logger.exception("rate_limiter_atomic_eval_failed")
+            if self.metrics is not None:
+                self.metrics.increment("octo_rate_limiter_fail_closed_total", {"reason": "eval_failed"})
             return False
-        tokens -= tokens_needed
-        await self.redis.set(tk, tokens, ex=120)
-        await self.redis.set(lk, now, ex=120)
-        return True
+        return bool(int(result))
