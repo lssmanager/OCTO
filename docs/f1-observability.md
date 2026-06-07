@@ -134,7 +134,7 @@ F1 exposes or defines operational metrics for execution counts and latencies, qu
 | `REDIS_URL` | Redis/BullMQ for queues, metrics, scheduler/reclaimer/outbox. | `redis://:<password>@redis:6379` | API/workers/tests |
 | `API_URL` | API base URL used by operators/tests. | `https://octo-api-staging.example.invalid` | runbook/tests |
 | `RUNTIME_WORKER_URL` | Internal runtime-worker execution endpoint. | `http://runtime-worker:8000/api/v1/execute` | scheduler-worker |
-| `RUNTIME_API_SECRET` / `INTERNAL_SECRET` | Internal service authentication. | `32-plus-random-chars` | API/workers |
+| `INTERNAL_SECRET` | Internal/admin and inter-service authentication. | `32-plus-random-chars` | API/workers |
 | `LITELLM_MASTER_KEY` | LiteLLM gateway authentication. | `sk-staging-placeholder` | runtime-worker/LiteLLM |
 | `OTEL_ENABLED` | Enable OTEL tracing when collector exists. | `true` | all services |
 | `OTEL_SERVICE_NAME` / `OTEL_SERVICE_NAME_WORKER` | OTEL service naming. | `octo-api`, `octo-runtime-worker` | services |

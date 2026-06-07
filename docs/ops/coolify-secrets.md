@@ -54,7 +54,7 @@ gate falla ante un token de repositorio y ante variables genéricas como
 | `REDIS_PASSWORD` | ✅ Environment Variable | Credencial de Redis |
 | `JWT_SECRET` | ✅ Environment Variable | Secret criptográfico |
 | `LITELLM_MASTER_KEY` | ✅ Environment Variable | API key de LLM |
-| `RUNTIME_API_SECRET` | ✅ Environment Variable | Inter-service secret |
+| `INTERNAL_SECRET` | ✅ Environment Variable | Inter-service secret |
 | `POSTGRES_PASSWORD` | ✅ Environment Variable | Credencial de base de datos |
 | `LOG_LEVEL` | ✅ Environment Variable | Configuración runtime |
 | `DB_POOL_MAX` | ✅ Environment Variable | Configuración runtime |
@@ -127,7 +127,7 @@ debes repetir el procedimiento.
 - Cualquier `*_URL` que contenga usuario/contraseña en el connection string
 - Cualquier `*_PASSWORD`, `*_SECRET`, `*_KEY`, `*_TOKEN`
 - `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `LITELLM_MASTER_KEY`,
-  `RUNTIME_API_SECRET`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`
+  `INTERNAL_SECRET`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`
 
 ---
 
@@ -196,9 +196,9 @@ Build Variables) on the compose resource:
 | `REDIS_PASSWORD` | Strong generated Redis password; compose injects it into `REDIS_URL`. |
 | `JWT_SECRET` | Strong HMAC secret for compatibility with F1 smoke JWT generation. |
 | `JWT_SIGNING_KEYS` | Preferred key-store JSON when using explicit signing keys; must align with `JWT_SECRET`/`JWT_KID` used by smoke credentials. |
-| `RUNTIME_API_SECRET` | Shared internal secret for API ↔ runtime/scheduler calls. |
 | `RUNTIME_POSTGRES_PASSWORD` | Runtime-worker least-privilege database role password, distinct from `POSTGRES_PASSWORD`. |
 | `LITELLM_MASTER_KEY` | LiteLLM master key used by API/runtime readiness and calls. |
+| `INTERNAL_SECRET` | Canonical 32+ character internal/admin and inter-service secret shared by API, runtime-worker, scheduler-worker, and BullBoard. |
 | `OPENAI_API_KEY` | Real provider key or a controlled fake key only when the F1 environment intentionally uses fake LLM mode. |
 | `OCTO_WEB_CONSOLE_TOKEN` | Do not configure on the public web service for F1 console writes; graph reads/writes must use authenticated `octo_console_token` sessions, and secrets must never be exposed as `NEXT_PUBLIC_*`. |
 
