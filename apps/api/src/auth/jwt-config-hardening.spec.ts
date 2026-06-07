@@ -11,6 +11,24 @@ const validConfig = {
 };
 
 describe('apiConfigSchema JWT hardening', () => {
+  it('rejects production config when JWT_SIGNING_KEYS is unset even if JWT_SECRET is strong', () => {
+    const result = apiConfigSchema.safeParse({
+      ...validConfig,
+      JWT_SIGNING_KEYS: undefined,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ['JWT_SIGNING_KEYS'],
+          message: expect.stringContaining('JWT_SIGNING_KEYS is required in production'),
+        }),
+      ])
+    );
+  });
+
   it('rejects the published JWT_SECRET placeholder in production when JWT_SIGNING_KEYS is unset', () => {
     const result = apiConfigSchema.safeParse({
       ...validConfig,
@@ -26,11 +44,15 @@ describe('apiConfigSchema JWT hardening', () => {
           path: ['JWT_SECRET'],
           message: expect.stringContaining('JWT_SECRET placeholder must be replaced'),
         }),
+        expect.objectContaining({
+          path: ['JWT_SIGNING_KEYS'],
+          message: expect.stringContaining('JWT_SIGNING_KEYS is required in production'),
+        }),
       ])
     );
   });
 
-  it('allows the placeholder when JWT_SIGNING_KEYS is present because the fallback is inactive', () => {
+  it('allows production config when JWT_SIGNING_KEYS is present because the fallback is inactive', () => {
     const result = apiConfigSchema.safeParse({
       ...validConfig,
       JWT_SECRET: JWT_SECRET_PLACEHOLDER,
