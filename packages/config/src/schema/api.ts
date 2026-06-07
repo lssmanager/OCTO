@@ -52,6 +52,15 @@ export const apiConfigSchema = z
     BUILD_TIME: z.string().default('local'),
   })
   .superRefine((config, ctx) => {
+    if (config.NODE_ENV === 'production' && !config.JWT_SIGNING_KEYS) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['JWT_SIGNING_KEYS'],
+        message:
+          'JWT_SIGNING_KEYS is required in production; JWT_SECRET fallback is disabled',
+      });
+    }
+
     if (
       config.NODE_ENV === 'production' &&
       !config.JWT_SIGNING_KEYS &&
