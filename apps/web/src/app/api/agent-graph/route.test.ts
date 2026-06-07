@@ -1,21 +1,31 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-
 import { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import { agentGraphApiUrl, normalizeAgentGraphApiUrl, POST } from './route';
+import { GET, POST, agentGraphApiUrl, normalizeAgentGraphApiUrl } from './route';
 
 const routeSource = readFileSync(fileURLToPath(new URL('./route.ts', import.meta.url)), 'utf8');
+const originalFetch = globalThis.fetch;
 
-function request(body: unknown, cookie?: string) {
-  return new NextRequest('https://web.test/api/agent-graph', {
-    method: 'POST',
+afterEach(() => {
+  vi.restoreAllMocks();
+  globalThis.fetch = originalFetch;
+  delete process.env['OCTO_WEB_CONSOLE_TOKEN'];
+  delete process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'];
+});
+
+function request(
+  method: 'GET' | 'POST',
+  init: { cookie?: string; origin?: string; body?: unknown } = {}
+) {
+  return new NextRequest('https://console.example.test/api/agent-graph', {
+    method,
     headers: {
-      'content-type': 'application/json',
-      ...(cookie ? { cookie } : {}),
+      ...(init.cookie ? { cookie: `octo_console_token=${init.cookie}` } : {}),
+      ...(init.origin ? { origin: init.origin } : {}),
+      ...(init.body ? { 'content-type': 'application/json' } : {}),
     },
-    body: JSON.stringify(body),
+    ...(init.body ? { body: JSON.stringify(init.body) } : {}),
   });
 }
 
@@ -46,82 +56,145 @@ describe('F1 Agent Graph route URL contract', () => {
     expect(routeSource).not.toContain('revalidate: 15');
   });
 
-  it('does not reference browser-public console write secrets', () => {
+  it('does not reference browser-public or server-token write bypass secrets', () => {
+    expect(routeSource).not.toContain('OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES');
+    expect(routeSource).not.toContain('OCTO_WEB_CONSOLE_TOKEN');
     expect(routeSource).not.toContain('NEXT_PUBLIC_OCTO_CONSOLE_TOKEN');
     expect(routeSource).not.toMatch(/NEXT_PUBLIC_[A-Z0-9_]*TOKEN/);
   });
 });
 
-describe('agent graph POST proxy authorization', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    delete process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'];
-    delete process.env['OCTO_WEB_CONSOLE_TOKEN'];
-  });
-
-  it('blocks destructive writes that would use the unauthenticated server-token fallback', async () => {
-    process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'] = 'true';
-    process.env['OCTO_WEB_CONSOLE_TOKEN'] = 'server-token';
+describe('F1 Agent Graph route authentication', () => {
+  it('rejects unauthenticated graph reads without forwarding the server console token', async () => {
+    process.env['OCTO_WEB_CONSOLE_TOKEN'] = 'SERVER_SIDE_CONSOLE_TOKEN';
     const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const response = await POST(request({ action: 'deleteAgent', agentId: 'agent-1' }));
+    const res = await GET(request('GET'));
 
-    await expect(response.json()).resolves.toEqual({
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({
       error:
-        'F1 Agent Graph server-token writes are limited to createNode and createAgent actions. Use an authenticated console session for destructive or state-changing writes.',
+        'F1 Agent Graph console reads require an authenticated octo_console_token session cookie.',
     });
-    expect(response.status).toBe(403);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('still allows server-token fallback for bootstrap create actions', async () => {
-    process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'] = 'true';
-    process.env['OCTO_WEB_CONSOLE_TOKEN'] = 'server-token';
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ id: 'node-1' }), {
-        status: 201,
-        headers: { 'content-type': 'application/json' },
-      })
-    );
-    vi.stubGlobal('fetch', fetchMock);
+  it('forwards authenticated graph reads with only the caller session cookie token', async () => {
+    process.env['OCTO_WEB_CONSOLE_TOKEN'] = 'SERVER_SIDE_CONSOLE_TOKEN';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify([{ id: 'node-1' }]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const response = await POST(request({ action: 'createNode', body: { name: 'Node' } }));
+    const res = await GET(request('GET', { cookie: 'CALLER_SESSION_TOKEN' }));
 
-    await expect(response.json()).resolves.toEqual({ id: 'node-1' });
-    expect(response.status).toBe(201);
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual([{ id: 'node-1' }]);
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:3001/api/v1/agents/nodes',
+      'http://localhost:3001/api/v1/agents/graph',
       expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ authorization: 'Bearer server-token' }),
+        headers: expect.objectContaining({ authorization: 'Bearer CALLER_SESSION_TOKEN' }),
       })
     );
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('SERVER_SIDE_CONSOLE_TOKEN');
   });
 
-  it('allows destructive writes from an authenticated console session cookie', async () => {
+  it('rejects unauthenticated writes even when server-token writes are enabled', async () => {
+    process.env['OCTO_WEB_CONSOLE_TOKEN'] = 'SERVER_SIDE_CONSOLE_TOKEN';
     process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'] = 'true';
-    process.env['OCTO_WEB_CONSOLE_TOKEN'] = 'server-token';
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ deleted: true }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const res = await POST(
+      request('POST', {
+        body: { action: 'patchNode', nodeId: 'node-1', body: { name: 'Updated' } },
       })
     );
-    vi.stubGlobal('fetch', fetchMock);
 
-    const response = await POST(
-      request({ action: 'deleteAgent', agentId: 'agent-1' }, 'octo_console_token=session-token')
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({
+      error:
+        'F1 Agent Graph console writes require an authenticated octo_console_token session cookie.',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated destructive delete attempts without using the server-token fallback', async () => {
+    process.env['OCTO_WEB_CONSOLE_TOKEN'] = 'SERVER_SIDE_CONSOLE_TOKEN';
+    process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'] = 'true';
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const res = await POST(
+      request('POST', {
+        origin: 'https://console.example.test',
+        body: { action: 'deleteAgent', agentId: 'agent-1' },
+      })
     );
 
-    await expect(response.json()).resolves.toEqual({ deleted: true });
-    expect(response.status).toBe(200);
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({
+      error:
+        'F1 Agent Graph console writes require an authenticated octo_console_token session cookie.',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('SERVER_SIDE_CONSOLE_TOKEN');
+  });
+
+  it('allows same-origin destructive writes only with the caller session cookie token', async () => {
+    process.env['OCTO_WEB_CONSOLE_TOKEN'] = 'SERVER_SIDE_CONSOLE_TOKEN';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ deleted: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const res = await POST(
+      request('POST', {
+        cookie: 'CALLER_SESSION_TOKEN',
+        origin: 'https://console.example.test',
+        body: { action: 'deleteAgent', agentId: 'agent-1' },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ deleted: true });
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:3001/api/v1/agents/agent-1',
       expect.objectContaining({
         method: 'DELETE',
-        headers: expect.objectContaining({ authorization: 'Bearer session-token' }),
+        headers: expect.objectContaining({ authorization: 'Bearer CALLER_SESSION_TOKEN' }),
       })
     );
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('SERVER_SIDE_CONSOLE_TOKEN');
+  });
+
+  it('rejects cross-origin authenticated writes before forwarding to the API', async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const res = await POST(
+      request('POST', {
+        cookie: 'CALLER_SESSION_TOKEN',
+        origin: 'https://evil.example.test',
+        body: { action: 'patchNode', nodeId: 'node-1', body: { name: 'Updated' } },
+      })
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: 'F1 Agent Graph console writes require a same-origin request.',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
