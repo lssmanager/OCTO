@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export function normalizeAgentGraphApiUrl(value = process.env['API_URL'] ?? 'http://localhost:3001/api') {
+export function normalizeAgentGraphApiUrl(
+  value = process.env['API_URL'] ?? 'http://localhost:3001/api'
+) {
   return value.replace(/\/+$/, '');
 }
 
@@ -12,10 +14,24 @@ export function agentGraphApiUrl(path: string, baseUrl = normalizeAgentGraphApiU
 const API_URL = normalizeAgentGraphApiUrl();
 const CONSOLE_COOKIE = 'octo_console_token';
 
-type ConsoleAction = 'createNode' | 'createAgent' | 'patchNode' | 'reparentNode' | 'patchAgent' | 'deleteAgent' | 'archiveNode' | 'setActivationState';
+type ConsoleAction =
+  | 'createNode'
+  | 'createAgent'
+  | 'patchNode'
+  | 'reparentNode'
+  | 'patchAgent'
+  | 'deleteAgent'
+  | 'archiveNode'
+  | 'setActivationState';
 
-type ActionSpec = { path: (payload: ConsolePayload) => string; method: 'POST' | 'PATCH' | 'DELETE'; body?: (payload: ConsolePayload) => unknown };
+type ActionSpec = {
+  path: (payload: ConsolePayload) => string;
+  method: 'POST' | 'PATCH' | 'DELETE';
+  body?: (payload: ConsolePayload) => unknown;
+};
 type ConsolePayload = { action?: ConsoleAction; nodeId?: string; agentId?: string; body?: unknown };
+
+const SERVER_TOKEN_WRITE_ACTIONS = new Set<ConsoleAction>(['createNode', 'createAgent']);
 
 function requireId(value: string | undefined, label: string) {
   if (!value) throw new Error(`missing_${label}`);
@@ -25,12 +41,36 @@ function requireId(value: string | undefined, label: string) {
 const actionSpecs: Record<ConsoleAction, ActionSpec> = {
   createNode: { method: 'POST', path: () => '/v1/agents/nodes' },
   createAgent: { method: 'POST', path: () => '/v1/agents' },
-  patchNode: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}` },
-  reparentNode: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}/parent` },
-  patchAgent: { method: 'PATCH', path: (payload) => `/v1/agents/${requireId(payload.agentId, 'agent_id')}` },
-  deleteAgent: { method: 'DELETE', path: (payload) => `/v1/agents/${requireId(payload.agentId, 'agent_id')}`, body: () => undefined },
-  archiveNode: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}`, body: (payload) => ({ ...(payload.body as Record<string, unknown> | undefined), activationState: 'archived' }) },
-  setActivationState: { method: 'PATCH', path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}`, body: (payload) => payload.body },
+  patchNode: {
+    method: 'PATCH',
+    path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}`,
+  },
+  reparentNode: {
+    method: 'PATCH',
+    path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}/parent`,
+  },
+  patchAgent: {
+    method: 'PATCH',
+    path: (payload) => `/v1/agents/${requireId(payload.agentId, 'agent_id')}`,
+  },
+  deleteAgent: {
+    method: 'DELETE',
+    path: (payload) => `/v1/agents/${requireId(payload.agentId, 'agent_id')}`,
+    body: () => undefined,
+  },
+  archiveNode: {
+    method: 'PATCH',
+    path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}`,
+    body: (payload) => ({
+      ...(payload.body as Record<string, unknown> | undefined),
+      activationState: 'archived',
+    }),
+  },
+  setActivationState: {
+    method: 'PATCH',
+    path: (payload) => `/v1/agents/nodes/${requireId(payload.nodeId, 'node_id')}`,
+    body: (payload) => payload.body,
+  },
 };
 
 function jsonError(status: number, message: string) {
@@ -41,12 +81,13 @@ function getReadToken() {
   return process.env['OCTO_WEB_CONSOLE_TOKEN'];
 }
 
-function getWriteToken(req: NextRequest) {
+function getWriteAuth(req: NextRequest) {
   const sessionToken = req.cookies.get(CONSOLE_COOKIE)?.value;
-  if (sessionToken) return sessionToken;
+  if (sessionToken) return { token: sessionToken, source: 'session' as const };
 
   if (process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'] === 'true') {
-    return process.env['OCTO_WEB_CONSOLE_TOKEN'];
+    const serverToken = process.env['OCTO_WEB_CONSOLE_TOKEN'];
+    if (serverToken) return { token: serverToken, source: 'server' as const };
   }
 
   return undefined;
@@ -63,14 +104,19 @@ async function forward(path: string, init: RequestInit) {
   });
 
   const contentType = res.headers.get('content-type') ?? '';
-  const body = contentType.includes('application/json') ? await res.json() : { error: await res.text() };
+  const body = contentType.includes('application/json')
+    ? await res.json()
+    : { error: await res.text() };
   return NextResponse.json(body, { status: res.status });
 }
 
 export async function GET() {
   const token = getReadToken();
   if (!token) {
-    return jsonError(503, 'OCTO_WEB_CONSOLE_TOKEN is not configured for the authenticated F1 Agent Graph projection.');
+    return jsonError(
+      503,
+      'OCTO_WEB_CONSOLE_TOKEN is not configured for the authenticated F1 Agent Graph projection.'
+    );
   }
 
   try {
@@ -80,13 +126,16 @@ export async function GET() {
       cache: 'no-store',
     });
   } catch (err) {
-    return jsonError(502, err instanceof Error ? err.message : 'Unable to fetch F1 Agent Graph projection.');
+    return jsonError(
+      502,
+      err instanceof Error ? err.message : 'Unable to fetch F1 Agent Graph projection.'
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
-  const token = getWriteToken(req);
-  if (!token) {
+  const auth = getWriteAuth(req);
+  if (!auth) {
     return jsonError(
       403,
       'F1 Agent Graph console writes require an httpOnly octo_console_token session cookie or OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES=true with server-side OCTO_WEB_CONSOLE_TOKEN.'
@@ -104,16 +153,27 @@ export async function POST(req: NextRequest) {
     return jsonError(400, 'invalid_agent_graph_console_action');
   }
 
+  if (auth.source === 'server' && !SERVER_TOKEN_WRITE_ACTIONS.has(payload.action)) {
+    return jsonError(
+      403,
+      'F1 Agent Graph server-token writes are limited to createNode and createAgent actions. Use an authenticated console session for destructive or state-changing writes.'
+    );
+  }
+
   try {
     const spec = actionSpecs[payload.action];
     const body = spec.body ? spec.body(payload) : payload.body;
     return await forward(spec.path(payload), {
       method: spec.method,
-      headers: { authorization: `Bearer ${token}`, ...(spec.method === 'DELETE' ? {} : { 'content-type': 'application/json' }) },
+      headers: {
+        authorization: `Bearer ${auth.token}`,
+        ...(spec.method === 'DELETE' ? {} : { 'content-type': 'application/json' }),
+      },
       ...(spec.method === 'DELETE' ? {} : { body: JSON.stringify(body ?? {}) }),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unable to write F1 Agent Graph projection.';
+    const message =
+      err instanceof Error ? err.message : 'Unable to write F1 Agent Graph projection.';
     return jsonError(message.startsWith('missing_') ? 400 : 502, message);
   }
 }
