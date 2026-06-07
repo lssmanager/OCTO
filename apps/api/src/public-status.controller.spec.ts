@@ -1,5 +1,10 @@
 import { describe, expect, it, afterEach } from 'vitest';
-import { PublicStatusController, renderF1ClosureDashboard } from './public-status.controller';
+import {
+  PublicStatusController,
+  renderF1ClosureDashboard,
+  renderPublicApiRoot,
+} from './public-status.controller';
+import { IS_PUBLIC_KEY } from './admin/internal-secret.guard';
 import { calculateF1ClosureStatus, type F1ClosureStatus } from './public-f1-closure-status.service';
 
 const buildEnvKeys = [
@@ -141,46 +146,52 @@ function statusFixture(overrides: Partial<F1ClosureStatus> = {}): F1ClosureStatu
 }
 
 describe('PublicStatusController', () => {
-  it('renders a minimal F1 closure dashboard with all required areas and metadata', async () => {
+  it('renders the public root as a stable non-operational landing page', () => {
     const controller = new PublicStatusController({
       getStatus: async () => statusFixture(),
     } as any);
 
-    const html = await controller.root();
+    const html = controller.root();
 
-    expect(html).toContain('<h1>F1 Operational Closure Dashboard</h1>');
-    expect(html).toContain('octo-api');
-    expect(html).toContain('0.1.0-f1-test');
-    expect(html).toContain('abcdef123456');
-    expect(html).toContain('Overall status');
-    for (const area of [
-      'Backend',
-      'Runtime Foundation',
-      'Queues',
-      'DB',
-      'LLM Integration',
-      'Infra',
-      'Observabilidad',
-      'Seguridad',
-    ]) {
-      expect(html).toContain(area);
-    }
-    expect(html).toContain('/api/f1/closure-status');
+    expect(html).toContain('<h1>Control Plane API</h1>');
+    expect(html).toContain('intentionally minimal');
+    expect(html).not.toContain('F1 Operational Closure Dashboard');
+    expect(html).not.toContain('octo-api');
+    expect(html).not.toContain('0.1.0-f1-test');
+    expect(html).not.toContain('abcdef123456');
+    expect(html).not.toContain('2026-06-03T00:00:00Z');
+    expect(html).not.toContain('production');
+    expect(html).not.toContain('/api/f1/closure-status');
     expect(html).not.toContain('Cannot GET /');
   });
 
-  it('does not claim 100% when any area is not OK', async () => {
-    const controller = new PublicStatusController({
-      getStatus: async () => statusFixture(),
-    } as any);
+  it('keeps deployment metadata out of the public root renderer', () => {
+    process.env['BUILD_PHASE'] = 'F1';
+    process.env['BUILD_VERSION'] = '0.1.0-f1-sensitive';
+    process.env['BUILD_COMMIT'] = 'sensitivecommitsha';
+    process.env['BUILD_TIME'] = '2026-06-03T00:00:00Z';
+    process.env['NODE_ENV'] = 'production';
 
-    const html = await controller.root();
+    const html = renderPublicApiRoot();
 
-    expect(html).toContain('BLOQUEADO');
-    expect(html).toContain('F1 no puede declararse 100% hasta que todas las áreas estén OK.');
-    expect(html).toContain('LiteLLM readiness failed');
-    expect(html).not.toContain('F1 operando al 100%.');
-    expect(html).not.toContain('OPERANDO 100%</span>');
+    expect(html).not.toContain('F1');
+    expect(html).not.toContain('0.1.0-f1-sensitive');
+    expect(html).not.toContain('sensitivecommitsha');
+    expect(html).not.toContain('2026-06-03T00:00:00Z');
+    expect(html).not.toContain('production');
+  });
+
+  it('marks only the root method as public and leaves closure JSON protected by the internal guard', () => {
+    const rootPublic = Reflect.getMetadata(IS_PUBLIC_KEY, PublicStatusController.prototype.root);
+    const closurePublic = Reflect.getMetadata(
+      IS_PUBLIC_KEY,
+      PublicStatusController.prototype.closureStatus
+    );
+    const controllerPublic = Reflect.getMetadata(IS_PUBLIC_KEY, PublicStatusController);
+
+    expect(rootPublic).toBe(true);
+    expect(closurePublic).toBeUndefined();
+    expect(controllerPublic).toBeUndefined();
   });
 
   it('escapes build metadata and evidence before embedding it in HTML', () => {

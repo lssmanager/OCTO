@@ -88,6 +88,8 @@ describe('API config internal secret contract', () => {
       DATABASE_URL: 'postgresql://octo:octo@localhost:5432/octo',
       REDIS_URL: 'redis://localhost:6379',
       JWT_SECRET: 'jwt-secret-for-tests-minimum-32-chars',
+      JWT_SIGNING_KEYS:
+        '[{"kid":"test-key","algorithm":"HS256","secret":"jwt-secret-for-tests-minimum-32-chars","isActive":true}]',
       LITELLM_MASTER_KEY: 'litellm-key-for-tests',
       RUNTIME_WORKER_URL: 'http://runtime-worker:8000',
     };

@@ -157,16 +157,41 @@ export function renderF1ClosureDashboard(status: F1ClosureStatus): string {
 </html>`;
 }
 
-@Public()
+export function renderPublicApiRoot(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OCTO Control Plane API</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f8fafc; }
+    main { width: min(680px, calc(100vw - 32px)); padding: 28px; border: 1px solid #dbe3ef; border-radius: 16px; background: #ffffff; box-shadow: 0 12px 28px rgb(15 23 42 / 0.06); }
+    .eyebrow { margin: 0 0 8px; color: #475569; font-size: 0.85rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 2.5rem); }
+    p { color: #334155; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <main aria-label="OCTO API public landing">
+    <p class="eyebrow">OCTO</p>
+    <h1>Control Plane API</h1>
+    <p>This API surface is intentionally minimal. Operational status and administration require authenticated internal access.</p>
+  </main>
+</body>
+</html>`;
+}
+
 @Controller()
 export class PublicStatusController {
   constructor(private readonly closureStatusService: PublicF1ClosureStatusService) {}
 
+  @Public()
   @Get()
   @Header('Content-Type', 'text/html; charset=utf-8')
-  async root(): Promise<string> {
-    const status = await this.closureStatusService.getStatus();
-    return renderF1ClosureDashboard(status);
+  root(): string {
+    return renderPublicApiRoot();
   }
 
   @Get('f1/closure-status')
