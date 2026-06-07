@@ -9,7 +9,10 @@ const runIfDatabase = databaseUrl ? describe : describe.skip;
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(currentDir, '..', 'migrations');
 const runtimeWriteContract = JSON.parse(
-  readFileSync(join(currentDir, '..', '..', '..', 'docs', 'f1', 'runtime-write-contract.json'), 'utf8')
+  readFileSync(
+    join(currentDir, '..', '..', '..', 'docs', 'f1', 'runtime-write-contract.json'),
+    'utf8'
+  )
 ) as {
   runtimeRole: string;
   allowedWriteTables: string[];
@@ -21,9 +24,12 @@ const migrationFiles = [
   '202605230002_f1_tools_approvals_outbox.sql',
   '202605230003_f1_rls_policies.sql',
   '202605230004_f1_rls_hardening.sql',
+  '202605240001_f1_outbox_publisher_hardening.sql',
   '202605280002_worker_heartbeats.sql',
+  '202605290001_f2_hierarchy_nodes.sql',
   '202605300002_f1_runtime_db_role.sql',
   '202606010001_f1_tenant_isolation_rls_expansion.sql',
+  '202606070002_tenant_scoped_integrity_hardening.sql',
 ];
 
 type Sql = ReturnType<typeof postgres>;
@@ -55,14 +61,26 @@ runIfDatabase('F1 database integration', () => {
     }
   });
 
-  
-
-  it('enables and forces RLS on all F1 tenant-scoped tables', async () => {
+  it('enables and forces RLS on all tenant-scoped tables', async () => {
     const tables = [
-      'agents','agent_versions','executions','execution_steps','execution_checkpoints',
-      'execution_checkpoint_writes','tool_invocations','approvals','outbox_events','execution_dlq','idempotency_keys',
+      'agents',
+      'agent_versions',
+      'executions',
+      'execution_steps',
+      'execution_checkpoints',
+      'execution_checkpoint_writes',
+      'tool_invocations',
+      'approvals',
+      'outbox_events',
+      'execution_events',
+      'execution_dlq',
+      'idempotency_keys',
+      'outbox_publish_dlq',
+      'hierarchy_nodes',
     ];
-    const rows = await sql<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }[]>`
+    const rows = await sql<
+      { relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }[]
+    >`
       SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -107,7 +125,9 @@ runIfDatabase('F1 database integration', () => {
     `;
     const grantedTables = [...new Set(grants.map((grant) => grant.table_name))].sort();
     expect(grantedTables).toEqual([...runtimeWriteContract.allowedWriteTables].sort());
-    expect(grants.every((grant) => ['SELECT', 'INSERT', 'UPDATE'].includes(grant.privilege_type))).toBe(true);
+    expect(
+      grants.every((grant) => ['SELECT', 'INSERT', 'UPDATE'].includes(grant.privilege_type))
+    ).toBe(true);
 
     for (const table of ['agents', 'agent_versions']) {
       const [{ canWrite }] = await sql<{ canWrite: boolean }[]>`
@@ -119,10 +139,24 @@ runIfDatabase('F1 database integration', () => {
 
   it('creates tenant isolation policies with non-empty tenant guard', async () => {
     const tables = [
-      'agents','agent_versions','executions','execution_steps','execution_checkpoints',
-      'execution_checkpoint_writes','tool_invocations','approvals','outbox_events','execution_dlq','idempotency_keys',
+      'agents',
+      'agent_versions',
+      'executions',
+      'execution_steps',
+      'execution_checkpoints',
+      'execution_checkpoint_writes',
+      'tool_invocations',
+      'approvals',
+      'outbox_events',
+      'execution_events',
+      'execution_dlq',
+      'idempotency_keys',
+      'outbox_publish_dlq',
+      'hierarchy_nodes',
     ];
-    const rows = await sql<{ tablename: string; policyname: string; qual: string | null; with_check: string | null }[]>`
+    const rows = await sql<
+      { tablename: string; policyname: string; qual: string | null; with_check: string | null }[]
+    >`
       SELECT tablename, policyname, qual, with_check
       FROM pg_policies
       WHERE schemaname = 'public' AND tablename = ANY(${tables})
@@ -130,14 +164,16 @@ runIfDatabase('F1 database integration', () => {
     `;
     expect(rows.length).toBeGreaterThanOrEqual(tables.length);
     for (const table of tables) {
-      const policy = rows.find((r) => r.tablename === table && r.policyname === `tenant_isolation_${table}`);
+      const policy = rows.find(
+        (r) => r.tablename === table && r.policyname === `tenant_isolation_${table}`
+      );
       expect(policy).toBeDefined();
       expect(policy?.qual ?? '').toContain("current_setting('app.current_tenant'::text, true)");
       expect(policy?.qual ?? '').toContain('COALESCE');
       expect(policy?.with_check ?? '').toContain('COALESCE');
     }
   });
-it('enforces compare-and-swap updates on executions.version', async () => {
+  it('enforces compare-and-swap updates on executions.version', async () => {
     await insertAgentVersion(sql, 'tenant-a', 'f1-test-agent-a', 'f1-test-agent-version-cas');
     await insertExecution(sql, {
       id: 'f1-test-execution-cas',
@@ -337,10 +373,13 @@ it('enforces compare-and-swap updates on executions.version', async () => {
     expect(crossTenantById).toHaveLength(0);
   });
 
-  
-
   it('blocks cross-tenant insert with WITH CHECK', async () => {
-    await insertAgentVersion(sql, 'tenant-a', 'f1-test-agent-a', 'f1-test-agent-version-cross-insert');
+    await insertAgentVersion(
+      sql,
+      'tenant-a',
+      'f1-test-agent-a',
+      'f1-test-agent-version-cross-insert'
+    );
 
     await expect(
       sql.begin(async (tx) => {
@@ -361,7 +400,9 @@ it('enforces compare-and-swap updates on executions.version', async () => {
   it('denies reads and writes when tenant context is empty', async () => {
     const rows = await sql.begin(async (tx) => {
       await tx`SELECT set_config('app.current_tenant', '', true)`;
-      return tx<{ id: string }[]>`SELECT "id" FROM "executions" WHERE "id" LIKE 'f1-test-execution-rls-%'`;
+      return tx<
+        { id: string }[]
+      >`SELECT "id" FROM "executions" WHERE "id" LIKE 'f1-test-execution-rls-%'`;
     });
     expect(rows).toHaveLength(0);
 
@@ -375,7 +416,66 @@ it('enforces compare-and-swap updates on executions.version', async () => {
       })
     ).rejects.toThrow();
   });
-it('does not grant BYPASSRLS to the current database role', async () => {
+
+  it('isolates hierarchy_nodes for empty, wrong, and cross-tenant contexts', async () => {
+    await insertHierarchyNode(sql, 'f1-test-hierarchy-a', 'tenant-a', null, 'agency-a');
+    await insertHierarchyNode(sql, 'f1-test-hierarchy-b', 'tenant-b', null, 'agency-b');
+
+    const wrongTenantRows = await sql.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_tenant', 'tenant-a', true)`;
+      return tx<{ id: string }[]>`
+        SELECT "id" FROM "hierarchy_nodes" WHERE "id" = 'f1-test-hierarchy-b'
+      `;
+    });
+    const emptyTenantRows = await sql.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_tenant', '', true)`;
+      return tx<{ id: string }[]>`
+        SELECT "id" FROM "hierarchy_nodes" WHERE "id" LIKE 'f1-test-hierarchy-%'
+      `;
+    });
+
+    expect(wrongTenantRows).toHaveLength(0);
+    expect(emptyTenantRows).toHaveLength(0);
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`SELECT set_config('app.current_tenant', 'tenant-a', true)`;
+        await tx`
+          INSERT INTO "hierarchy_nodes" ("id", "tenant_id", "level", "name", "slug")
+          VALUES ('f1-test-hierarchy-wrong-context', 'tenant-b', 'department', 'wrong', 'wrong')
+        `;
+      })
+    ).rejects.toThrow();
+  });
+
+  it('blocks cross-tenant hierarchy parent references', async () => {
+    await insertHierarchyNode(sql, 'f1-test-hierarchy-parent-a', 'tenant-a', null, 'parent-a');
+
+    await expect(
+      insertHierarchyNode(
+        sql,
+        'f1-test-hierarchy-child-b',
+        'tenant-b',
+        'f1-test-hierarchy-parent-a',
+        'child-b'
+      )
+    ).rejects.toThrow();
+  });
+
+  it('blocks cross-tenant agent to hierarchy node references', async () => {
+    await insertHierarchyNode(sql, 'f1-test-hierarchy-agent-a', 'tenant-a', null, 'agent-a');
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`SELECT set_config('app.current_tenant', 'tenant-b', true)`;
+        await tx`
+          INSERT INTO "agents" ("id", "tenant_id", "name", "role", "goal", "hierarchy_node_id")
+          VALUES ('f1-test-agent-cross-hierarchy', 'tenant-b', 'cross', 'worker', 'g', 'f1-test-hierarchy-agent-a')
+        `;
+      })
+    ).rejects.toThrow();
+  });
+  it('does not grant BYPASSRLS to the current database role', async () => {
     const [role] = await sql<{ rolbypassrls: boolean }[]>`
       SELECT "rolbypassrls"
       FROM "pg_roles"
@@ -398,6 +498,7 @@ async function cleanupTenant(sql: Sql, tenantId: string) {
     await tx`DELETE FROM "executions" WHERE "id" LIKE 'f1-test-%'`;
     await tx`DELETE FROM "agent_versions" WHERE "id" LIKE 'f1-test-%'`;
     await tx`DELETE FROM "agents" WHERE "id" LIKE 'f1-test-%'`;
+    await tx`DELETE FROM "hierarchy_nodes" WHERE "id" LIKE 'f1-test-%'`;
   });
 }
 
@@ -412,6 +513,22 @@ async function selectExecutionIdsForTenant(sql: Sql, tenantId: string): Promise<
     `;
   });
   return rows.map((row) => row.id);
+}
+
+async function insertHierarchyNode(
+  sql: Sql,
+  id: string,
+  tenantId: string,
+  parentId: string | null,
+  slug: string
+) {
+  return sql.begin(async (tx) => {
+    await tx`SELECT set_config('app.current_tenant', ${tenantId}, true)`;
+    return tx`
+      INSERT INTO "hierarchy_nodes" ("id", "tenant_id", "level", "name", "slug", "parent_id")
+      VALUES (${id}, ${tenantId}, 'department', ${slug}, ${slug}, ${parentId})
+    `;
+  });
 }
 
 async function insertAgentVersion(

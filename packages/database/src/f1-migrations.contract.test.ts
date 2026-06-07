@@ -1,9 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const migrationsDir = join(__dirname, '..', 'migrations');
-const runtimeWriteContractPath = join(__dirname, '..', '..', '..', 'docs', 'f1', 'runtime-write-contract.json');
+const runtimeWriteContractPath = join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'docs',
+  'f1',
+  'runtime-write-contract.json'
+);
+
+const tenantScopedTables = [
+  'agents',
+  'agent_versions',
+  'executions',
+  'execution_steps',
+  'execution_checkpoints',
+  'execution_checkpoint_writes',
+  'tool_invocations',
+  'approvals',
+  'outbox_events',
+  'execution_events',
+  'execution_dlq',
+  'idempotency_keys',
+  'outbox_publish_dlq',
+  'hierarchy_nodes',
+];
 
 function readRuntimeWriteContract(): {
   runtimeRole: string;
@@ -26,6 +51,23 @@ function readMigration(name: string): string {
 }
 
 describe('F1 database migrations contract', () => {
+  it('registers every SQL migration in the Drizzle journal', () => {
+    const journal = JSON.parse(readMigration('meta/_journal.json')) as {
+      entries: { tag: string }[];
+    };
+    const registered = new Set(journal.entries.map((entry) => entry.tag));
+    const sqlMigrations = readdirSync(migrationsDir)
+      .filter((file) => file.endsWith('.sql'))
+      .map((file) => file.replace(/\.sql$/, ''));
+
+    for (const migration of sqlMigrations) {
+      expect(
+        registered.has(migration),
+        `${migration} should be registered in meta/_journal.json`
+      ).toBe(true);
+    }
+  });
+
   it('adds durable execution and checkpoint tables with CAS and stale lease support', () => {
     const sql = readMigration('202605230001_f1_executions_core.sql');
 
@@ -106,6 +148,59 @@ describe('F1 database migrations contract', () => {
     expect(sql).not.toMatch(/\b(GRANT|ALTER)\s+.*BYPASSRLS\b/i);
   });
 
+  it('protects hierarchy nodes with the official F1 RLS pattern', () => {
+    const sql = readMigration('202605290001_f2_hierarchy_nodes.sql');
+
+    expect(sql).toContain('ALTER TABLE "hierarchy_nodes" ENABLE ROW LEVEL SECURITY');
+    expect(sql).toContain('ALTER TABLE "hierarchy_nodes" FORCE ROW LEVEL SECURITY');
+    expect(sql).toContain('tenant_isolation_hierarchy_nodes');
+    expect(sql).toContain("tenant_id = current_setting('app.current_tenant', true)");
+    expect(sql).toContain("COALESCE(current_setting('app.current_tenant', true), '') <> ''");
+    expect(sql).toContain('"hierarchy_nodes_parent_tenant_fk"');
+    expect(sql).toContain('"agents_hierarchy_node_tenant_fk"');
+  });
+
+  it('hardens tenant-scoped FKs with composite tenant references', () => {
+    const sql = readMigration('202606070002_tenant_scoped_integrity_hardening.sql');
+    const expectedConstraints = [
+      'agents_parent_tenant_fk',
+      'agents_hierarchy_node_tenant_fk',
+      'agent_versions_agent_tenant_fk',
+      'executions_agent_tenant_fk',
+      'executions_agent_version_tenant_fk',
+      'execution_steps_execution_tenant_fk',
+      'execution_checkpoints_execution_tenant_fk',
+      'execution_checkpoints_parent_tenant_fk',
+      'execution_checkpoint_writes_checkpoint_tenant_fk',
+      'approvals_execution_tenant_fk',
+      'approvals_step_tenant_fk',
+      'tool_invocations_execution_tenant_fk',
+      'tool_invocations_step_tenant_fk',
+      'tool_invocations_approval_tenant_fk',
+      'execution_events_execution_tenant_fk',
+      'execution_dlq_execution_tenant_fk',
+      'hierarchy_nodes_parent_tenant_fk',
+    ];
+
+    for (const table of tenantScopedTables) {
+      expect(sql).toContain(`tenant_isolation_${table}`);
+      expect(sql).toContain(`('${table}', 'tenant_isolation_${table}')`);
+    }
+    for (const constraint of expectedConstraints) {
+      expect(sql).toContain(`"${constraint}"`);
+    }
+    expect(sql).toContain('NOT VALID');
+  });
+
+  it('documents all tenant-scoped RLS tables in security docs', () => {
+    const docs = readFileSync(
+      join(__dirname, '..', '..', '..', 'docs', 'security', 'rls-policies.md'),
+      'utf8'
+    );
+    for (const table of tenantScopedTables) {
+      expect(docs).toContain(`- ${table}`);
+    }
+  });
 
   it('expands forced tenant RLS to DLQ and idempotency runtime tables', () => {
     const sql = readMigration('202606010001_f1_tenant_isolation_rls_expansion.sql');
@@ -122,11 +217,15 @@ describe('F1 database migrations contract', () => {
   it('keeps legacy 0004 migration idempotent and non-duplicative', () => {
     const sql = readMigration('0004_shocking_yellow_claw.sql');
 
-    expect(sql).toContain("ALTER TYPE \"public\".\"step_status\" ADD VALUE IF NOT EXISTS 'QUEUED'");
-    expect(sql).toContain("ALTER TYPE \"public\".\"tool_invocation_status\" ADD VALUE IF NOT EXISTS 'PENDING'");
-    expect(sql).toContain("ALTER TYPE \"public\".\"execution_status\" ADD VALUE IF NOT EXISTS 'dispatched'");
+    expect(sql).toContain('ALTER TYPE "public"."step_status" ADD VALUE IF NOT EXISTS \'QUEUED\'');
+    expect(sql).toContain(
+      'ALTER TYPE "public"."tool_invocation_status" ADD VALUE IF NOT EXISTS \'PENDING\''
+    );
+    expect(sql).toContain(
+      'ALTER TYPE "public"."execution_status" ADD VALUE IF NOT EXISTS \'dispatched\''
+    );
     expect(sql).not.toContain('CREATE TABLE "agent_versions"');
-    expect(sql).not.toContain("ALTER TYPE \"public\".\"step_status\" ADD VALUE 'QUEUED';");
+    expect(sql).not.toContain('ALTER TYPE "public"."step_status" ADD VALUE \'QUEUED\';');
   });
 
   it('enforces the F1 runtime worker least-privilege database role', () => {
@@ -138,8 +237,12 @@ describe('F1 database migrations contract', () => {
     for (const attribute of contract.forbiddenRoleAttributes) {
       expect(sql.toUpperCase()).toContain(`NO${attribute}`);
     }
-    expect(sql).toContain(`REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM ${contract.runtimeRole}`);
-    expect(sql).toContain(`REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM ${contract.runtimeRole}`);
+    expect(sql).toContain(
+      `REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM ${contract.runtimeRole}`
+    );
+    expect(sql).toContain(
+      `REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM ${contract.runtimeRole}`
+    );
     expect(sql).toContain(`REVOKE ALL PRIVILEGES ON SCHEMA public FROM ${contract.runtimeRole}`);
     expect(sql).toContain('GRANT SELECT, INSERT, UPDATE ON TABLE');
     expect(sql).toContain('information_schema.role_table_grants');
@@ -153,5 +256,4 @@ describe('F1 database migrations contract', () => {
       expect(sql).not.toMatch(new RegExp(`GRANT\\s+[^;]*\\b${table}\\b`, 'i'));
     }
   });
-
 });
