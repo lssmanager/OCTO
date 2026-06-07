@@ -78,7 +78,7 @@ verify_runtime_health() {
       if [[ "$path" == "/health/live" ]]; then
         status="$(curl -sS -o "$file" -w '%{http_code}' "${RUNTIME_WORKER_URL%/}${path}" || true)"
       else
-        status="$(curl -sS -o "$file" -w '%{http_code}' -H "X-Internal-Secret: ${RUNTIME_API_SECRET}" "${RUNTIME_WORKER_URL%/}${path}" || true)"
+        status="$(curl -sS -o "$file" -w '%{http_code}' -H "X-Internal-Secret: ${INTERNAL_SECRET}" "${RUNTIME_WORKER_URL%/}${path}" || true)"
       fi
       if [[ "$status" == "200" ]]; then
         break
