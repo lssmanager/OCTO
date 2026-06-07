@@ -121,22 +121,76 @@ async def _insert_outbox(
 def _messages_from_state(state_json: dict[str, Any] | None, fallback_input: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(state_json, dict):
         messages = state_json.get("messages")
-        if isinstance(messages, list) and messages:
-            return messages
+        if isinstance(messages, list) and messages and all(isinstance(message, dict) for message in messages):
+            return [dict(message) for message in messages]
     return [{"role": "user", "content": str(fallback_input)}]
+
+
+def _contains_user_message(messages: list[dict[str, Any]]) -> bool:
+    return any(isinstance(message, dict) and message.get("role") == "user" for message in messages)
+
+
+def _should_replace_message_history(candidate: list[dict[str, Any]], current: list[dict[str, Any]]) -> bool:
+    if len(candidate) > len(current):
+        return True
+    if len(candidate) == len(current) and _contains_user_message(candidate) and not _contains_user_message(current):
+        return True
+    return False
+
+
+def _message_from_checkpoint_write(write: dict[str, Any]) -> dict[str, Any] | None:
+    if write.get("channel") != "messages":
+        return None
+    value = write.get("value_json")
+    if not isinstance(value, dict):
+        return None
+    write_type = str(write.get("type") or "")
+    if write_type == "assistant_message":
+        message: dict[str, Any] = {
+            "role": str(value.get("role") or "assistant"),
+            "content": value.get("content") or "",
+        }
+        if isinstance(value.get("tool_calls"), list):
+            message["tool_calls"] = value["tool_calls"]
+        if value.get("tool_call_id") is not None:
+            message["tool_call_id"] = value.get("tool_call_id")
+        return message
+    if write_type == "tool_result":
+        message = {"role": "tool", "content": _json(value)}
+        if value.get("tool_call_id") is not None:
+            message["tool_call_id"] = value.get("tool_call_id")
+        return message
+    return None
 
 
 def _apply_checkpoint_writes_to_messages(
     base_messages: list[dict[str, Any]], writes: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    messages = list(base_messages)
+    messages = [dict(message) for message in base_messages]
     for write in sorted(writes, key=lambda row: int(row.get("write_index") or 0)):
-        if write.get("channel") != "messages" or write.get("type") != "tool_result":
-            continue
-        value = write.get("value_json")
-        if not isinstance(value, dict):
-            continue
-        messages.append({"role": "tool", "content": _json(value)})
+        message = _message_from_checkpoint_write(write)
+        if message is not None:
+            messages.append(message)
+    return messages
+
+
+def _reconstruct_messages_from_checkpoint_lineage(
+    checkpoint_rows: list[dict[str, Any]],
+    writes_by_checkpoint: dict[str, list[dict[str, Any]]],
+    fallback_input: dict[str, Any],
+) -> list[dict[str, Any]]:
+    messages = [{"role": "user", "content": str(fallback_input)}]
+    for checkpoint in sorted(checkpoint_rows, key=lambda row: int(row.get("step_index") or 0)):
+        state_messages = _messages_from_state(
+            checkpoint.get("state_json") if isinstance(checkpoint.get("state_json"), dict) else {},
+            fallback_input,
+        )
+        if _should_replace_message_history(state_messages, messages):
+            messages = state_messages
+        messages = _apply_checkpoint_writes_to_messages(
+            messages,
+            writes_by_checkpoint.get(str(checkpoint["id"]), []),
+        )
     return messages
 
 
@@ -346,23 +400,25 @@ async def _claim_and_start(
                 last_checkpoint_id = str(latest["id"])
                 checkpoint_step_index = int(latest["step_index"]) + 1
                 checkpoint_source = "reclaim"
-                base_messages = _messages_from_state(
-                    latest.get("state_json") if isinstance(latest.get("state_json"), dict) else {},
-                    row["input_json"] or {},
-                )
                 writes = await conn.fetch(
                     """
-                    SELECT write_index, channel, type, value_json
-                    FROM execution_checkpoint_writes
-                    WHERE tenant_id=$1 AND checkpoint_id=$2
-                    ORDER BY write_index ASC
+                    SELECT ecw.checkpoint_id, ecw.write_index, ecw.channel, ecw.type, ecw.value_json
+                    FROM execution_checkpoint_writes ecw
+                    INNER JOIN execution_checkpoints ec ON ec.id = ecw.checkpoint_id
+                    WHERE ec.tenant_id=$1 AND ec.execution_id=$2
+                    ORDER BY ec.step_index ASC, ecw.write_index ASC
                     """,
                     tenant_id,
-                    last_checkpoint_id,
+                    execution_id,
                 )
-                base_messages = _apply_checkpoint_writes_to_messages(
-                    base_messages,
-                    [dict(write) for write in writes],
+                writes_by_checkpoint: dict[str, list[dict[str, Any]]] = {}
+                for write in writes:
+                    item = dict(write)
+                    writes_by_checkpoint.setdefault(str(item["checkpoint_id"]), []).append(item)
+                base_messages = _reconstruct_messages_from_checkpoint_lineage(
+                    checkpoint_rows,
+                    writes_by_checkpoint,
+                    row["input_json"] or {},
                 )
 
         if not _ownership_matches(row, lease_token, attempt):
@@ -494,7 +550,7 @@ async def _run_llm_and_tools(
     tenant_id: str,
     trace_id: str | None,
     started: dict[str, Any],
-) -> tuple[str, LLMCallResult]:
+) -> tuple[str, LLMCallResult, list[dict[str, Any]]]:
     messages = list(started.get("messages") or [{"role": "user", "content": str(started["input_json"])}])
     snapshot = started["context_snapshot_json"] or {}
     agent_id = str(started["agent_id"])
@@ -507,7 +563,40 @@ async def _run_llm_and_tools(
         snapshot=snapshot,
     )
     if llm.tool_calls:
-        messages.append({"role": "assistant", "content": "", "tool_calls": llm.tool_calls})
+        assistant_message = {"role": "assistant", "content": "", "tool_calls": llm.tool_calls}
+        messages.append(assistant_message)
+        if not await _has_current_ownership(
+            conn,
+            execution_id=execution_id,
+            tenant_id=tenant_id,
+            lease_token=str(started["lease_token"]),
+            attempt=int(started["attempt"]),
+        ):
+            log.warning(
+                "execution.stale_owner_checkpoint_write_rejected",
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                lease_token=started["lease_token"],
+                attempt=started["attempt"],
+            )
+            raise LostOwnershipError(execution_id, tenant_id)
+
+        await conn.execute(
+            """
+            INSERT INTO execution_checkpoint_writes (
+              id, tenant_id, checkpoint_id, task_id, task_path, write_index, channel, type, value_json
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
+            """,
+            str(uuid.uuid4()),
+            tenant_id,
+            started["checkpoint_id"],
+            execution_id,
+            "tool",
+            0,
+            "messages",
+            "assistant_message",
+            _json(assistant_message),
+        )
         for idx, tc in enumerate(llm.tool_calls):
             tool_res = await execute_tool_call(
                 conn,
@@ -552,7 +641,7 @@ async def _run_llm_and_tools(
                 started["checkpoint_id"],
                 execution_id,
                 "tool",
-                idx,
+                idx + 1,
                 "messages",
                 "tool_result",
                 _json(tool_res),
@@ -565,8 +654,10 @@ async def _run_llm_and_tools(
             messages=messages,
             snapshot=snapshot,
         )
-        return llm2.content, llm2
-    return llm.content, llm
+        final_messages = [*messages, {"role": "assistant", "content": llm2.content}]
+        return llm2.content, llm2, final_messages
+    final_messages = [*messages, {"role": "assistant", "content": llm.content}]
+    return llm.content, llm, final_messages
 
 
 async def _persist_success(
@@ -578,6 +669,7 @@ async def _persist_success(
     started: dict[str, Any],
     output: str,
     llm: LLMCallResult,
+    final_messages: list[dict[str, Any]],
 ) -> None:
     worker_id = os.environ.get("HOSTNAME", "runtime-worker")
     async with conn.transaction():
@@ -643,7 +735,7 @@ async def _persist_success(
             execution_id,
             started["checkpoint_step_index"] + 2,
             started["checkpoint_id"],
-            _json({"messages": [{"role": "assistant", "content": output}]}),
+            _json({"messages": final_messages}),
             _json({"checkpoint_schema_version": 1}),
             worker_id,
         )
@@ -759,7 +851,7 @@ async def run_f1_execution(
             return started
 
         try:
-            output, llm = await _run_llm_and_tools(
+            output, llm, final_messages = await _run_llm_and_tools(
                 conn,
                 execution_id=execution_id,
                 tenant_id=tenant_id,
@@ -866,6 +958,7 @@ async def run_f1_execution(
                 started=started,
                 output=output,
                 llm=llm,
+                final_messages=final_messages,
             )
         except LostOwnershipError as exc:
             return {"status": "lost_ownership", "reason": exc.reason}
