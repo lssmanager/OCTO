@@ -59,6 +59,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 @Injectable()
 export class HealthService implements OnModuleInit, OnModuleDestroy {
   private healthQueue!: Queue<HealthJobData>;
+  private postgresProbeClient: ReturnType<typeof postgres> | null = null;
   private redisUrl!: string;
   private dbUrl!: string;
   private litellmUrl!: string;
@@ -71,6 +72,14 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
     this.healthQueue = createQueue<HealthJobData>(QUEUE_NAMES.HEALTH, {
       redisUrl: this.redisUrl,
     });
+    if (this.dbUrl) {
+      this.postgresProbeClient = postgres(this.dbUrl, {
+        max: 1,
+        idle_timeout: 2,
+        connect_timeout: 2,
+        onnotice: () => undefined,
+      });
+    }
   }
 
   /**
@@ -88,6 +97,10 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await this.healthQueue.close();
+    if (this.postgresProbeClient) {
+      await this.postgresProbeClient.end({ timeout: 1 }).catch(() => undefined);
+      this.postgresProbeClient = null;
+    }
   }
 
   /** Run all dependency checks. Used by GET /health and GET /ready. */
@@ -185,27 +198,19 @@ export class HealthService implements OnModuleInit, OnModuleDestroy {
    * Principle #12: PostgreSQL is the system of record — must be monitored.
    */
   private async checkPostgres(): Promise<PostgresCheck> {
-    if (!this.dbUrl) {
+    if (!this.postgresProbeClient) {
       return { status: 'error', error: 'DATABASE_URL not configured' };
     }
     const start = Date.now();
-    const probeClient = postgres(this.dbUrl, {
-      max: 1,
-      idle_timeout: 2,
-      connect_timeout: 2,
-      onnotice: () => undefined,
-    });
     try {
-      await withTimeout(drizzle(probeClient).execute(sql`SELECT 1`), CHECK_TIMEOUT_MS);
+      await withTimeout(drizzle(this.postgresProbeClient).execute(sql`SELECT 1`), CHECK_TIMEOUT_MS);
       const latencyMs = Date.now() - start;
       return { status: 'ok', latencyMs };
-    } catch (err) {
+    } catch {
       return {
         status: 'error',
-        error: err instanceof Error ? err.message : String(err),
+        error: 'postgres check failed',
       };
-    } finally {
-      await probeClient.end({ timeout: 1 });
     }
   }
 
