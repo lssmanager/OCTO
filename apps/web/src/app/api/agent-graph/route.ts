@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export function normalizeAgentGraphApiUrl(value = process.env['API_URL'] ?? 'http://localhost:3001/api') {
+export function normalizeAgentGraphApiUrl(
+  value = process.env['API_URL'] ?? 'http://localhost:3001/api'
+) {
   return value.replace(/\/+$/, '');
 }
 
@@ -28,14 +30,7 @@ function getReadToken() {
 }
 
 function getWriteToken(req: NextRequest) {
-  const sessionToken = req.cookies.get(CONSOLE_COOKIE)?.value;
-  if (sessionToken) return sessionToken;
-
-  if (process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'] === 'true') {
-    return process.env['OCTO_WEB_CONSOLE_TOKEN'];
-  }
-
-  return undefined;
+  return req.cookies.get(CONSOLE_COOKIE)?.value;
 }
 
 async function forward(path: string, init: RequestInit) {
@@ -49,14 +44,19 @@ async function forward(path: string, init: RequestInit) {
   });
 
   const contentType = res.headers.get('content-type') ?? '';
-  const body = contentType.includes('application/json') ? await res.json() : { error: await res.text() };
+  const body = contentType.includes('application/json')
+    ? await res.json()
+    : { error: await res.text() };
   return NextResponse.json(body, { status: res.status });
 }
 
 export async function GET() {
   const token = getReadToken();
   if (!token) {
-    return jsonError(503, 'OCTO_WEB_CONSOLE_TOKEN is not configured for the authenticated F1 Agent Graph projection.');
+    return jsonError(
+      503,
+      'OCTO_WEB_CONSOLE_TOKEN is not configured for the authenticated F1 Agent Graph projection.'
+    );
   }
 
   try {
@@ -66,7 +66,10 @@ export async function GET() {
       cache: 'no-store',
     });
   } catch (err) {
-    return jsonError(502, err instanceof Error ? err.message : 'Unable to fetch F1 Agent Graph projection.');
+    return jsonError(
+      502,
+      err instanceof Error ? err.message : 'Unable to fetch F1 Agent Graph projection.'
+    );
   }
 }
 
@@ -75,7 +78,7 @@ export async function POST(req: NextRequest) {
   if (!token) {
     return jsonError(
       403,
-      'F1 Agent Graph console writes require an httpOnly octo_console_token session cookie or OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES=true with server-side OCTO_WEB_CONSOLE_TOKEN.'
+      'F1 Agent Graph console writes require an httpOnly octo_console_token session cookie.'
     );
   }
 
@@ -97,6 +100,9 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(payload.body ?? {}),
     });
   } catch (err) {
-    return jsonError(502, err instanceof Error ? err.message : 'Unable to write F1 Agent Graph projection.');
+    return jsonError(
+      502,
+      err instanceof Error ? err.message : 'Unable to write F1 Agent Graph projection.'
+    );
   }
 }

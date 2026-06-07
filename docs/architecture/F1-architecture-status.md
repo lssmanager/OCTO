@@ -13,7 +13,7 @@ F1 is aligned to OCTO v5 as **Foundation + Agent Graph System**.
 - Browser code must not use `NEXT_PUBLIC_OCTO_CONSOLE_TOKEN` or any other `NEXT_PUBLIC_*` secret for graph writes.
 - `apps/web/src/app/api/agent-graph/route.ts` is the same-origin backend route for console graph reads/writes.
 - Reads use server-side `OCTO_WEB_CONSOLE_TOKEN` and an `API_URL` base that includes `/api` (for example `http://localhost:3001/api` or `https://agents.socialstudies.cloud/api`).
-- Writes require an `httpOnly` `octo_console_token` session cookie or controlled server-token mode with `OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES=true`.
+- Writes require an `httpOnly` `octo_console_token` session cookie; unauthenticated callers cannot use the server-side read token for writes.
 - Backend `apps/api/src/agents` JWT, RBAC, tenant and hierarchy guards remain authoritative.
 
 ## F1/F2 boundary

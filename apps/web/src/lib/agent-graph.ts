@@ -33,14 +33,14 @@ export type AgentGraphData = {
   fetchedAt: string;
 };
 
-export function writesConfigured() {
-  return Boolean(process.env['OCTO_WEB_CONSOLE_TOKEN'] && process.env['OCTO_WEB_CONSOLE_ALLOW_SERVER_TOKEN_WRITES'] === 'true');
-}
-
 export async function getAgentGraph(): Promise<AgentGraphData> {
   const token = process.env['OCTO_WEB_CONSOLE_TOKEN'];
   if (!token) {
-    return { nodes: [], error: 'OCTO_WEB_CONSOLE_TOKEN is not configured for the authenticated console projection.', fetchedAt: new Date().toISOString() };
+    return {
+      nodes: [],
+      error: 'OCTO_WEB_CONSOLE_TOKEN is not configured for the authenticated console projection.',
+      fetchedAt: new Date().toISOString(),
+    };
   }
   try {
     const res = await fetch(`${API_URL}/v1/agents/graph`, {
@@ -48,7 +48,12 @@ export async function getAgentGraph(): Promise<AgentGraphData> {
       next: { revalidate: 15 },
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return { nodes: [], error: `API returned HTTP ${res.status}`, fetchedAt: new Date().toISOString() };
+    if (!res.ok)
+      return {
+        nodes: [],
+        error: `API returned HTTP ${res.status}`,
+        fetchedAt: new Date().toISOString(),
+      };
     return { nodes: (await res.json()) as AgentGraphNode[], fetchedAt: new Date().toISOString() };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unable to fetch agent graph';
