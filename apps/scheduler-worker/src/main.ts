@@ -6,6 +6,11 @@ import { processExecutionDispatchJob, type DispatchPayload } from './dispatch-ha
 import { invokeRuntimeHttp } from './runtime-client';
 import { startHeartbeat, stopHeartbeat } from './heartbeat';
 import { reconcileQueuedDispatchGaps } from './reconciliation/execution-reconciler';
+import {
+  buildSchedulerOperationalStatus,
+  isAuthorizedSchedulerOpsRequest,
+  schedulerPublicProbeBody,
+} from './health-contract';
 
 const workerId = process.env['SCHEDULER_WORKER_ID'] ?? `scheduler-${process.pid}`;
 const leaseSeconds = Number(process.env['EXECUTION_LEASE_SECONDS'] ?? '90');
@@ -198,7 +203,7 @@ async function start() {
           if (!rr.ok) throw new Error('runtime_not_ready');
         }
         res.statusCode = ready ? 200 : 503;
-        res.end(ready ? 'ready' : 'booting');
+        res.end(schedulerPublicProbeBody(ready));
       } catch {
         res.statusCode = 503;
         res.end('not_ready');
@@ -206,24 +211,25 @@ async function start() {
       return;
     }
     if (req.url === '/health/status') {
+      if (!isAuthorizedSchedulerOpsRequest(req)) {
+        res.statusCode = 401;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
       res.statusCode = 200;
       res.setHeader('content-type', 'application/json');
       res.end(
-        JSON.stringify({
-          workerId,
-          topology: {
-            dispatchConsumer: 'scheduler-worker',
-            dispatchRepair: 'queued-dispatch-reconciler',
-            runtimeInvocation: 'scheduler-http-runtime-202-accepted',
+        JSON.stringify(
+          buildSchedulerOperationalStatus({
+            workerId,
             runtimeInvokeTimeoutMs,
             leaseSeconds,
-          },
-          executionDispatch: {
-            staleThresholdMs: dispatchReconcilerStaleMs,
-            intervalMs: dispatchReconcilerIntervalMs,
-            ...dispatchRepairStatus,
-          },
-        })
+            dispatchReconcilerStaleMs,
+            dispatchReconcilerIntervalMs,
+            dispatchRepairStatus,
+          })
+        )
       );
       return;
     }
