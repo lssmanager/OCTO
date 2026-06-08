@@ -7,6 +7,7 @@ import sys
 from typing import Any
 
 MODEL_BY_CONTRACT = {
+    "ExecutionSchema": ("ExecutionSchema", "ExecutionSchema"),
     "ExecutionCheckpointSchema": ("ExecutionCheckpointSchema", "ExecutionCheckpointSchema"),
     "CheckpointWriteSchema": ("CheckpointWriteSchema", "CheckpointWriteSchema"),
     "CanonicalChatMessageSchema": ("CanonicalChatMessageSchema", "CanonicalChatMessageSchema"),

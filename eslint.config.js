@@ -34,10 +34,9 @@
 //        BullMQ access belongs behind @octo/queue adapters
 //   [R6] contracts/config/prompts x @octo/*
 //   [R7] workers adapter-only: no UI and no direct app-to-app imports
+//   [R8] provider SDK packages stay behind packages/sdk-abstractions; direct
+//        external provider SDK imports are blocked everywhere else.
 //
-// NOTE: boundaries/no-unknown is intentionally scoped through include-paths so
-// external node_modules imports are not architectural violations. The element
-// topology enforces the internal DAG.
 
 import boundaries from 'eslint-plugin-boundaries';
 import tsParser from '@typescript-eslint/parser';
@@ -186,13 +185,38 @@ export default [
         },
       ],
 
-      // External deps (node_modules) are valid; only flag truly unknown internal
-      // imports that do not match any element pattern.
+      // External deps (node_modules) are valid by default, but direct provider
+      // SDK imports are not: those belong behind packages/sdk-abstractions.
       'boundaries/no-unknown': 'error',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'openai', message: 'Use @octo/sdk-abstractions instead of importing provider SDKs directly.' },
+            { name: 'anthropic', message: 'Use @octo/sdk-abstractions instead of importing provider SDKs directly.' },
+            { name: '@anthropic-ai/sdk', message: 'Use @octo/sdk-abstractions instead of importing provider SDKs directly.' },
+            { name: '@google/generative-ai', message: 'Use @octo/sdk-abstractions instead of importing provider SDKs directly.' },
+            { name: 'google-generativeai', message: 'Use @octo/sdk-abstractions instead of importing provider SDKs directly.' },
+            { name: 'ai', message: 'Use @octo/sdk-abstractions instead of importing provider SDKs directly.' },
+          ],
+          patterns: [
+            { group: ['@ai-sdk/*'], message: 'Use @octo/sdk-abstractions instead of importing provider SDKs directly.' },
+          ],
+        },
+      ],
 
       // [ADR-0017] Prevent raw execution status writes outside runtime-state.
       // Use ExecutionStateService.transition() instead.
       'octo-local/no-raw-execution-status-write': 'error',
     },
   },
+  // Provider SDK abstraction package is the only TypeScript zone allowed to
+  // import provider SDKs directly.
+  {
+    files: ['packages/sdk-abstractions/**/*.ts', 'packages/sdk-abstractions/**/*.tsx'],
+    rules: {
+      'no-restricted-imports': 'off',
+    },
+  },
+
 ];

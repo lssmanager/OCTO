@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# TypeScript boundary lint enforces the official OCTO stack DAG and direct provider SDK ban.
+pnpm lint:boundaries
+node scripts/self-test-boundary-lint.mjs
+
 # Forbidden provider SDK imports outside Python LLM adapter boundary
 violations=$(rg -n "\bfrom (openai|anthropic|google\.generativeai)\b|\bimport (openai|anthropic|google\.generativeai)\b" apps packages \
   -g '!apps/runtime-worker/app/adapters/llm/**' -g '!**/tests/**' || true)

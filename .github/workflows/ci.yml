@@ -28,6 +28,7 @@ jobs:
       - run: HUSKY=0 pnpm install --frozen-lockfile
       - run: pnpm formatcheck
       - run: pnpm lint
+      - run: pnpm lint:boundaries
       - run: pnpm arch:check
       - run: pnpm compose:network-policy
       - run: pnpm security:vitest
@@ -61,10 +62,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: HUSKY=0 pnpm install --frozen-lockfile
-      - run: pnpm contracts:build
-      - run: pnpm contracts:python
-      - run: pnpm contracts:check
-      - run: pytest packages/contracts/tests/ -v
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install datamodel-code-generator pydantic pytest
+      - run: pnpm contracts:validate
 
   unit-tests:
     runs-on: ubuntu-latest
