@@ -45,8 +45,8 @@ apps/channel-*        NestJS workers — channel adapters
 packages/*            Shared TS libraries — contracts, database, queue, etc.
 ```
 
-TypeScript version: **5.7.x**  
-Node.js version: **20.x LTS**  
+TypeScript version: **5.9.3** (F1 pin; owner: OCTO Repo Engineering; retire after TS 6.x is supported by ESLint/Vitest/workspace tooling and the lockfile gate is green)  
+Node.js version: **>=22.13.0** (Node 22 baseline for pnpm 11.2.2; enforced by `engine-strict=true`)  
 tsconfig: `strict: true` + `noUncheckedIndexedAccess: true` + `exactOptionalPropertyTypes: true`
 
 ### Python — Runtime (Execution Plane)

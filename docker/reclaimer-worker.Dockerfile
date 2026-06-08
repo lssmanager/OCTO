@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # apps/reclaimer-worker/Dockerfile
 # Issue #34 — Reclaimer worker container
 #
@@ -10,6 +11,7 @@
 # ---- builder ----
 FROM node:22.22.2-alpine3.22 AS builder
 WORKDIR /app
+ENV TURBO_TELEMETRY_DISABLED=1
 
 # Install pnpm
 RUN npm install -g pnpm@11.2.2

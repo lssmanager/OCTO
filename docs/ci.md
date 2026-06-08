@@ -34,6 +34,8 @@ pnpm security:secret-scan-gate
 ```
 
 ## Local commands
+- `pnpm f1:tooling-gate` - verifies Node/pnpm engine policy, package/lockfile TypeScript alignment, root ESM/CommonJS config naming, explicit Turbo telemetry opt-out, and effective F1 Dockerfile syntax directives.
+- `pnpm f1:tooling-gate:self-test` - negative self-tests for stale manifest/lockfile alignment, CommonJS config drift under root ESM, missing Turbo telemetry opt-out, and missing/ineffective Dockerfile syntax directives.
 - `pnpm f1:workspace-type-gate` - reproducible F1/F2 handoff gate for `@octo/events`, `@octo/database`, `@octo/api`, then full workspace `build` and `typecheck`.
 - `pnpm formatcheck`
 - `pnpm lint:boundaries`
@@ -52,6 +54,16 @@ pnpm security:secret-scan-gate
 - `pytest apps/runtime-worker/tests/ -v --tb=short`
 
 Use real Postgres/Redis for integration checks.
+
+## F1 Node, pnpm, lockfile and telemetry policy
+
+F1 supports the Node.js tooling baseline declared in `package.json`: `node >=22.13.0` and `pnpm >=11.2.2 <12`, with `.npmrc` `engine-strict=true` so unsupported runtimes fail before install drift can enter CI. The root `packageManager` remains `pnpm@11.2.2`, and CI keeps `pnpm install --frozen-lockfile`; do not remove the frozen lockfile flag to hide manifest drift.
+
+TypeScript is intentionally pinned to `5.9.3` in `package.json`, `pnpm-workspace.yaml` overrides, and `pnpm-lock.yaml`. Owner: OCTO Repo Engineering. Removal condition: TS 6.x is supported by the full ESLint/Vitest/workspace toolchain and `pnpm f1:tooling-gate` plus `pnpm install --frozen-lockfile` pass without overrides drift.
+
+`lint-staged` is pinned to `16.2.7` because `17.x` raises the Node engine floor above the F1-supported Node 22.13 baseline. Revisit only when the official Node floor is raised and documented.
+
+Turbo telemetry opt-out is explicit: package scripts that invoke Turbo set `TURBO_TELEMETRY_DISABLED=1`, CI exports the same variable, and Docker builders set it before build-time Turbo commands.
 
 ## Tooling hygiene outside F1 close gate
 

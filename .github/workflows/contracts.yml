@@ -5,25 +5,34 @@ on:
   push:
     branches: [main, develop]
 
+env:
+  NODE_VERSION: '22.15.0'
+  PNPM_VERSION: '11.2.2'
+  PYTHON_VERSION: '3.12'
+  TURBO_TELEMETRY_DISABLED: '1'
+
 jobs:
   contracts:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+      TURBO_TELEMETRY_DISABLED: ${{ env.TURBO_TELEMETRY_DISABLED }}
     steps:
       - uses: actions/checkout@v6
       # pnpm 11.2.2 requires Node >= 22.13 during action bootstrap.
       - uses: actions/setup-node@v6
         with:
-          node-version: '22.15.0'
+          node-version: ${{ env.NODE_VERSION }}
       - uses: pnpm/action-setup@v6
         with:
-          version: 11.2.2
+          version: ${{ env.PNPM_VERSION }}
       - name: Install deps
         run: HUSKY=0 pnpm install --frozen-lockfile
+      - name: F1 tooling reproducibility gate
+        run: pnpm f1:tooling-gate
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: Install Python deps
         run: pip install datamodel-code-generator pydantic pytest
       - name: Generate schemas

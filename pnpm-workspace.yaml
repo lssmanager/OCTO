@@ -22,6 +22,9 @@ overrides:
   file-type: '21.3.2'
   webpack: '5.104.1'
   source-map: '0.7.4'
+  # TypeScript is intentionally pinned to the stable 5.9.x line for F1.
+  # Owner: OCTO Repo Engineering. Remove after TS 6.x is supported by the
+  # full ESLint/Vitest/workspace toolchain and the lockfile gate is green.
   typescript: '5.9.3'
   esbuild: '0.25.12'
   vitest: '4.1.8'

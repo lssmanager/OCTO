@@ -3,6 +3,7 @@
 
 publish-branch=main
 link-workspace-packages=true
+inject-workspace-packages=true
 strict-peer-dependencies=false
 auto-install-peers=true
 shamefully-hoist=true

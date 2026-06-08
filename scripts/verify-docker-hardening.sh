@@ -25,6 +25,13 @@ mutable_alias_re = re.compile(r"^(?:\d+|\d+\.\d+)-(?:alpine|slim|bookworm|bullse
 results: list[tuple[str, str, str]] = []
 images: list[dict[str, str]] = []
 dockerfile_rows: list[dict[str, str]] = []
+f1_syntax_required = {
+    'docker/api.Dockerfile',
+    'docker/runtime-worker.Dockerfile',
+    'docker/scheduler-worker.Dockerfile',
+    'docker/reclaimer-worker.Dockerfile',
+    'docker/migrate.Dockerfile',
+}
 compose_rows: list[dict[str, str]] = []
 
 def add(level: str, check: str, detail: str) -> None:
@@ -73,10 +80,16 @@ for path in compose_paths:
     if not services:
         add("WARN", "compose services", f"{compose_name}: no services found")
         continue
+    is_debug_override = compose_name.endswith(".debug.yml") or compose_name.endswith(".debug.yaml")
     for service, cfg in services.items():
         source = f"{compose_name}:{service}"
         if isinstance(cfg, dict) and cfg.get("image"):
             check_image_ref(str(cfg["image"]), source)
+        if is_debug_override:
+            add("PASS", "debug compose override", f"{source}: debug-only host bindings are checked by compose:network-policy")
+            if cfg.get("ports"):
+                compose_rows.append({"compose": compose_name, "service": service, "ports": json.dumps(cfg.get("ports")), "healthcheck": "debug override", "restart": "debug override"})
+            continue
         restart = str(cfg.get("restart", "")) if isinstance(cfg, dict) else ""
         if restart != "unless-stopped":
             if service == "migrate" and restart in {"no", "'no'", '"no"'}:
@@ -111,6 +124,15 @@ for path in compose_paths:
 for path in dockerfiles():
     rel = str(path.relative_to(root))
     text = path.read_text()
+    first_line = text.splitlines()[0] if text.splitlines() else ''
+    syntax_effective = first_line.startswith('# syntax=docker/dockerfile:')
+    if rel in f1_syntax_required:
+        if syntax_effective:
+            add('PASS', 'Dockerfile syntax directive', f'{rel}: effective on line 1 ({first_line})')
+        else:
+            add('FAIL', 'Dockerfile syntax directive', f'{rel}: missing or ineffective; # syntax= must be the first line for BuildKit')
+    elif '# syntax=' in text and not syntax_effective:
+        add('WARN', 'Dockerfile syntax directive', f'{rel}: # syntax= is present but not effective because it is not line 1')
     from_lines = re.findall(r"^FROM\s+([^\s]+)(?:\s+AS\s+([^\s]+))?", text, flags=re.MULTILINE | re.IGNORECASE)
     froms = [ref for ref, _alias in from_lines]
     stage_aliases = {alias for _ref, alias in from_lines if alias}
@@ -137,7 +159,7 @@ for path in dockerfiles():
     non_comment_text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
     if re.search(r"^(?:ENV|ARG)\s+[^\n]*(_KEY|_SECRET|PASSWORD|TOKEN)=", non_comment_text, flags=re.MULTILINE):
         add("FAIL", "Dockerfile secret material", f"{rel}: possible secret ENV/ARG assignment")
-    dockerfile_rows.append({"path": rel, "stages": str(len(froms)), "final_user": final_user or "missing", "oci_labels": "yes" if "org.opencontainers.image.title" in text else "no"})
+    dockerfile_rows.append({"path": rel, "syntax": "line 1" if syntax_effective else "missing/ineffective", "stages": str(len(froms)), "final_user": final_user or "missing", "oci_labels": "yes" if "org.opencontainers.image.title" in text else "no"})
 
 # Optional built-image checks for canonical F1 local images. Static checks above are authoritative for close gate.
 for image in ["octo/api:sha-local", "octo/runtime-worker:sha-local", "octo/scheduler-worker:sha-local", "octo/migrate:sha-local", "octo/outbox-publisher-worker:sha-local", "octo/reclaimer-worker:sha-local"]:
@@ -180,9 +202,9 @@ with report_path.open("w") as f:
     f.write("\n## Exposed ports, health checks and restart policies\n\n| Compose | Service | Ports | Healthcheck | Restart |\n|---|---|---|---|---|\n")
     for row in compose_rows:
         f.write(f"| {row['compose']} | {row['service']} | `{row['ports']}` | {row['healthcheck']} | `{row['restart']}` |\n")
-    f.write("\n## Dockerfiles\n\n| Path | Stages | Final USER | OCI labels |\n|---|---:|---|---|\n")
+    f.write("\n## Dockerfiles\n\n| Path | Syntax directive | Stages | Final USER | OCI labels |\n|---|---|---:|---|---|\n")
     for row in dockerfile_rows:
-        f.write(f"| `{row['path']}` | {row['stages']} | `{row['final_user']}` | {row['oci_labels']} |\n")
+        f.write(f"| `{row['path']}` | {row['syntax']} | {row['stages']} | `{row['final_user']}` | {row['oci_labels']} |\n")
     f.write("\n## Check log\n\n| Level | Check | Detail |\n|---|---|---|\n")
     for level, check, detail in results:
         f.write(f"| {level} | {check} | {detail.replace('|','\\|')} |\n")

@@ -16,8 +16,9 @@
 | **Object Storage** | MinIO | `infra/` |
 | **Observability** | OpenTelemetry, Grafana, Prometheus, Loki | `packages/observability`, `infra/` |
 | **Deployment** | Docker, Coolify, Traefik | `infra/` |
-| **Monorepo** | Turborepo | root |
-| **Package Manager** | pnpm workspaces | root |
+| **Monorepo** | Turborepo with explicit `TURBO_TELEMETRY_DISABLED=1` in local scripts and CI | root |
+| **Package Manager** | pnpm `11.2.2` workspaces with frozen lockfile installs | root |
+| **Node.js Tooling Runtime** | Node.js `>=22.13.0` enforced by `engine-strict=true`; CI uses Node 22 | root |
 
 ## 10-Layer Architecture
 

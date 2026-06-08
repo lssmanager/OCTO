@@ -29,6 +29,7 @@ REPORT_CHECK_DETAILS=()
 REPORT_URLS=()
 REQUIRED_CLOSE_CHECKS=(
   "close tooling available (docker and docker compose)"
+  "F1 tooling reproducibility gate"
   "workspace build/typecheck gate"
   "workspace lint"
   "API unit tests"
@@ -188,6 +189,7 @@ run_mode_check() {
 }
 
 run_common_checks() {
+  run_mode_check "F1 tooling reproducibility gate" pnpm f1:tooling-gate
   run_mode_check "workspace build/typecheck gate" pnpm f1:workspace-type-gate
   run_mode_check "workspace lint" pnpm lint
   run_mode_check "API unit tests" pnpm -s --filter @octo/api test -- --runInBand
