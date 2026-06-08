@@ -33,6 +33,32 @@ Local validation:
 pnpm security:secret-scan-gate
 ```
 
+
+## F1 security gates restored
+
+- `pnpm f1:verify` defaults to fast local feedback, but `F1_VERIFY_MODE=close` is
+  a supported CI/environment source of truth. CLI flags have explicit precedence
+  over the environment for one-off overrides: `--close` / `--fast` >
+  `F1_VERIFY_MODE` > default `fast`. Invalid modes fail explicitly.
+- `pnpm f1:close-gate` always runs the strict close path and records unreached
+  required checks as failures in the close report.
+- `pnpm contracts:validate` is the contracts CI gate: regenerate JSON Schema,
+  regenerate Pydantic models under `apps/runtime-worker/app/contracts/generated`,
+  validate Ajv 8 formats (including `date-time`), run TS/Python conformance and
+  fail on generated artifact drift.
+- `pnpm lint:boundaries` and `pnpm arch:check` enforce the official stack zones
+  and block direct provider SDK imports outside `packages/sdk-abstractions`.
+- `pnpm testintegration` first verifies that the API integration scope includes
+  every `apps/api/src/**/*.integration.test.ts` file, then executes explicit root-relative test file paths to avoid shell-expansion, Vitest filter, or workspace-cwd false greens.
+
+## pnpm release-age gate
+
+F1 uses pnpm's `minimum-release-age=1440` (24 hours) supply-chain gate in
+`.pnpmrc`. Any `minimumReleaseAgeExclude` entry in `pnpm-workspace.yaml` must be
+version-scoped or family-scoped only for an active security remediation, include
+owner, reason and removal date/condition in comments, and must not include React
+without a current approved release blocker.
+
 ## Local commands
 - `pnpm f1:workspace-type-gate` - reproducible F1/F2 handoff gate for `@octo/events`, `@octo/database`, `@octo/api`, then full workspace `build` and `typecheck`.
 - `pnpm formatcheck`

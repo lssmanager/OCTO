@@ -1,19 +1,50 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+usage() { echo "Usage: $0 [--fast|--close]" >&2; }
+
+mode_from_flag() {
+  case "$1" in
+    --fast) printf 'fast' ;;
+    --close) printf 'close' ;;
+    *) return 1 ;;
+  esac
+}
+
+normalize_mode() {
+  case "$1" in
+    fast|close) printf '%s' "$1" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Mode precedence is intentionally explicit for CI/local compatibility:
+#   1. CLI flags (--fast/--close) are the highest-precedence per-invocation override.
+#   2. F1_VERIFY_MODE is the CI/environment source of truth when no CLI flag is supplied.
+#   3. The default remains fast for local feedback only.
+# Invalid modes fail closed instead of silently downgrading to fast.
 MODE="fast"
 if (( $# > 1 )); then
-  echo "Usage: $0 [--fast|--close]" >&2
+  usage
   exit 64
 fi
 
-if [[ "${1:-}" == "--close" ]]; then
-  MODE="close"
-elif [[ "${1:-}" == "--fast" || "${1:-}" == "" ]]; then
-  MODE="fast"
-else
-  echo "Usage: $0 [--fast|--close]" >&2
-  exit 64
+if [[ -n "${1:-}" ]]; then
+  if ! MODE="$(mode_from_flag "$1")"; then
+    usage
+    echo "Invalid F1 verify flag: $1" >&2
+    exit 64
+  fi
+elif [[ -n "${F1_VERIFY_MODE:-}" ]]; then
+  if ! MODE="$(normalize_mode "$F1_VERIFY_MODE")"; then
+    echo "Invalid F1_VERIFY_MODE: $F1_VERIFY_MODE (expected fast or close)" >&2
+    exit 64
+  fi
+fi
+
+if [[ "${F1_VERIFY_PRINT_MODE:-0}" == "1" ]]; then
+  printf '%s\n' "$MODE"
+  exit 0
 fi
 
 log() { printf '\n==> %s\n' "$*"; }
@@ -29,6 +60,7 @@ REPORT_CHECK_DETAILS=()
 REPORT_URLS=()
 REQUIRED_CLOSE_CHECKS=(
   "close tooling available (docker and docker compose)"
+  "F1 security gate self-tests"
   "workspace build/typecheck gate"
   "workspace lint"
   "API unit tests"
@@ -188,6 +220,7 @@ run_mode_check() {
 }
 
 run_common_checks() {
+  run_mode_check "F1 security gate self-tests" pnpm f1:self-test-gates
   run_mode_check "workspace build/typecheck gate" pnpm f1:workspace-type-gate
   run_mode_check "workspace lint" pnpm lint
   run_mode_check "API unit tests" pnpm -s --filter @octo/api test -- --runInBand
@@ -240,6 +273,10 @@ run_fast_integration_if_available() {
 }
 
 require_close_tooling() {
+  if [[ "${F1_VERIFY_SELF_TEST_FAIL_CLOSE_TOOLING:-0}" == "1" ]]; then
+    echo "F1 close gate self-test sabotaged close tooling" >&2
+    return 1
+  fi
   command -v docker >/dev/null 2>&1 || { echo "F1 close gate requires docker" >&2; return 1; }
   docker compose version >/dev/null 2>&1 || { echo "F1 close gate requires docker compose" >&2; return 1; }
 }

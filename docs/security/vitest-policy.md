@@ -37,4 +37,4 @@ The guard fails when a workspace reintroduces vulnerable Vitest versions, instal
 
 ## Emergency release-age exception
 
-The workspace keeps version-scoped `minimumReleaseAgeExclude` entries for `vitest@4.1.8` and `@vitest/*` so a critical Dependabot remediation can be installed immediately without disabling pnpm release-age protection globally. Remove or rotate the exception when the next safe Vitest line is adopted.
+The workspace keeps version-scoped `minimumReleaseAgeExclude` entries for `vitest@4.1.8` and `@vitest/*` so a critical Dependabot remediation can be installed immediately without disabling pnpm release-age protection globally. Owner: OCTO Security. Removal condition: remove or rotate the exception when the next safe Vitest line is adopted, and review no later than 2026-07-15. React packages are intentionally not excluded from the release-age gate.

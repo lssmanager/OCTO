@@ -100,3 +100,16 @@ La validación cubre:
 - reclaim controlado de una ejecución zombie, re-encolado sin duplicar efectos observables y publicación outbox de reclaim.
 
 PostgreSQL es la fuente de verdad. Redis/BullMQ solo es transporte/coordinación; si PostgreSQL contiene estado durable y BullMQ pierde el job, el reconciliador/worker debe repararlo o el gate falla.
+
+
+## Verify mode contract
+
+`pnpm f1:verify` is fast by default for local feedback. CI or release wrappers may
+set `F1_VERIFY_MODE=close` to require the strict close gate without changing the
+package script. Explicit CLI flags are per-invocation overrides and take
+precedence (`bash scripts/f1-verify.sh --close|--fast` > `F1_VERIFY_MODE` >
+`fast`). Invalid modes fail with exit 64 instead of silently downgrading to fast.
+
+`pnpm f1:close-gate` remains the canonical strict release gate and is equivalent
+to invoking the script with `--close`; close mode records any failed or unreached
+required check as a failing close report entry.

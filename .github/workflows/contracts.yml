@@ -26,11 +26,5 @@ jobs:
           python-version: '3.11'
       - name: Install Python deps
         run: pip install datamodel-code-generator pydantic pytest
-      - name: Generate schemas
-        run: pnpm contracts:build
-      - name: Generate pydantic
-        run: pnpm contracts:python
-      - name: Drift check
-        run: pnpm contracts:check
-      - name: Contract conformance (TS/Python roundtrip)
-        run: pnpm contracts:conformance
+      - name: Full contract validation (schema, generated Python, conformance, drift)
+        run: pnpm contracts:validate

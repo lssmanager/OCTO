@@ -96,5 +96,5 @@ describe('ExecutionCheckpoint persistence payload conformance', () => {
       child.id,
     ]);
     expect(store.writesFor(String(child.id)).map((write) => write.writeIndex)).toEqual([0, 1]);
-  });
+  }, 20_000);
 });

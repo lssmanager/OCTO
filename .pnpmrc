@@ -6,3 +6,6 @@ link-workspace-packages=true
 strict-peer-dependencies=false
 auto-install-peers=true
 shamefully-hoist=true
+
+# F1 supply-chain release gate: wait at least 24h before installing newly published packages.
+minimum-release-age=1440
