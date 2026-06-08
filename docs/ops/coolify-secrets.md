@@ -200,6 +200,13 @@ Build Variables) on the compose resource:
 | `LITELLM_MASTER_KEY` | LiteLLM master key used by API/runtime readiness and calls. |
 | `INTERNAL_SECRET` | Canonical 32+ character internal/admin and inter-service secret shared by API, runtime-worker, scheduler-worker, and BullBoard. |
 | `OPENAI_API_KEY` | Real provider key or a controlled fake key only when the F1 environment intentionally uses fake LLM mode. |
+| `DATABASE_URL` | Runtime admin/API DSN using compose DNS, for example `postgresql://octo:<password>@postgres:5432/octo`; must not be a Build Variable. |
+| `REDIS_URL` | Runtime Redis DSN using compose DNS, for example `redis://:<password>@redis:6379`; must not be a Build Variable. |
+| `RUNTIME_DATABASE_URL` | Runtime-worker least-privilege DSN, for example `postgresql://octo_runtime:<runtime-password>@postgres:5432/octo`. |
+| `LITELLM_BASE_URL` | `http://litellm:4000`; keep LiteLLM as an internal Compose service. |
+| `LITELLM_HEALTH_ENDPOINT` | `/health/readiness`; do not replace readiness with liveness. |
+| `LITELLM_HEALTH_TIMEOUT_MS` | `5000`; runtime env for API readiness. |
+| `DASHBOARD_TOKEN` | Leave unset for the public F1 close surface so `/` and `/status` return HTTP 200 to smokes; set only for a deliberately private console and pass the matching `X-Dashboard-Token` in private checks. |
 | `OCTO_WEB_CONSOLE_TOKEN` | Do not configure on the public web service for F1 console writes; graph reads/writes must use authenticated `octo_console_token` sessions, and secrets must never be exposed as `NEXT_PUBLIC_*`. |
 
 Configure these non-secret metadata variables for F1 close deploys. They may be

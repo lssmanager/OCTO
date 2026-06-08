@@ -113,9 +113,9 @@ export async function getVersionInfo(): Promise<VersionInfo> {
   await requireDashboardAccess();
 
   return {
-    version: process.env['npm_package_version'] ?? '0.0.1-f0',
-    phase: 'F0',
-    commit: process.env['GIT_COMMIT'] ?? 'local',
+    version: process.env['BUILD_VERSION'] ?? process.env['npm_package_version'] ?? '0.1.0-f1',
+    phase: process.env['BUILD_PHASE'] ?? 'F1',
+    commit: process.env['BUILD_COMMIT'] ?? process.env['GIT_COMMIT'] ?? 'local',
     buildTime: process.env['BUILD_TIME'] ?? new Date().toISOString(),
     nodeEnv: process.env['NODE_ENV'] ?? 'development',
     apiUrl: API_URL,

@@ -75,6 +75,13 @@ inside compose so server-side rendering and the same-origin `/api/agent-graph`
 proxy can reach the API without exposing console tokens as `NEXT_PUBLIC_*`
 values.
 
+
+## Mandatory resource decision for F1
+
+If the current Coolify application was created from a root Dockerfile, a single API service, Nixpacks, or any Build Pack, replace it for F1 with a **Docker Compose** resource that uses `docker-compose.yml`. F1 is not closed by an `octo-api`-only deploy even when `/api/health/live` is healthy, because that topology does not instantiate `web`, the workers, LiteLLM, or the `migrate` one-shot service on the same compose network.
+
+Coolify must show the following services in the resource after deploy: `web`, `api`, `postgres`, `redis`, `litellm`, `runtime-worker`, `scheduler-worker`, `reclaimer-worker`, `outbox-publisher-worker`, and `migrate`. The public proxy target for the primary host is `web:3000`; API traffic is either routed by path to `api:3001` or moved to a dedicated API host.
+
 ## Routing options
 
 ### Option A — one Docker Compose resource (preferred)
@@ -116,7 +123,7 @@ prefix.
 
 ## Expected public results
 
-After deploy:
+After deploy, run `pnpm f1:coolify-public-smoke` with `F1_WEB_URL` and, when using a split API host, `API_URL` set to the public origins. The expected results are:
 
 - `GET /` returns HTTP 200 and renders `Agent Graph Console` plus the
   `F1 · Agent Graph System` marker.

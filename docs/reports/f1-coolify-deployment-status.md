@@ -248,3 +248,40 @@ Evidencia requerida antes de considerar #289 cerrado en Coolify:
 - reclaimer detecta una ejecución zombie y la recupera/re-encola sin duplicar efectos.
 
 Esta actualización no convierte la evidencia pública previa en PASS por sí sola. El PASS real sigue requiriendo desplegar Compose completo en Coolify y ejecutar `pnpm f1:close-gate` hasta `Final decision: PASS`.
+
+## Revalidación F1 deploy — 2026-06-08 20:32 UTC
+
+Comandos ejecutados desde el repo contra la superficie pública observada:
+
+```bash
+for url in \
+  https://agents.socialstudies.cloud/ \
+  https://agents.socialstudies.cloud/status \
+  https://agents.socialstudies.cloud/api/health/live \
+  https://agents.socialstudies.cloud/api/health/ready \
+  https://agents.socialstudies.cloud/api/health/version; do
+  curl -k -i --max-time 20 "$url"
+done
+```
+
+Resultado objetivo:
+
+| Endpoint | Resultado 2026-06-08 | Evidencia |
+|---|---:|---|
+| `/` | HTTP `200` | Sigue renderizando la página operacional del `octo-api`; el HTML contiene `<title>OCTO F1 status</title>` y no la consola `web` de Next.js. |
+| `/status` | HTTP `404` | Respuesta JSON: `Cannot GET /status`, confirmando que el dominio sigue apuntando al API o a un recurso API-only. |
+| `/api/health/live` | HTTP `200` | `{"status":"ok"}`: el proceso API está vivo. |
+| `/api/health/ready` | HTTP `503` | `ready:false`; `postgres`, `redis` y `queue` están `ok`; `litellm` falla con `This operation was aborted`. |
+| `/api/health/version` | HTTP `200` | `service: octo-api`, `phase: F1`, `version: 0.1.0-f1`, commit `2be6f23359ef97ef40dc7efe7b6256d17b0ec993`, `built_at: local`. |
+
+Diagnóstico raíz actualizado: el despliegue público observado continúa siendo **API-only**. Aunque el repo ya tiene `docker-compose.yml` como contrato canónico F1, la ruta pública de Coolify no está demostrando el recurso Docker Compose completo ni enruta `/` y `/status` al servicio `web:3000`. Por tanto, el fallo de LiteLLM en readiness no debe tratarse como único fix: F1 sigue bloqueada hasta migrar/verificar el recurso `Docker Compose` completo y capturar evidencia de `web`, `api`, `postgres`, `redis`, `litellm`, `runtime-worker`, `scheduler-worker`, `reclaimer-worker`, `outbox-publisher-worker` y `migrate`.
+
+Decisión operacional requerida: cambiar el recurso actual si es single Dockerfile, API-only service, Nixpacks o Build Pack. El recurso F1 correcto en Coolify debe ser **Docker Compose** con `docker-compose.yml` como archivo fuente. Después del redeploy, la evidencia mínima esperada es:
+
+1. `migrate` termina con `service_completed_successfully`.
+2. `docker compose ps`/Coolify Services muestra healthy/running para `web`, `api`, `postgres`, `redis`, `litellm`, `runtime-worker`, `scheduler-worker`, `reclaimer-worker` y `outbox-publisher-worker`.
+3. Desde el contenedor `api`: `getent hosts litellm` resuelve, `curl -fsS http://litellm:4000/health/readiness` responde, y `env` confirma `LITELLM_BASE_URL=http://litellm:4000`, `LITELLM_HEALTH_ENDPOINT=/health/readiness`, `LITELLM_HEALTH_TIMEOUT_MS=5000`.
+4. El dominio público apunta a `web:3000` para `/` y `/status`; `/api/*` apunta a `api:3001` o, si Coolify no soporta ese path routing de forma fiable, se separan dominios: `agents.socialstudies.cloud -> web:3000` y `api.agents.socialstudies.cloud -> api:3001`.
+5. Los smokes públicos devuelven `/status` HTTP 200 y `/api/health/ready` con `ready:true`.
+
+Estado de cierre con esta revalidación: **FAIL**. No hay evidencia pública equivalente a `pnpm f1:close-gate` y el deployment observado no prueba el stack multi-servicio completo.
