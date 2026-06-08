@@ -20,4 +20,22 @@ describe('HeartbeatRefresher', () => {
     expect(onLeaseLost.mock.calls[0]?.[0]).toBeInstanceOf(HeartbeatLostError);
     expect(refresher.getLastError()).toBeInstanceOf(HeartbeatLostError);
   });
+
+  it('converts lease-loss callback exceptions into observable state instead of escaping', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const refresher = new HeartbeatRefresher(
+      { refreshHeartbeat: vi.fn().mockResolvedValue(0) },
+      'exec-1',
+      'worker-1',
+      () => {
+        throw new Error('callback exploded');
+      }
+    );
+
+    await expect((refresher as any).refresh()).resolves.toBeUndefined();
+
+    expect(refresher.getLastError()).toBeInstanceOf(HeartbeatLostError);
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
 });

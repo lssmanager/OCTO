@@ -16,6 +16,7 @@ from tests.utils.contract_conformance_fixtures import (
 )
 
 MODEL_BY_CONTRACT = {
+    "ExecutionSchema": ("ExecutionSchema", "ExecutionSchema"),
     "ExecutionCheckpointSchema": ("ExecutionCheckpointSchema", "ExecutionCheckpointSchema"),
     "CheckpointWriteSchema": ("CheckpointWriteSchema", "CheckpointWriteSchema"),
     "CanonicalChatMessageSchema": ("CanonicalChatMessageSchema", "CanonicalChatMessageSchema"),

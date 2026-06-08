@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,13 +17,33 @@ async function text(path) {
   return readFile(join(root, path), 'utf8');
 }
 
-function hasLine(source, pattern) {
-  return source.split(/\r?\n/).some((line) => pattern.test(line));
-}
-
 function matchScalar(source, key) {
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return source.match(new RegExp(`^\\s*${escaped}:\\s*['\"]?([^'\"\\n#]+)['\"]?`, 'm'))?.[1]?.trim();
+}
+
+function normalizeConfigValue(value) {
+  return value.trim().replace(/^['\"]|['\"]$/g, '');
+}
+
+function readPnpmConfig(key) {
+  const result = spawnSync('pnpm', ['config', 'get', key], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    fail(`Unable to read effective pnpm config for ${key}: ${result.stderr || result.stdout || 'unknown error'}`);
+    return null;
+  }
+  return normalizeConfigValue(result.stdout || '');
+}
+
+function expectPnpmConfig(key, expected) {
+  const actual = readPnpmConfig(key);
+  if (actual === null) return;
+  if (actual !== expected) {
+    fail(`Effective pnpm config ${key} must be ${expected}, found ${actual || 'missing'}`);
+  }
 }
 
 async function workspacePackageJsonFiles(dir = root) {
@@ -57,12 +78,13 @@ function checkLockfileAlignment(packageJson, workspaceYaml, lockYaml) {
   const workspaceTypescript = matchScalar(workspaceYaml, 'typescript');
   const lockTypescript = matchScalar(lockYaml, 'typescript');
   const lintStaged = packageJson.devDependencies?.['lint-staged'];
+  const injectWorkspacePackages = /settings:\s*[\s\S]*?injectWorkspacePackages:\s*true/m.test(workspaceYaml);
 
   if (packageManager !== 'pnpm@11.2.2') {
     fail(`packageManager must stay pinned to pnpm@11.2.2, found ${packageManager ?? 'missing'}`);
   }
-  if (packageJson.engines?.node !== '>=22.13.0') {
-    fail(`engines.node must enforce the supported F1 Node floor >=22.13.0, found ${packageJson.engines?.node ?? 'missing'}`);
+  if (packageJson.engines?.node !== '>=22.22.1') {
+    fail(`engines.node must enforce the supported F1 Node floor >=22.22.1, found ${packageJson.engines?.node ?? 'missing'}`);
   }
   if (packageJson.engines?.pnpm !== '>=11.2.2 <12') {
     fail(`engines.pnpm must enforce pnpm 11.2.2-compatible installs, found ${packageJson.engines?.pnpm ?? 'missing'}`);
@@ -73,21 +95,22 @@ function checkLockfileAlignment(packageJson, workspaceYaml, lockYaml) {
   if (rootTypescript !== '5.9.3') {
     fail(`F1 TypeScript pin must remain 5.9.3 until the documented TS 6.x retirement condition is met, found ${rootTypescript}`);
   }
-  if (lintStaged !== '16.2.7') {
-    fail(`lint-staged must remain on 16.2.7 for the supported Node 22.13 floor, found ${lintStaged ?? 'missing'}`);
+  if (lintStaged !== '17.0.7') {
+    fail(`lint-staged must remain aligned with the main lockfile on 17.0.7, found ${lintStaged ?? 'missing'}`);
+  }
+  if (!injectWorkspacePackages) {
+    fail('pnpm-workspace.yaml must keep settings.injectWorkspacePackages=true as the project-level source of truth');
   }
 }
 
-function checkPnpmPolicy(npmrc, pnpmrc) {
-  if (!hasLine(npmrc, /^engine-strict=true$/)) {
-    fail('.npmrc must keep engine-strict=true so unsupported Node/pnpm versions fail installs');
-  }
-  if (!hasLine(pnpmrc, /^strict-peer-dependencies=false$/)) {
-    fail('.pnpmrc must keep the explicit workspace peer policy used by F1 frozen installs');
-  }
-  if (!hasLine(pnpmrc, /^auto-install-peers=true$/)) {
-    fail('.pnpmrc must keep auto-install-peers=true aligned with the F1 lockfile');
-  }
+function checkEffectivePnpmPolicy() {
+  expectPnpmConfig('engine-strict', 'true');
+  expectPnpmConfig('strict-peer-dependencies', 'false');
+  expectPnpmConfig('auto-install-peers', 'true');
+  expectPnpmConfig('shamefully-hoist', 'true');
+  expectPnpmConfig('link-workspace-packages', 'true');
+  expectPnpmConfig('inject-workspace-packages', 'true');
+  expectPnpmConfig('minimum-release-age', '1440');
 }
 
 async function checkCjsUnderRootEsm(packageJson) {
@@ -143,18 +166,16 @@ async function checkDockerSyntaxDirectives() {
 
 async function runGate() {
   const packageJson = JSON.parse(await text('package.json'));
-  const [workspaceYaml, lockYaml, npmrc, pnpmrc, ciYaml, contractsYaml] = await Promise.all([
+  const [workspaceYaml, lockYaml, ciYaml, contractsYaml] = await Promise.all([
     text('pnpm-workspace.yaml'),
     text('pnpm-lock.yaml'),
-    text('.npmrc'),
-    text('.pnpmrc'),
     text('.github/workflows/ci.yml'),
     text('.github/workflows/contracts.yml'),
   ]);
 
   checkLockfileAlignment(packageJson, workspaceYaml, lockYaml);
   await checkWorkspacePackageManifests(packageJson.devDependencies?.typescript);
-  checkPnpmPolicy(npmrc, pnpmrc);
+  checkEffectivePnpmPolicy();
   await checkCjsUnderRootEsm(packageJson);
   checkTurboTelemetry(packageJson, ciYaml, contractsYaml);
   await checkDockerSyntaxDirectives();
@@ -164,7 +185,7 @@ async function runGate() {
     for (const failure of failures) console.error(`- ${failure}`);
     process.exit(1);
   }
-  console.log('F1 tooling gate passed: lockfile/tooling root/telemetry/Dockerfile directives are aligned.');
+  console.log('F1 tooling gate passed: lockfile/tooling policy/telemetry/Dockerfile directives are aligned.');
 }
 
 function expectFailure(fn, expected) {
@@ -176,14 +197,18 @@ function expectFailure(fn, expected) {
 async function runSelfTest() {
   expectFailure(
     () => checkLockfileAlignment(
-      { packageManager: 'pnpm@11.2.2', engines: { node: '>=22.13.0', pnpm: '>=11.2.2 <12' }, devDependencies: { typescript: '6.0.3', 'lint-staged': '16.2.7' } },
-      'overrides:\n  typescript: \'5.9.3\'\n',
+      { packageManager: 'pnpm@11.2.2', engines: { node: '>=22.22.1', pnpm: '>=11.2.2 <12' }, devDependencies: { typescript: '6.0.3', 'lint-staged': '17.0.7' } },
+      'settings:\n  injectWorkspacePackages: true\noverrides:\n  typescript: \'5.9.3\'\n',
       'settings:\n  injectWorkspacePackages: true\n  typescript: 5.9.3\n',
     ),
     'TypeScript drift',
   );
   expectFailure(
-    () => checkTurboTelemetry({ scripts: { build: 'turbo build' } }, 'name: CI\nenv:\n  TURBO_TELEMETRY_DISABLED: \'1\'\n', 'name: Contracts\nenv:\n  TURBO_TELEMETRY_DISABLED: \'1\'\n'),
+    () => checkTurboTelemetry(
+      { scripts: { build: 'turbo build' } },
+      'name: CI\nenv:\n  TURBO_TELEMETRY_DISABLED: \'1\'\n',
+      'name: Contracts\nenv:\n  TURBO_TELEMETRY_DISABLED: \'1\'\n',
+    ),
     'Turbo scripts',
   );
 
@@ -209,7 +234,9 @@ async function runSelfTest() {
 
   failures.length = 0;
   const dockerFirstLine = 'FROM node:22.22.2-alpine3.22 AS builder\n';
-  if (!dockerFirstLine.split(/\r?\n/, 1)[0].startsWith('# syntax=docker/dockerfile:')) fail('docker/api.Dockerfile must put an effective # syntax= directive on line 1');
+  if (!dockerFirstLine.split(/\r?\n/, 1)[0].startsWith('# syntax=docker/dockerfile:')) {
+    fail('docker/api.Dockerfile must put an effective # syntax= directive on line 1');
+  }
   assert.ok(failures.some((failure) => failure.includes('syntax= directive on line 1')), 'expected Dockerfile syntax directive failure');
 
   failures.length = 0;

@@ -63,8 +63,16 @@ export async function processExecutionDispatchJob(
   const runId = data.runId ?? data.executionId;
   const queueJobId = data.queueJobId ?? data.executionId;
   logJson('execution_dispatch_job_received', {
-    executionId: data.executionId, tenantId: data.tenantId, agentId: data.agentId,
-    traceId: data.traceId, correlationId, runId, queueJobId, workerId: deps.workerId, mode, attempt: data.attempt,
+    executionId: data.executionId,
+    tenantId: data.tenantId,
+    agentId: data.agentId,
+    traceId: data.traceId,
+    correlationId,
+    runId,
+    queueJobId,
+    workerId: deps.workerId,
+    mode,
+    attempt: data.attempt,
   });
   const dispatchReason: DispatchReason =
     data.reason ?? (mode === 'reclaim' ? 'reclaim_replay' : 'dispatch');
@@ -80,7 +88,8 @@ export async function processExecutionDispatchJob(
     )[0];
     if (!current) throw new Error('execution_not_found');
 
-    if (data.agentId && data.agentId !== current.agentId) throw new Error('dispatch_tenant_agent_mismatch');
+    if (data.agentId && data.agentId !== current.agentId)
+      throw new Error('dispatch_tenant_agent_mismatch');
 
     skippedStatus = String(current.status);
     if (['completed', 'failed', 'cancelled'].includes(skippedStatus)) return false;
@@ -123,6 +132,8 @@ export async function processExecutionDispatchJob(
       runId: String(current.runId),
       agentId: String(current.agentId),
       source: 'scheduler-worker',
+      expectedVersion: data.expectedVersion ?? Number(current.version),
+      expectedLeaseOwner: null,
       rowPatch: {
         leaseOwner: deps.workerId,
         workerId: deps.workerId,
@@ -208,12 +219,34 @@ export async function processExecutionDispatchJob(
     if (mode === 'reclaim') {
       dispatchSkippedCounter.add(1, { executionId: data.executionId, status: skippedStatus });
     }
-    logJson('execution_dispatch_skipped', { executionId: data.executionId, tenantId: data.tenantId, traceId: data.traceId, correlationId, runId, queueJobId, workerId: deps.workerId, status: skippedStatus, mode });
+    logJson('execution_dispatch_skipped', {
+      executionId: data.executionId,
+      tenantId: data.tenantId,
+      traceId: data.traceId,
+      correlationId,
+      runId,
+      queueJobId,
+      workerId: deps.workerId,
+      status: skippedStatus,
+      mode,
+    });
     return 'skipped';
   }
 
   try {
-    logJson('execution_runtime_invocation_started', { executionId: data.executionId, tenantId: data.tenantId, agentId: transitioned.agentId, traceId: transitioned.traceId, correlationId: transitioned.correlationId, runId: transitioned.runId, queueJobId: transitioned.queueJobId, workerId: deps.workerId, mode, attempt: transitioned.attempt, leaseOwner: transitioned.leaseOwner });
+    logJson('execution_runtime_invocation_started', {
+      executionId: data.executionId,
+      tenantId: data.tenantId,
+      agentId: transitioned.agentId,
+      traceId: transitioned.traceId,
+      correlationId: transitioned.correlationId,
+      runId: transitioned.runId,
+      queueJobId: transitioned.queueJobId,
+      workerId: deps.workerId,
+      mode,
+      attempt: transitioned.attempt,
+      leaseOwner: transitioned.leaseOwner,
+    });
     await deps.invokeRuntime({
       executionId: data.executionId,
       tenantId: data.tenantId,
@@ -228,7 +261,17 @@ export async function processExecutionDispatchJob(
       leaseToken: transitioned.leaseToken,
       attempt: transitioned.attempt,
     });
-    logJson('execution_runtime_invocation_accepted', { executionId: data.executionId, tenantId: data.tenantId, traceId: transitioned.traceId, correlationId: transitioned.correlationId, runId: transitioned.runId, queueJobId: transitioned.queueJobId, workerId: deps.workerId, mode, attempt: transitioned.attempt });
+    logJson('execution_runtime_invocation_accepted', {
+      executionId: data.executionId,
+      tenantId: data.tenantId,
+      traceId: transitioned.traceId,
+      correlationId: transitioned.correlationId,
+      runId: transitioned.runId,
+      queueJobId: transitioned.queueJobId,
+      workerId: deps.workerId,
+      mode,
+      attempt: transitioned.attempt,
+    });
     if (mode === 'reclaim') {
       replayedCounter.add(1, { executionId: data.executionId });
     }
@@ -249,7 +292,17 @@ export async function processExecutionDispatchJob(
         failedTerminalCounter.add(1, { executionId: data.executionId, status: currentStatus });
       }
     }
-    logJson('execution_runtime_invocation_failed', { executionId: data.executionId, tenantId: data.tenantId, traceId: data.traceId, correlationId, runId, queueJobId, workerId: deps.workerId, mode, error: error instanceof Error ? error.message : String(error) });
+    logJson('execution_runtime_invocation_failed', {
+      executionId: data.executionId,
+      tenantId: data.tenantId,
+      traceId: data.traceId,
+      correlationId,
+      runId,
+      queueJobId,
+      workerId: deps.workerId,
+      mode,
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 }

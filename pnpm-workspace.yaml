@@ -22,9 +22,6 @@ overrides:
   file-type: '21.3.2'
   webpack: '5.104.1'
   source-map: '0.7.4'
-  # TypeScript is intentionally pinned to the stable 5.9.x line for F1.
-  # Owner: OCTO Repo Engineering. Remove after TS 6.x is supported by the
-  # full ESLint/Vitest/workspace toolchain and the lockfile gate is green.
   typescript: '5.9.3'
   esbuild: '0.25.12'
   vitest: '4.1.8'
@@ -55,6 +52,10 @@ allowBuilds:
   unrs-resolver: true
 
 minimumReleaseAgeExclude:
+  # SECURITY-2026-06 / owner: OCTO Security. Temporary exception for a coordinated
+  # TypeScript-ESLint remediation batch pinned to exact 8.60.1 artifacts; remove once
+  # these pins are older than the 24h release-age window or when upgrading to the next
+  # audited TypeScript-ESLint line. Review no later than 2026-07-15.
   - '@typescript-eslint/eslint-plugin@8.60.1'
   - '@typescript-eslint/project-service@8.60.1'
   - '@typescript-eslint/scope-manager@8.60.1'
@@ -64,9 +65,12 @@ minimumReleaseAgeExclude:
   - '@typescript-eslint/typescript-estree@8.60.1'
   - '@typescript-eslint/utils@8.60.1'
   - '@typescript-eslint/visitor-keys@8.60.1'
+  # SECURITY-2026-06 / owner: OCTO Security. Temporary Vitest emergency remediation
+  # documented in docs/security/vitest-policy.md; remove/rotate when the next safe
+  # Vitest line is adopted or no later than 2026-07-15.
   - '@vitest/*'
   - 'vitest@4.1.8'
+  # OPS-2026-06 / owner: OCTO Platform. Temporary exact BullMQ pin for the F1 queue
+  # worker close gate while Redis/BullMQ smoke tests remain version-locked; remove
+  # after the next successful F1 close-gate dependency refresh or by 2026-07-15.
   - 'bullmq@5.77.7'
-  - 'react@19.2.7'
-  - 'react-dom@19.2.7'
-  - '@types/react@19.2.16'

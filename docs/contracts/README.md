@@ -121,25 +121,35 @@ import type { IEventBus } from '@octo/events';
 // @Inject(EVENT_BUS_TOKEN) private readonly eventBus: IEventBus
 ```
 
-## Python mirror
+## Python mirror canónico de F1
 
-`apps/runtime-worker/src/contracts.py` replica los tipos con Pydantic v2.
-**Sincronización manual en F0**. Generación automática planificada en F2+.
+El source of truth cross-language de F1 es `packages/contracts/src/zod/*`. El flujo
+canónico es:
 
-### Reglas de sincronización
+1. `pnpm contracts:build` genera `packages/contracts/generated/json-schema/*.json`.
+2. `pnpm contracts:python` genera `apps/runtime-worker/app/contracts/generated/*.py`.
+3. `pnpm contracts:validate` valida JSON Schema con Ajv 8 + formatos reales,
+   conformance TS/Python y drift de artefactos generados.
 
-| TypeScript | Python |
+`apps/runtime-worker/src/contracts.py` queda solo como referencia legacy/manual y no
+debe usarse para parity o source-of-truth F1. Si un contrato Zod cambia, el mismo
+commit debe actualizar los JSON Schema generados y los modelos Pydantic generados
+bajo `apps/runtime-worker/app/contracts/generated/`.
+
+### Reglas de sincronización generada
+
+| TypeScript / JSON Schema | Python generado |
 |---|---|
-| `camelCase` | `snake_case` |
+| `camelCase` | alias Pydantic con campo `snake_case` |
 | `Record<string, unknown>` | `dict[str, Any]` |
-| `string` literal union | `Literal[...]` |
-| `T \| undefined` (optional field) | `Optional[T] = None` |
-| `T \| null` | `Optional[T] = None` |
-| `number` | `int` o `float` según contexto |
+| `string` literal union / enum | `StrEnum` / literales generados |
+| `T \| undefined` (optional field) | campo Pydantic opcional/default generado |
+| `T \| null` | `T | None` |
+| `number` | `int` o `float` según JSON Schema |
 | `boolean` | `bool` |
 
-**Regla crítica**: si modificas una interfaz en `@octo/contracts`, debes
-actualizar `contracts.py` en el **mismo commit**.
+**Regla crítica**: no edites los modelos generados a mano para resolver drift;
+actualiza el Zod canónico y regenera.
 
 ## ADRs fuente
 

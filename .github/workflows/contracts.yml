@@ -6,7 +6,7 @@ on:
     branches: [main, develop]
 
 env:
-  NODE_VERSION: '22.15.0'
+  NODE_VERSION: '22'
   PNPM_VERSION: '11.2.2'
   PYTHON_VERSION: '3.12'
   TURBO_TELEMETRY_DISABLED: '1'
@@ -19,13 +19,13 @@ jobs:
       TURBO_TELEMETRY_DISABLED: ${{ env.TURBO_TELEMETRY_DISABLED }}
     steps:
       - uses: actions/checkout@v6
-      # pnpm 11.2.2 requires Node >= 22.13 during action bootstrap.
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
       - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
       - name: Install deps
         run: HUSKY=0 pnpm install --frozen-lockfile
       - name: F1 tooling reproducibility gate
@@ -34,12 +34,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install Python deps
-        run: pip install datamodel-code-generator pydantic pytest
-      - name: Generate schemas
-        run: pnpm contracts:build
-      - name: Generate pydantic
-        run: pnpm contracts:python
-      - name: Drift check
-        run: pnpm contracts:check
-      - name: Contract conformance (TS/Python roundtrip)
-        run: pnpm contracts:conformance
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install datamodel-code-generator pydantic pytest
+      - name: Validate contracts end to end
+        run: pnpm contracts:validate

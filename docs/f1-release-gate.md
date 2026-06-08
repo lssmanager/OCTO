@@ -33,23 +33,22 @@ The detailed evidence is tracked in `docs/reports/f1-coolify-deployment-status.m
 The close gate records each required check in `docs/reports/f1-close-report.md`:
 
 1. Docker and Docker Compose availability.
-2. F1 tooling reproducibility gate through `pnpm f1:tooling-gate` (frozen install policy, root ESM/CJS config naming, Turbo telemetry opt-out and Dockerfile syntax-directive effectiveness).
-3. Workspace build/typecheck through `pnpm f1:workspace-type-gate`.
-4. Workspace lint through `pnpm lint`.
-5. API unit tests and Agent Graph F1 integration contract.
-6. Scheduler build and Runtime Worker unit checks.
-7. F1 naming guard: F1 gate scripts must not present Agent Graph as an F2 close proof. `scripts/f2-agent-graph-smoke.sh` remains only as a legacy compatibility wrapper.
-8. Anti-stub source scan.
-9. Clean compose reset and volume removal.
-10. Postgres/Redis startup.
-11. Database migrations through the compose `migrate` service.
-12. Runtime Worker least-privilege database role smoke via `scripts/f1-runtime-db-role-smoke.sh --strict`.
-13. DB/Redis integration tests.
-14. Tenant isolation tests across API, DB/RLS, queues/workers, scheduler, reclaimer and outbox.
-15. F1 observability tests for executionId/traceId reconstruction.
-16. Full F1 compose build and compose up.
-17. Runtime Worker F1 handoff smoke through `scripts/f1-runtime-handoff-smoke.sh`. This smoke runs from the host after `compose up`, so HTTP checks use the published host ports (`API_URL=http://localhost:3001/api` and `RUNTIME_WORKER_URL=http://localhost:8000`), direct SQL heartbeat verification uses `DATABASE_URL=$F1_HOST_DATABASE_URL`, and Compose services continue using `F1_COMPOSE_*` URLs internally. The runtime-worker container itself must keep using `RUNTIME_DATABASE_URL` with the least-privilege runtime role; the host admin `DATABASE_URL` is only for the smoke's optional direct `worker_heartbeats` read. The smoke validates `/health/live`, `/health/ready`, `/health/status`, `workerType=runtime-worker`, phase `F1`, `database.runtimeDatabaseUrlConfigured=true`, `database.credential=RUNTIME_DATABASE_URL`, HTTP handoff `202 Accepted`, JSON `status=accepted`, API worker visibility and a fresh heartbeat when host-side `psql` is available.
-18. Strict public web+API smoke through `scripts/f1-smoke.sh --strict`, including:
+2. Workspace build/typecheck through `pnpm f1:workspace-type-gate`.
+3. Workspace lint through `pnpm lint`.
+4. API unit tests and Agent Graph F1 integration contract.
+5. Scheduler build and Runtime Worker unit checks.
+6. F1 naming guard: F1 gate scripts must not present Agent Graph as an F2 close proof. `scripts/f2-agent-graph-smoke.sh` remains only as a legacy compatibility wrapper.
+7. Anti-stub source scan.
+8. Clean compose reset and volume removal.
+9. Postgres/Redis startup.
+10. Database migrations through the compose `migrate` service.
+11. Runtime Worker least-privilege database role smoke via `scripts/f1-runtime-db-role-smoke.sh --strict`.
+12. DB/Redis integration tests.
+13. Tenant isolation tests across API, DB/RLS, queues/workers, scheduler, reclaimer and outbox.
+14. F1 observability tests for executionId/traceId reconstruction.
+15. Full F1 compose build and compose up.
+16. Runtime Worker F1 handoff smoke through `scripts/f1-runtime-handoff-smoke.sh`. This smoke runs from the host after `compose up`, so HTTP checks use the published host ports (`API_URL=http://localhost:3001/api` and `RUNTIME_WORKER_URL=http://localhost:8000`), direct SQL heartbeat verification uses `DATABASE_URL=$F1_HOST_DATABASE_URL`, and Compose services continue using `F1_COMPOSE_*` URLs internally. The runtime-worker container itself must keep using `RUNTIME_DATABASE_URL` with the least-privilege runtime role; the host admin `DATABASE_URL` is only for the smoke's optional direct `worker_heartbeats` read. The smoke validates `/health/live`, `/health/ready`, `/health/status`, `workerType=runtime-worker`, phase `F1`, `database.runtimeDatabaseUrlConfigured=true`, `database.credential=RUNTIME_DATABASE_URL`, HTTP handoff `202 Accepted`, JSON `status=accepted`, API worker visibility and a fresh heartbeat when host-side `psql` is available.
+17. Strict public web+API smoke through `scripts/f1-smoke.sh --strict`, including:
     - web `/` is HTTP 200, renders `Agent Graph Console`, contains `F1` / `Agent Graph System`, and does not return `Cannot GET /`;
     - web `/status` is HTTP 200 and renders foundation/service status;
     - web `/api/health` is HTTP 200 for the Next.js service healthcheck;
@@ -101,3 +100,16 @@ La validación cubre:
 - reclaim controlado de una ejecución zombie, re-encolado sin duplicar efectos observables y publicación outbox de reclaim.
 
 PostgreSQL es la fuente de verdad. Redis/BullMQ solo es transporte/coordinación; si PostgreSQL contiene estado durable y BullMQ pierde el job, el reconciliador/worker debe repararlo o el gate falla.
+
+
+## Verify mode contract
+
+`pnpm f1:verify` is fast by default for local feedback. CI or release wrappers may
+set `F1_VERIFY_MODE=close` to require the strict close gate without changing the
+package script. Explicit CLI flags are per-invocation overrides and take
+precedence (`bash scripts/f1-verify.sh --close|--fast` > `F1_VERIFY_MODE` >
+`fast`). Invalid modes fail with exit 64 instead of silently downgrading to fast.
+
+`pnpm f1:close-gate` remains the canonical strict release gate and is equivalent
+to invoking the script with `--close`; close mode records any failed or unreached
+required check as a failing close report entry.

@@ -134,6 +134,13 @@
       "when": 1779537660018,
       "tag": "202606070002_tenant_scoped_integrity_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1780876800000,
+      "tag": "202606080001_f1_reclaim_runtime_hardening",
+      "breakpoints": true
     }
   ]
 }

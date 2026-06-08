@@ -51,10 +51,6 @@ curl -H "X-Internal-Secret: $RUNTIME_API_SECRET" http://127.0.0.1:8000/models/
 
 Do not use `docker-compose.debug.yml` in Coolify or production deployments.
 
-## Dockerfile syntax directives
-
-F1 Dockerfiles that rely on BuildKit behavior must put `# syntax=docker/dockerfile:1.7` on line 1. Comments, blank lines or legacy headers before the directive make it ineffective. `pnpm docker:verify-hardening` fails when the directive is absent or displaced for the canonical F1 Dockerfiles under `/docker`.
-
 ## Guardrails
 
 - `pnpm compose:network-policy` fails if deployable compose files publish host
@@ -67,7 +63,7 @@ F1 Dockerfiles that rely on BuildKit behavior must put `# syntax=docker/dockerfi
 ## Local checks
 
 - `pnpm docker:build:f1`
-- `pnpm docker:verify-hardening` (includes effective line-1 `# syntax=` verification for canonical F1 Dockerfiles)
+- `pnpm docker:verify-hardening`
 - `pnpm compose:network-policy`
 - `trivy image --exit-code 1 --severity HIGH,CRITICAL octo/api:sha-local`
 - `syft octo/api:sha-local -o cyclonedx-json > sbom-api.json`
