@@ -80,6 +80,22 @@ export class HeartbeatRefresher {
     return this.lostError;
   }
 
+  private notifyLeaseLost(error: HeartbeatLostError): void {
+    console.error('[heartbeat] lease lost', {
+      executionId: this.executionId,
+      workerId: this.workerId,
+    });
+    try {
+      this.onLeaseLost?.(error);
+    } catch (callbackError) {
+      console.error('[heartbeat] lease-lost callback failed', {
+        executionId: this.executionId,
+        workerId: this.workerId,
+        err: callbackError,
+      });
+    }
+  }
+
   private async refresh(): Promise<void> {
     try {
       const affected = await this.deps.refreshHeartbeat(this.executionId, this.workerId);
@@ -87,13 +103,13 @@ export class HeartbeatRefresher {
         this.stop();
         const error = new HeartbeatLostError(this.executionId, this.workerId);
         this.lostError = error;
-        this.onLeaseLost?.(error);
+        this.notifyLeaseLost(error);
         return;
       }
     } catch (err) {
       if (err instanceof HeartbeatLostError) {
         this.lostError = err;
-        this.onLeaseLost?.(err);
+        this.notifyLeaseLost(err);
         return;
       }
       // Transient DB error -- log and keep trying; do not abort yet.

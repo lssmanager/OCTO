@@ -48,6 +48,7 @@ export const toolInvocations = pgTable(
     requiresApproval: boolean('requires_approval').notNull().default(false),
     approvalId: text('approval_id').references(() => approvals.id, { onDelete: 'set null' }),
     idempotencyKey: text('idempotency_key').notNull(),
+    semanticToolCallKey: text('semantic_tool_call_key').notNull().default(''),
     durationMs: integer('duration_ms'),
     attempt: integer('attempt').notNull().default(1),
     timeoutMs: integer('timeout_ms'),
@@ -78,6 +79,11 @@ export const toolInvocations = pgTable(
     idempotencyIdx: uniqueIndex('idx_tool_invocations_idempotency').on(
       t.tenantId,
       t.idempotencyKey
+    ),
+    semanticToolCallIdx: uniqueIndex('idx_tool_invocations_semantic_tool_call').on(
+      t.tenantId,
+      t.executionId,
+      t.semanticToolCallKey
     ),
     tenantExecutionIdx: index('idx_tool_invocations_tenant_execution').on(
       t.tenantId,

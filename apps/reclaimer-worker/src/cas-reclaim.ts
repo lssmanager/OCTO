@@ -21,6 +21,8 @@ export type ReclaimOutcome = 'reclaimed' | 'already_taken' | 'not_found';
 export type ReclaimPrecondition = {
   attempt?: number | null;
   leaseToken?: string | null;
+  leaseOwner?: string | null;
+  version?: number | null;
 };
 
 export async function casReclaim(
@@ -80,7 +82,13 @@ export async function casReclaim(
                   : eq(executions.attempt, precondition.attempt),
                 precondition.leaseToken == null
                   ? sql`TRUE`
-                  : eq(executions.leaseToken, precondition.leaseToken)
+                  : eq(executions.leaseToken, precondition.leaseToken),
+                precondition.leaseOwner == null
+                  ? sql`TRUE`
+                  : eq(executions.leaseOwner, precondition.leaseOwner),
+                precondition.version == null
+                  ? sql`TRUE`
+                  : eq(executions.version, precondition.version)
               )
             )
             .returning({ id: executions.id });

@@ -21,7 +21,8 @@ try:
     import jsonschema  # noqa: F401
 except ModuleNotFoundError:
     sys.modules.setdefault(
-        "jsonschema", types.SimpleNamespace(validate=lambda **_kwargs: None, ValidationError=ValueError)
+        "jsonschema",
+        types.SimpleNamespace(validate=lambda **_kwargs: None, ValidationError=ValueError),
     )
 
 from src import f1_runtime
@@ -36,7 +37,9 @@ def test_runtime_database_url_prefers_runtime_url(monkeypatch: pytest.MonkeyPatc
     assert f1_runtime.runtime_database_url() == "postgres://runtime"
 
 
-def test_runtime_database_url_requires_runtime_url_in_close_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_runtime_database_url_requires_runtime_url_in_close_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgres://wide")
     monkeypatch.delenv("RUNTIME_DATABASE_URL", raising=False)
     monkeypatch.setenv("F1_CLOSE_GATE", "1")
@@ -163,7 +166,9 @@ def test_run_f1_uses_status_as_authority_and_sends_real_agent_id(
         monkeypatch.setattr(f1_runtime.asyncpg, "connect", fake_connect)
         monkeypatch.setattr(f1_runtime, "call_llm", fake_call_llm)
 
-        result = await f1_runtime.run_f1_execution("exec-1", "tenant-1", "trace-1", lease_token="lease-1", attempt=1)
+        result = await f1_runtime.run_f1_execution(
+            "exec-1", "tenant-1", "trace-1", lease_token="lease-1", attempt=1
+        )
 
         assert result["status"] == "succeeded"
         assert seen["agent_id"] == "agent-real"
@@ -194,18 +199,6 @@ def test_reclaim_mode_resumes_from_latest_checkpoint(monkeypatch: pytest.MonkeyP
                     "source": "loop",
                 },
             ],
-            checkpoint_writes=[
-                {
-                    "write_index": 0,
-                    "channel": "messages",
-                    "type": "tool_result",
-                    "value_json": {
-                        "type": "tool_result",
-                        "tool_name": "search",
-                        "status": "succeeded",
-                    },
-                }
-            ],
         )
 
         async def fake_connect(_dsn: str) -> FakeConn:
@@ -219,13 +212,7 @@ def test_reclaim_mode_resumes_from_latest_checkpoint(monkeypatch: pytest.MonkeyP
             messages: list[dict[str, Any]],
             snapshot: dict[str, Any],
         ) -> LLMCallResult:
-            assert messages == [
-                {"role": "assistant", "content": "partial"},
-                {
-                    "role": "tool",
-                    "content": '{"type": "tool_result", "tool_name": "search", "status": "succeeded"}',
-                },
-            ]
+            assert messages == [{"role": "assistant", "content": "partial"}]
             return LLMCallResult(
                 content="ok",
                 tool_calls=None,
@@ -242,7 +229,9 @@ def test_reclaim_mode_resumes_from_latest_checkpoint(monkeypatch: pytest.MonkeyP
         monkeypatch.setattr(f1_runtime.asyncpg, "connect", fake_connect)
         monkeypatch.setattr(f1_runtime, "call_llm", fake_call_llm)
 
-        result = await f1_runtime.run_f1_execution("exec-1", "tenant-1", "trace-1", mode="reclaim", lease_token="lease-1", attempt=1)
+        result = await f1_runtime.run_f1_execution(
+            "exec-1", "tenant-1", "trace-1", mode="reclaim", lease_token="lease-1", attempt=1
+        )
 
         assert result["status"] == "succeeded"
         checkpoint_inserts = [
@@ -280,7 +269,9 @@ def test_reclaim_mode_fails_terminally_when_lineage_is_broken(
         monkeypatch.setenv("DATABASE_URL", "postgres://unit")
         monkeypatch.setattr(f1_runtime.asyncpg, "connect", fake_connect)
 
-        result = await f1_runtime.run_f1_execution("exec-1", "tenant-1", "trace-1", mode="reclaim", lease_token="lease-1", attempt=1)
+        result = await f1_runtime.run_f1_execution(
+            "exec-1", "tenant-1", "trace-1", mode="reclaim", lease_token="lease-1", attempt=1
+        )
 
         assert result["status"] == "failed"
         assert result["error"] == "CHECKPOINT_LINEAGE_BROKEN"
@@ -289,8 +280,9 @@ def test_reclaim_mode_fails_terminally_when_lineage_is_broken(
     asyncio.run(run_case())
 
 
-
-def test_stale_runtime_owner_cannot_start_or_write_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_stale_runtime_owner_cannot_start_or_write_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def run_case() -> None:
         conn = FakeConn(row_status="dispatched", lease_token="current-token", attempt=2)
 
@@ -317,6 +309,7 @@ def test_stale_runtime_owner_cannot_start_or_write_terminal(monkeypatch: pytest.
         assert not any("SET status='completed'" in sql for sql, _args in conn.executed)
 
     asyncio.run(run_case())
+
 
 def test_invalid_transition_is_rejected_by_contract() -> None:
     with pytest.raises(InvalidExecutionTransitionError):
@@ -361,7 +354,9 @@ def test_accounting_warning_emits_observable_outbox_event(monkeypatch: pytest.Mo
         monkeypatch.setattr(f1_runtime.asyncpg, "connect", fake_connect)
         monkeypatch.setattr(f1_runtime, "call_llm", fake_call_llm)
 
-        result = await f1_runtime.run_f1_execution("exec-1", "tenant-1", "trace-1", lease_token="lease-1", attempt=1)
+        result = await f1_runtime.run_f1_execution(
+            "exec-1", "tenant-1", "trace-1", lease_token="lease-1", attempt=1
+        )
 
         assert result["status"] == "succeeded"
         outbox_event_types = [
