@@ -29,6 +29,8 @@ type ReclaimCandidate = {
   traceId: string | null;
   runId: string | null;
   leaseToken: string | null;
+  leaseOwner: string | null;
+  version: number | null;
   queueJobId: string | null;
 };
 
@@ -93,7 +95,11 @@ async function failReclaimTerminally(
         and(
           eq(executions.id, candidate.id),
           eq(executions.tenantId, candidate.tenantId),
-          sql`${executions.status} IN ('running', 'reclaimable')`
+          sql`${executions.status} IN ('running', 'reclaimable')`,
+          candidate.version == null ? sql`TRUE` : eq(executions.version, candidate.version),
+          candidate.leaseOwner == null
+            ? sql`${executions.leaseOwner} IS NULL`
+            : eq(executions.leaseOwner, candidate.leaseOwner)
         )
       )
       .returning({ id: executions.id });
@@ -159,34 +165,35 @@ export async function processReclaimCandidate(
 ): Promise<'requeued' | 'skipped' | 'failed_terminal'> {
   if (!candidate.tenantId) throw new Error('invalid_reclaim_payload');
 
-  console.log(JSON.stringify({ msg: 'reclaim_candidate_found', executionId: candidate.id, tenantId: candidate.tenantId, agentId: candidate.agentId, traceId: candidate.traceId, correlationId: candidate.traceId, runId: candidate.runId, queueJobId: candidate.queueJobId, attempt: candidate.attempt, reclaimCount: candidate.reclaimCount }));
+  console.log(
+    JSON.stringify({
+      msg: 'reclaim_candidate_found',
+      executionId: candidate.id,
+      tenantId: candidate.tenantId,
+      agentId: candidate.agentId,
+      traceId: candidate.traceId,
+      correlationId: candidate.traceId,
+      runId: candidate.runId,
+      queueJobId: candidate.queueJobId,
+      attempt: candidate.attempt,
+      reclaimCount: candidate.reclaimCount,
+    })
+  );
 
-  const current = await withTenantTx(candidate.tenantId, async (tx) => {
-    return (
-      await tx
-        .select({
-          id: executions.id,
-          tenantId: executions.tenantId,
-          agentId: executions.agentId,
-          status: executions.status,
-          attempt: executions.attempt,
-          reclaimCount: executions.reclaimCount,
-          traceId: executions.traceId,
-          runId: executions.runId,
-          leaseToken: executions.leaseToken,
-          queueJobId: executions.queueJobId,
-        })
-        .from(executions)
-        .where(and(eq(executions.id, candidate.id), eq(executions.tenantId, candidate.tenantId)))
-        .limit(1)
-    )[0] as ReclaimCandidate | undefined;
-  });
-  if (!current || current.agentId !== candidate.agentId) {
+  if (!candidate.agentId) {
     skippedCounter.add(1, { executionId: candidate.id, outcome: 'tenant_mismatch' });
-    console.log(JSON.stringify({ msg: 'reclaim_candidate_skipped', executionId: candidate.id, tenantId: candidate.tenantId, traceId: candidate.traceId, correlationId: candidate.traceId, outcome: 'tenant_mismatch' }));
+    console.log(
+      JSON.stringify({
+        msg: 'reclaim_candidate_skipped',
+        executionId: candidate.id,
+        tenantId: candidate.tenantId,
+        traceId: candidate.traceId,
+        correlationId: candidate.traceId,
+        outcome: 'tenant_mismatch',
+      })
+    );
     return 'skipped';
   }
-  candidate = { ...candidate, ...current };
 
   if (Number(candidate.reclaimCount ?? 0) >= maxReclaimAttempts) {
     await failReclaimTerminally(
@@ -207,7 +214,12 @@ export async function processReclaimCandidate(
       {
         ...(candidate.traceId ? { correlationId: candidate.traceId } : {}),
       },
-      { attempt: candidate.attempt, leaseToken: candidate.leaseToken }
+      {
+        attempt: candidate.attempt,
+        leaseToken: candidate.leaseToken,
+        leaseOwner: candidate.leaseOwner,
+        version: candidate.version,
+      }
     );
 
     if (outcome !== 'reclaimed') {
@@ -224,7 +236,19 @@ export async function processReclaimCandidate(
     attempts: 1,
   });
 
-  console.log(JSON.stringify({ msg: 'execution_reclaim_requeued', executionId: candidate.id, tenantId: candidate.tenantId, agentId: candidate.agentId, traceId: payload.traceId, correlationId: payload.correlationId, runId: payload.runId, queueJobId: payload.queueJobId, attempt: payload.attempt }));
+  console.log(
+    JSON.stringify({
+      msg: 'execution_reclaim_requeued',
+      executionId: candidate.id,
+      tenantId: candidate.tenantId,
+      agentId: candidate.agentId,
+      traceId: payload.traceId,
+      correlationId: payload.correlationId,
+      runId: payload.runId,
+      queueJobId: payload.queueJobId,
+      attempt: payload.attempt,
+    })
+  );
   requeuedCounter.add(1, { executionId: candidate.id, attempt: payload.attempt });
   return 'requeued';
 }
@@ -249,6 +273,8 @@ export async function startReclaimLoop(
           traceId: executions.traceId,
           runId: executions.runId,
           leaseToken: executions.leaseToken,
+          leaseOwner: executions.leaseOwner,
+          version: executions.version,
           queueJobId: executions.queueJobId,
         })
         .from(executions)

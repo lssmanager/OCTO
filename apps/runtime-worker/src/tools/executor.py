@@ -36,20 +36,37 @@ async def execute_tool_call(
     agent_id: str | None = None,
     context_snapshot: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    del step_index  # F1 idempotency must not depend on mutable replay step indexes.
     name = str(tool_call.get("name", ""))
     args, input_error = _parse_args(tool_call.get("arguments_json") or "{}")
     invocation_call_id = str(tool_call.get("id") or "noid")
     args_hash = _hash_json(args)
+    semantic_key = str(
+        tool_call.get("semantic_tool_call_key")
+        or tool_call.get("stable_tool_call_key")
+        or tool_call.get("idempotency_key")
+        or ""
+    )
+    if not semantic_key:
+        semantic_key = _build_semantic_tool_call_key(
+            execution_id=execution_id,
+            tool_name=name,
+            arguments_hash=args_hash,
+        )
     idem = _build_idempotency_key(
         execution_id=execution_id,
         tool_name=name,
-        tool_call_id=invocation_call_id,
+        semantic_tool_call_key=semantic_key,
         arguments_hash=args_hash,
     )
 
     duplicate = await _find_existing_invocation(conn, tenant_id, idem)
     if duplicate is not None:
-        return _result_from_existing_invocation(duplicate, name)
+        result = _result_from_existing_invocation(duplicate, name)
+        if result.get("semantic_tool_call_key") is not None:
+            result.setdefault("tool_call_id", invocation_call_id)
+            result.setdefault("idempotency_key", idem)
+        return result
 
     defn, fn = registry.resolve(name)
     effective_tools = registry.resolve_effective(context_snapshot)
@@ -81,8 +98,17 @@ async def execute_tool_call(
             input_schema_valid=False,
             policy=decision,
             arguments_hash=args_hash,
+            semantic_tool_call_key=semantic_key,
         )
-        return _failure(name, "TOOL_INPUT_INVALID", input_error, retryable=False, tool_call_id=invocation_call_id)
+        return _failure(
+            name,
+            "TOOL_INPUT_INVALID",
+            input_error,
+            retryable=False,
+            tool_call_id=invocation_call_id,
+            semantic_tool_call_key=semantic_key,
+            idempotency_key=idem,
+        )
 
     if decision.outcome == "deny":
         await _insert_invocation(
@@ -101,6 +127,7 @@ async def execute_tool_call(
             error_message=decision.reason or decision.code or "TOOL_NOT_ALLOWED",
             policy=decision,
             arguments_hash=args_hash,
+            semantic_tool_call_key=semantic_key,
         )
         return _failure(
             name,
@@ -108,6 +135,8 @@ async def execute_tool_call(
             decision.reason or "TOOL_NOT_ALLOWED",
             retryable=False,
             tool_call_id=invocation_call_id,
+            semantic_tool_call_key=semantic_key,
+            idempotency_key=idem,
         )
 
     if decision.outcome == "approval_required":
@@ -126,6 +155,7 @@ async def execute_tool_call(
             tool_kind=defn.kind if defn else "unknown",
             policy=decision,
             arguments_hash=args_hash,
+            semantic_tool_call_key=semantic_key,
         )
         raise ToolApprovalRequired(approval_id, inv_id)
 
@@ -143,6 +173,7 @@ async def execute_tool_call(
         tool_kind=defn.kind if defn else "unknown",
         policy=decision,
         arguments_hash=args_hash,
+        semantic_tool_call_key=semantic_key,
     )
     try:
         validate(instance=args, schema=defn.input_schema)  # type: ignore[union-attr]
@@ -158,7 +189,15 @@ async def execute_tool_call(
             str(e),
             json.dumps({"code": "TOOL_INPUT_INVALID", "message": str(e)}),
         )
-        return _failure(name, "TOOL_INPUT_INVALID", str(e), retryable=False, tool_call_id=invocation_call_id)
+        return _failure(
+            name,
+            "TOOL_INPUT_INVALID",
+            str(e),
+            retryable=False,
+            tool_call_id=invocation_call_id,
+            semantic_tool_call_key=semantic_key,
+            idempotency_key=idem,
+        )
 
     start = time.perf_counter()
     try:
@@ -179,7 +218,15 @@ async def execute_tool_call(
             inv_id,
             json.dumps({"code": "TOOL_TIMEOUT", "message": "tool timeout"}),
         )
-        return _failure(name, "TOOL_TIMEOUT", "tool timeout", retryable=True, tool_call_id=invocation_call_id)
+        return _failure(
+            name,
+            "TOOL_TIMEOUT",
+            "tool timeout",
+            retryable=True,
+            tool_call_id=invocation_call_id,
+            semantic_tool_call_key=semantic_key,
+            idempotency_key=idem,
+        )
     except ToolError as exc:
         await conn.execute(
             """
@@ -193,7 +240,15 @@ async def execute_tool_call(
             str(exc),
             json.dumps({"code": exc.code, "message": str(exc), "retryable": exc.retryable}),
         )
-        return _failure(name, exc.code, str(exc), retryable=exc.retryable, tool_call_id=invocation_call_id)
+        return _failure(
+            name,
+            exc.code,
+            str(exc),
+            retryable=exc.retryable,
+            tool_call_id=invocation_call_id,
+            semantic_tool_call_key=semantic_key,
+            idempotency_key=idem,
+        )
 
     try:
         validate(instance=result, schema=defn.output_schema)  # type: ignore[union-attr]
@@ -211,7 +266,15 @@ async def execute_tool_call(
             json.dumps(result),
             json.dumps({"code": "TOOL_OUTPUT_INVALID", "message": str(e)}),
         )
-        return _failure(name, "TOOL_OUTPUT_INVALID", str(e), retryable=False, tool_call_id=invocation_call_id)
+        return _failure(
+            name,
+            "TOOL_OUTPUT_INVALID",
+            str(e),
+            retryable=False,
+            tool_call_id=invocation_call_id,
+            semantic_tool_call_key=semantic_key,
+            idempotency_key=idem,
+        )
 
     duration = int((time.perf_counter() - start) * 1000)
     await conn.execute(
@@ -230,13 +293,22 @@ async def execute_tool_call(
         "type": "tool_result",
         "tool_name": name,
         "tool_call_id": invocation_call_id,
+        "semantic_tool_call_key": semantic_key,
+        "idempotency_key": idem,
         "status": "succeeded",
         "result": result,
     }
 
 
-def _build_idempotency_key(*, execution_id: str, tool_name: str, tool_call_id: str, arguments_hash: str) -> str:
-    return f"{execution_id}:{tool_name}:{tool_call_id}:{arguments_hash}"
+def _build_semantic_tool_call_key(*, execution_id: str, tool_name: str, arguments_hash: str) -> str:
+    return f"{execution_id}:tool:{tool_name}:{arguments_hash}:0"
+
+
+def _build_idempotency_key(
+    *, execution_id: str, tool_name: str, semantic_tool_call_key: str, arguments_hash: str
+) -> str:
+    material = f"{execution_id}:{tool_name}:{semantic_tool_call_key}:{arguments_hash}"
+    return hashlib.sha256(material.encode()).hexdigest()
 
 
 def _parse_args(args_raw: Any) -> tuple[dict[str, Any], str | None]:
@@ -255,10 +327,12 @@ def _hash_json(value: dict[str, Any]) -> str:
     ).hexdigest()
 
 
-async def _find_existing_invocation(conn, tenant_id: str, idempotency_key: str) -> Mapping[str, Any] | None:
+async def _find_existing_invocation(
+    conn, tenant_id: str, idempotency_key: str
+) -> Mapping[str, Any] | None:
     row = await conn.fetchrow(
         """
-        SELECT id, tool_name, status, result_json, error_code, error_message, approval_id
+        SELECT id, tool_name, status, result_json, error_code, error_message, approval_id, idempotency_key, semantic_tool_call_key
         FROM tool_invocations
         WHERE tenant_id=$1 AND idempotency_key=$2
         """,
@@ -277,6 +351,17 @@ def _result_from_existing_invocation(row: Mapping[str, Any], fallback_name: str)
             "tool_name": name,
             "status": "succeeded",
             "result": row.get("result_json"),
+            **(
+                {"idempotency_key": row.get("idempotency_key")}
+                if row.get("idempotency_key") is not None
+                else {}
+            ),
+            **(
+                {"semantic_tool_call_key": row.get("semantic_tool_call_key")}
+                if row.get("semantic_tool_call_key") is not None
+                else {}
+            ),
+            **({"duplicate": True} if row.get("semantic_tool_call_key") is not None else {}),
         }
     if status == "TIMED_OUT":
         return _failure(
@@ -285,6 +370,8 @@ def _result_from_existing_invocation(row: Mapping[str, Any], fallback_name: str)
             str(row.get("error_message") or "tool timeout"),
             retryable=True,
             duplicate=True,
+            idempotency_key=row.get("idempotency_key"),
+            semantic_tool_call_key=row.get("semantic_tool_call_key"),
         )
     if status == "APPROVAL_REQUIRED":
         return {
@@ -295,6 +382,8 @@ def _result_from_existing_invocation(row: Mapping[str, Any], fallback_name: str)
             "approval_id": row.get("approval_id"),
             "retryable": False,
             "duplicate": True,
+            "idempotency_key": row.get("idempotency_key"),
+            "semantic_tool_call_key": row.get("semantic_tool_call_key"),
         }
     return _failure(
         name,
@@ -302,6 +391,8 @@ def _result_from_existing_invocation(row: Mapping[str, Any], fallback_name: str)
         str(row.get("error_message") or "duplicate tool invocation"),
         retryable=False,
         duplicate=True,
+        idempotency_key=row.get("idempotency_key"),
+        semantic_tool_call_key=row.get("semantic_tool_call_key"),
     )
 
 
@@ -313,6 +404,8 @@ def _failure(
     retryable: bool,
     duplicate: bool = False,
     tool_call_id: str | None = None,
+    semantic_tool_call_key: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "type": "tool_result",
@@ -326,6 +419,10 @@ def _failure(
         result["duplicate"] = True
     if tool_call_id is not None:
         result["tool_call_id"] = tool_call_id
+    if semantic_tool_call_key is not None:
+        result["semantic_tool_call_key"] = semantic_tool_call_key
+    if idempotency_key is not None:
+        result["idempotency_key"] = idempotency_key
     return result
 
 
@@ -344,6 +441,7 @@ async def _insert_invocation(
     tool_kind: str,
     policy: ToolPolicyDecision,
     arguments_hash: str,
+    semantic_tool_call_key: str,
     error_code: str | None = None,
     error_message: str | None = None,
     input_schema_valid: bool | None = None,
@@ -353,9 +451,9 @@ async def _insert_invocation(
         INSERT INTO tool_invocations (
           id, tenant_id, execution_id, step_id, tool_name, tool_kind, status,
           args_json, input, error_code, error_message, error, requires_approval,
-          idempotency_key, trace_id, policy_snapshot_json, arguments_hash,
+          idempotency_key, semantic_tool_call_key, trace_id, policy_snapshot_json, arguments_hash,
           input_schema_valid, started_at, invoked_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$8::jsonb,$9,$10,$11::jsonb,$12,$13,$14,$15::jsonb,$16,$17,now(),now())
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$8::jsonb,$9,$10,$11::jsonb,$12,$13,$14,$15,$16::jsonb,$17,$18,now(),now())
         """,
         inv_id,
         tenant_id,
@@ -370,6 +468,7 @@ async def _insert_invocation(
         json.dumps({"code": error_code, "message": error_message} if error_code else None),
         policy.requires_approval,
         idempotency_key,
+        semantic_tool_call_key,
         trace_id,
         json.dumps(policy.snapshot or {}),
         arguments_hash,
@@ -392,6 +491,7 @@ async def _insert_approval_required(
     tool_kind: str,
     policy: ToolPolicyDecision,
     arguments_hash: str,
+    semantic_tool_call_key: str,
 ) -> None:
     async with conn.transaction():
         await _insert_invocation(
@@ -410,6 +510,7 @@ async def _insert_approval_required(
             error_message=policy.reason,
             policy=policy,
             arguments_hash=arguments_hash,
+            semantic_tool_call_key=semantic_tool_call_key,
         )
         await conn.execute(
             """
@@ -429,6 +530,8 @@ async def _insert_approval_required(
                     "arguments": args,
                     "tool_invocation_id": inv_id,
                     "trace_id": trace_id,
+                    "semantic_tool_call_key": semantic_tool_call_key,
+                    "idempotency_key": idempotency_key,
                 }
             ),
         )

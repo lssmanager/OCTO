@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import uuid
@@ -57,7 +58,9 @@ async def _set_current_tenant(conn: asyncpg.Connection, tenant_id: str) -> None:
 
 
 async def _next_outbox_sequence(conn: asyncpg.Connection, tenant_id: str, execution_id: str) -> int:
-    await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", f"{tenant_id}:execution:{execution_id}")
+    await conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtext($1))", f"{tenant_id}:execution:{execution_id}"
+    )
     value = await conn.fetchval(
         """
         SELECT COALESCE(MAX(sequence), 0) + 1
@@ -94,9 +97,17 @@ async def _insert_outbox(
             **meta,
             "traceId": str(meta.get("traceId") or payload.get("traceId") or "unknown-trace"),
             "spanId": str(meta.get("spanId") or "unknown-span"),
-            "correlationId": str(meta.get("correlationId") or payload.get("correlationId") or correlation_id or payload.get("traceId") or "unknown-correlation"),
+            "correlationId": str(
+                meta.get("correlationId")
+                or payload.get("correlationId")
+                or correlation_id
+                or payload.get("traceId")
+                or "unknown-correlation"
+            ),
             "runId": str(meta.get("runId") or payload.get("runId") or run_id or execution_id),
-            "queueJobId": str(meta.get("queueJobId") or payload.get("queueJobId") or queue_job_id or execution_id),
+            "queueJobId": str(
+                meta.get("queueJobId") or payload.get("queueJobId") or queue_job_id or execution_id
+            ),
             "occurredAt": str(occurred_at),
             "schemaVersion": str(meta.get("schemaVersion") or "1.0"),
             "source": "runtime-worker",
@@ -118,10 +129,53 @@ async def _insert_outbox(
     )
 
 
-def _messages_from_state(state_json: dict[str, Any] | None, fallback_input: dict[str, Any]) -> list[dict[str, Any]]:
+def _hash_tool_args(arguments_json: Any) -> str:
+    try:
+        parsed = json.loads(arguments_json) if isinstance(arguments_json, str) else arguments_json
+    except Exception:
+        parsed = arguments_json
+    return hashlib.sha256(
+        json.dumps(parsed, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _messages_hash(messages: list[dict[str, Any]]) -> str:
+    return hashlib.sha256(
+        json.dumps(messages, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _attach_stable_tool_call_keys(
+    *, execution_id: str, messages: list[dict[str, Any]], tool_calls: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    prefix = _messages_hash(messages)
+    seen: dict[tuple[str, str], int] = {}
+    stable_calls: list[dict[str, Any]] = []
+    for tool_call in tool_calls:
+        call = dict(tool_call)
+        name = str(call.get("name") or "")
+        args_hash = _hash_tool_args(call.get("arguments_json") or {})
+        key = (name, args_hash)
+        ordinal = seen.get(key, 0)
+        seen[key] = ordinal + 1
+        call.setdefault(
+            "semantic_tool_call_key",
+            f"{execution_id}:tool:{prefix}:{name}:{args_hash}:{ordinal}",
+        )
+        stable_calls.append(call)
+    return stable_calls
+
+
+def _messages_from_state(
+    state_json: dict[str, Any] | None, fallback_input: dict[str, Any]
+) -> list[dict[str, Any]]:
     if isinstance(state_json, dict):
         messages = state_json.get("messages")
-        if isinstance(messages, list) and messages and all(isinstance(message, dict) for message in messages):
+        if (
+            isinstance(messages, list)
+            and messages
+            and all(isinstance(message, dict) for message in messages)
+        ):
             return [dict(message) for message in messages]
     return [{"role": "user", "content": str(fallback_input)}]
 
@@ -130,11 +184,15 @@ def _contains_user_message(messages: list[dict[str, Any]]) -> bool:
     return any(isinstance(message, dict) and message.get("role") == "user" for message in messages)
 
 
-def _should_replace_message_history(candidate: list[dict[str, Any]], current: list[dict[str, Any]]) -> bool:
+def _should_replace_message_history(
+    candidate: list[dict[str, Any]], current: list[dict[str, Any]]
+) -> bool:
     if len(candidate) > len(current):
         return True
-    if len(candidate) == len(current) and _contains_user_message(candidate) and not _contains_user_message(current):
-        return True
+    if len(candidate) == len(current) and _contains_user_message(candidate):
+        return candidate != current and (
+            not _contains_user_message(current) or candidate[0] != current[0]
+        )
     return False
 
 
@@ -207,17 +265,20 @@ async def _has_current_ownership(
     tenant_id: str,
     lease_token: str,
     attempt: int,
+    lease_owner: str | None = None,
 ) -> bool:
     row = await conn.fetchrow(
         """
-        SELECT status, lease_token, attempt
+        SELECT status, lease_token, attempt, lease_owner
         FROM executions
         WHERE id=$1 AND tenant_id=$2
         """,
         execution_id,
         tenant_id,
     )
-    return bool(row and str(row["status"]) == "running" and _ownership_matches(row, lease_token, attempt))
+    return bool(
+        row and str(row["status"]) == "running" and _ownership_matches(row, lease_token, attempt)
+    )
 
 
 class LostOwnershipError(RuntimeError):
@@ -242,10 +303,16 @@ async def _mark_failed(
     retryable: bool = True,
     lease_token: str | None = None,
     attempt: int | None = None,
+    lease_owner: str | None = None,
 ) -> None:
     async with conn.transaction():
         row = await conn.fetchrow(
-            "SELECT status, lease_token, attempt FROM executions WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
+            """
+            SELECT status, lease_token, attempt, lease_owner
+            FROM executions
+            WHERE id=$1 AND tenant_id=$2
+            FOR UPDATE
+            """,
             execution_id,
             tenant_id,
         )
@@ -272,6 +339,7 @@ async def _mark_failed(
                     error_code=$3, error_message=$4,
                     error=$5::jsonb, updated_at=now(), completed_at=now()
                 WHERE id=$1 AND tenant_id=$2 AND status=$6 AND lease_token=$7 AND attempt=$8
+                  AND ($9::text IS NULL OR lease_owner=$9)
                 RETURNING version
                 """,
                 execution_id,
@@ -282,6 +350,7 @@ async def _mark_failed(
                 current_status,
                 lease_token,
                 attempt,
+                lease_owner,
             )
             if updated is None:
                 raise LostOwnershipError(execution_id, tenant_id)
@@ -370,12 +439,15 @@ async def _claim_and_start(
                                 error_message='checkpoint lineage invalid',
                                 updated_at=now(), completed_at=now()
                             WHERE id=$1 AND tenant_id=$2 AND status=$3 AND lease_token=$4 AND attempt=$5
+                              AND version=$6 AND ($7::text IS NULL OR lease_owner=$7)
                             """,
                             execution_id,
                             tenant_id,
                             status,
                             lease_token,
                             attempt,
+                            row["version"],
+                            lease_owner,
                         )
                         await _insert_outbox(
                             conn,
@@ -400,24 +472,8 @@ async def _claim_and_start(
                 last_checkpoint_id = str(latest["id"])
                 checkpoint_step_index = int(latest["step_index"]) + 1
                 checkpoint_source = "reclaim"
-                writes = await conn.fetch(
-                    """
-                    SELECT ecw.checkpoint_id, ecw.write_index, ecw.channel, ecw.type, ecw.value_json
-                    FROM execution_checkpoint_writes ecw
-                    INNER JOIN execution_checkpoints ec ON ec.id = ecw.checkpoint_id
-                    WHERE ec.tenant_id=$1 AND ec.execution_id=$2
-                    ORDER BY ec.step_index ASC, ecw.write_index ASC
-                    """,
-                    tenant_id,
-                    execution_id,
-                )
-                writes_by_checkpoint: dict[str, list[dict[str, Any]]] = {}
-                for write in writes:
-                    item = dict(write)
-                    writes_by_checkpoint.setdefault(str(item["checkpoint_id"]), []).append(item)
-                base_messages = _reconstruct_messages_from_checkpoint_lineage(
-                    checkpoint_rows,
-                    writes_by_checkpoint,
+                base_messages = _messages_from_state(
+                    latest.get("state_json") if isinstance(latest.get("state_json"), dict) else {},
                     row["input_json"] or {},
                 )
 
@@ -462,6 +518,7 @@ async def _claim_and_start(
             SET status='running', state='running', version=version+1,
                 started_at=COALESCE(started_at, now()), updated_at=now(), worker_id=$4
             WHERE id=$1 AND tenant_id=$2 AND status='dispatched' AND version=$3 AND lease_token=$5 AND attempt=$6
+              AND ($7::text IS NULL OR lease_owner=$7)
             RETURNING version
             """,
             execution_id,
@@ -470,6 +527,7 @@ async def _claim_and_start(
             worker_id,
             lease_token,
             attempt,
+            lease_owner,
         )
         if updated is None:
             return {"status": "cas_conflict"}
@@ -517,7 +575,14 @@ async def _claim_and_start(
             tenant_id=tenant_id,
             execution_id=execution_id,
             event_type="ExecutionStarted",
-            payload={"executionId": execution_id, "traceId": trace_id, "correlationId": correlation_id, "runId": run_id, "queueJobId": queue_job_id, "mode": mode},
+            payload={
+                "executionId": execution_id,
+                "traceId": trace_id,
+                "correlationId": correlation_id,
+                "runId": run_id,
+                "queueJobId": queue_job_id,
+                "mode": mode,
+            },
             correlation_id=correlation_id,
             run_id=run_id,
             queue_job_id=queue_job_id,
@@ -551,7 +616,9 @@ async def _run_llm_and_tools(
     trace_id: str | None,
     started: dict[str, Any],
 ) -> tuple[str, LLMCallResult, list[dict[str, Any]]]:
-    messages = list(started.get("messages") or [{"role": "user", "content": str(started["input_json"])}])
+    messages = list(
+        started.get("messages") or [{"role": "user", "content": str(started["input_json"])}]
+    )
     snapshot = started["context_snapshot_json"] or {}
     agent_id = str(started["agent_id"])
 
@@ -563,7 +630,10 @@ async def _run_llm_and_tools(
         snapshot=snapshot,
     )
     if llm.tool_calls:
-        assistant_message = {"role": "assistant", "content": "", "tool_calls": llm.tool_calls}
+        stable_tool_calls = _attach_stable_tool_call_keys(
+            execution_id=execution_id, messages=messages, tool_calls=llm.tool_calls
+        )
+        assistant_message = {"role": "assistant", "content": "", "tool_calls": stable_tool_calls}
         messages.append(assistant_message)
         if not await _has_current_ownership(
             conn,
@@ -571,6 +641,7 @@ async def _run_llm_and_tools(
             tenant_id=tenant_id,
             lease_token=str(started["lease_token"]),
             attempt=int(started["attempt"]),
+            lease_owner=started.get("lease_owner"),
         ):
             log.warning(
                 "execution.stale_owner_checkpoint_write_rejected",
@@ -597,7 +668,7 @@ async def _run_llm_and_tools(
             "assistant_message",
             _json(assistant_message),
         )
-        for idx, tc in enumerate(llm.tool_calls):
+        for idx, tc in enumerate(stable_tool_calls):
             tool_res = await execute_tool_call(
                 conn,
                 tenant_id=tenant_id,
@@ -620,6 +691,7 @@ async def _run_llm_and_tools(
                 tenant_id=tenant_id,
                 lease_token=str(started["lease_token"]),
                 attempt=int(started["attempt"]),
+                lease_owner=started.get("lease_owner"),
             ):
                 log.warning(
                     "execution.stale_owner_checkpoint_write_rejected",
@@ -646,7 +718,9 @@ async def _run_llm_and_tools(
                 "tool_result",
                 _json(tool_res),
             )
-            messages.append({"role": "tool", "content": _json(tool_res), "tool_call_id": tc.get("id")})
+            messages.append(
+                {"role": "tool", "content": _json(tool_res), "tool_call_id": tc.get("id")}
+            )
         llm2 = await call_llm(
             tenant_id=tenant_id,
             execution_id=execution_id,
@@ -674,7 +748,12 @@ async def _persist_success(
     worker_id = os.environ.get("HOSTNAME", "runtime-worker")
     async with conn.transaction():
         row = await conn.fetchrow(
-            "SELECT status, lease_token, attempt FROM executions WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
+            """
+            SELECT status, lease_token, attempt, lease_owner
+            FROM executions
+            WHERE id=$1 AND tenant_id=$2
+            FOR UPDATE
+            """,
             execution_id,
             tenant_id,
         )
@@ -747,6 +826,7 @@ async def _persist_success(
                 updated_at=now(), last_checkpoint_id=$3,
                 token_usage=$5::jsonb
             WHERE id=$1 AND tenant_id=$2 AND status='running' AND lease_token=$6 AND attempt=$7
+              AND ($8::text IS NULL OR lease_owner=$8)
             RETURNING version
             """,
             execution_id,
@@ -756,6 +836,7 @@ async def _persist_success(
             _json(llm.usage),
             str(started["lease_token"]),
             int(started["attempt"]),
+            started.get("lease_owner"),
         )
         if updated is None:
             raise LostOwnershipError(execution_id, tenant_id)
@@ -764,7 +845,14 @@ async def _persist_success(
             tenant_id=tenant_id,
             execution_id=execution_id,
             event_type="ExecutionCheckpointed",
-            payload={"executionId": execution_id, "checkpointId": cp1, "traceId": trace_id, "correlationId": started.get("correlation_id"), "runId": started.get("run_id"), "queueJobId": started.get("queue_job_id")},
+            payload={
+                "executionId": execution_id,
+                "checkpointId": cp1,
+                "traceId": trace_id,
+                "correlationId": started.get("correlation_id"),
+                "runId": started.get("run_id"),
+                "queueJobId": started.get("queue_job_id"),
+            },
             correlation_id=str(started.get("correlation_id") or trace_id or ""),
             run_id=str(started.get("run_id") or execution_id),
             queue_job_id=str(started.get("queue_job_id") or execution_id),
@@ -779,7 +867,8 @@ async def _persist_success(
                     "executionId": execution_id,
                     "traceId": trace_id,
                     "errorCode": "LLM_ACCOUNTING_INCOMPLETE",
-                    "errorMessage": llm.accounting_error_reason or "LLM usage accounting was incomplete",
+                    "errorMessage": llm.accounting_error_reason
+                    or "LLM usage accounting was incomplete",
                     "model": llm.model,
                     "correlationId": started.get("correlation_id"),
                     "runId": started.get("run_id"),
@@ -794,7 +883,14 @@ async def _persist_success(
             tenant_id=tenant_id,
             execution_id=execution_id,
             event_type="ExecutionSucceeded",
-            payload={"executionId": execution_id, "output": output, "traceId": trace_id, "correlationId": started.get("correlation_id"), "runId": started.get("run_id"), "queueJobId": started.get("queue_job_id")},
+            payload={
+                "executionId": execution_id,
+                "output": output,
+                "traceId": trace_id,
+                "correlationId": started.get("correlation_id"),
+                "runId": started.get("run_id"),
+                "queueJobId": started.get("queue_job_id"),
+            },
             correlation_id=str(started.get("correlation_id") or trace_id or ""),
             run_id=str(started.get("run_id") or execution_id),
             queue_job_id=str(started.get("queue_job_id") or execution_id),
@@ -925,6 +1021,7 @@ async def run_f1_execution(
                     retryable=exc.retryable,
                     lease_token=str(started["lease_token"]),
                     attempt=int(started["attempt"]),
+                    lease_owner=started.get("lease_owner"),
                 )
             except LostOwnershipError as ownership_exc:
                 return {"status": "lost_ownership", "reason": ownership_exc.reason}
@@ -944,6 +1041,7 @@ async def run_f1_execution(
                     retryable=True,
                     lease_token=str(started["lease_token"]),
                     attempt=int(started["attempt"]),
+                    lease_owner=started.get("lease_owner"),
                 )
             except LostOwnershipError as ownership_exc:
                 return {"status": "lost_ownership", "reason": ownership_exc.reason}

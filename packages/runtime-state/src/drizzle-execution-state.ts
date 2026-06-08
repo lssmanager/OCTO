@@ -5,6 +5,8 @@ import type { TenantTransaction } from '@octo/database';
 import { ExecutionStateService } from './execution-state.service';
 
 export type DrizzleExecutionStateContext = {
+  expectedVersion?: number;
+  expectedLeaseOwner?: string | null;
   tenantId: string;
   traceId: string;
   runId: string;
@@ -32,7 +34,15 @@ export function createDrizzleExecutionStateService(context: DrizzleExecutionStat
           and(
             eq(executions.id, executionId),
             eq(executions.tenantId, context.tenantId),
-            eq(executions.status, from)
+            eq(executions.status, from),
+            context.expectedVersion == null
+              ? sql`TRUE`
+              : eq(executions.version, context.expectedVersion),
+            context.expectedLeaseOwner === undefined
+              ? sql`TRUE`
+              : context.expectedLeaseOwner === null
+                ? sql`${executions.leaseOwner} IS NULL`
+                : eq(executions.leaseOwner, context.expectedLeaseOwner)
           )
         )
         .returning({ id: executions.id });
