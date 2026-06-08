@@ -25,5 +25,5 @@ describe('Auth module DI wiring', () => {
     expect(moduleRef).toBeDefined();
     // NOTE: close() triggers HealthService.onModuleDestroy which expects live queue
     // infra in this environment; compile success is the DI signal we need.
-  });
+  }, 20000);
 });

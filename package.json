@@ -5,14 +5,14 @@
   "type": "module",
   "packageManager": "pnpm@11.2.2",
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "typecheck": "turbo typecheck",
-    "lint": "turbo lint",
+    "dev": "cross-env TURBO_TELEMETRY_DISABLED=1 turbo dev",
+    "build": "cross-env TURBO_TELEMETRY_DISABLED=1 turbo build",
+    "typecheck": "cross-env TURBO_TELEMETRY_DISABLED=1 turbo typecheck",
+    "lint": "cross-env TURBO_TELEMETRY_DISABLED=1 turbo lint",
     "lint:boundaries": "eslint --config eslint.config.js --rule 'octo-local/no-raw-execution-status-write: off' 'packages/**/*.ts' 'apps/**/*.ts' --max-warnings 0",
     "format": "prettier --write .",
-    "test": "turbo test",
-    "clean": "turbo clean",
+    "test": "cross-env TURBO_TELEMETRY_DISABLED=1 turbo test",
+    "clean": "cross-env TURBO_TELEMETRY_DISABLED=1 turbo clean",
     "db:generate": "pnpm --filter @octo/database db:generate",
     "db:migrate": "pnpm --filter @octo/database db:migrate",
     "db:studio": "pnpm --filter @octo/database db:studio",
@@ -26,7 +26,7 @@
     "observability:test-rules": "promtool test rules infra/prometheus/rules/octo-f1-test.yml",
     "observability:check-silences": "tsx scripts/observability/check-alert-silences.ts",
     "formatcheck": "prettier --check .",
-    "testunit": "turbo run test --filter=@octo/contracts --filter=@octo/api --filter=@octo/database --filter=@octo/events --filter=@octo/runtime-state -- --coverage",
+    "testunit": "cross-env TURBO_TELEMETRY_DISABLED=1 turbo run test --filter=@octo/contracts --filter=@octo/api --filter=@octo/database --filter=@octo/events --filter=@octo/runtime-state -- --coverage",
     "testintegration": "node scripts/verify-integration-scope.mjs && vitest run --config vitest.config.ts \"packages/database/src/f1-database.integration.test.ts\" \"apps/api/src/agents/agent-graph.integration.test.ts\" \"apps/api/src/execution/f1-dispatch-reconciliation.integration.test.ts\" \"apps/api/src/execution/f1-dispatch-runtime.integration.test.ts\" \"apps/api/src/execution/f1-reclaim-runtime.integration.test.ts\" \"apps/api/src/ops/f1-observability.integration.test.ts\" \"apps/api/src/security/tenant-isolation.integration.test.ts\"",
     "arch:check": "bash scripts/arch-check.sh",
     "docker:build:api": "docker build -f docker/api.Dockerfile -t octo/api:sha-local --build-arg VERSION=local --build-arg REVISION=local --build-arg CREATED=local .",
@@ -37,7 +37,7 @@
     "docker:verify-hardening": "bash scripts/verify-docker-hardening.sh",
     "f1:verify": "bash scripts/f1-verify.sh",
     "contracts:generate": "pnpm contracts:build && pnpm contracts:python",
-    "test:outbox": "turbo run test --filter=@octo/events --filter=@octo/api -- outbox",
+    "test:outbox": "cross-env TURBO_TELEMETRY_DISABLED=1 turbo run test --filter=@octo/events --filter=@octo/api -- outbox",
     "f1:close-gate": "bash scripts/f1-verify.sh --close",
     "test:tenant-isolation": "vitest run apps/api/src/security/tenant-isolation.integration.test.ts packages/database/src/f1-database.integration.test.ts",
     "f1:tenant-isolation": "pnpm test:tenant-isolation",
@@ -53,7 +53,9 @@
     "f1:queue-workers-smoke": "bash scripts/f1-queue-workers-smoke.sh",
     "f1:coolify-public-smoke": "bash scripts/f1-coolify-public-smoke.sh",
     "compose:network-policy": "python3 scripts/check-compose-network-policy.py",
-    "f1:self-test-gates": "bash scripts/self-test-f1-verify-mode.sh && node scripts/verify-integration-scope.mjs && node scripts/self-test-boundary-lint.mjs"
+    "f1:self-test-gates": "bash scripts/self-test-f1-verify-mode.sh && node scripts/verify-integration-scope.mjs && node scripts/self-test-boundary-lint.mjs",
+    "f1:tooling-gate": "node scripts/verify-f1-tooling.mjs",
+    "f1:tooling-gate:self-test": "node scripts/verify-f1-tooling.mjs --self-test"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.60.1",
@@ -74,12 +76,12 @@
     "rimraf": "6.1.3",
     "tsx": "4.22.4",
     "turbo": "2.9.16",
-    "typescript": "6.0.3",
+    "typescript": "5.9.3",
     "vitest": "4.1.8",
     "zod-to-json-schema": "3.25.2"
   },
   "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=10.0.0"
+    "node": ">=22.22.1",
+    "pnpm": ">=11.2.2 <12"
   }
 }

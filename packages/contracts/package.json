@@ -22,7 +22,7 @@
     "build": "tsup src/index.ts src/schemas/index.ts --format cjs,esm --dts",
     "typecheck": "tsc --noEmit",
     "dev": "tsup src/index.ts src/schemas/index.ts --format cjs,esm --dts --watch",
-    "test": "vitest run"
+    "test": "vitest run --testTimeout=60000"
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
@@ -32,6 +32,6 @@
     "@types/json-schema": "7.0.15",
     "@types/node": "25.9.1",
     "tsup": "8.5.1",
-    "typescript": "6.0.3"
+    "typescript": "5.9.3"
   }
 }

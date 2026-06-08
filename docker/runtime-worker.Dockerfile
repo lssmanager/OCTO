@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM python:3.12.8-slim-bookworm AS builder
 WORKDIR /app
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1

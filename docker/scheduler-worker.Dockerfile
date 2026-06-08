@@ -1,5 +1,7 @@
+# syntax=docker/dockerfile:1.7
 FROM node:22.22.2-alpine3.22 AS builder
 WORKDIR /app
+ENV TURBO_TELEMETRY_DISABLED=1
 RUN apk add --no-cache libc6-compat && npm install -g pnpm@11.2.2
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps ./apps

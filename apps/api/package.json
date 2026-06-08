@@ -9,16 +9,16 @@
     "start": "node dist/main",
     "start:prod": "node dist/main",
     "test": "vitest run",
-    "testintegration": "pnpm --dir ../.. exec vitest run --config vitest.config.ts \"apps/api/src/agents/agent-graph.integration.test.ts\" \"apps/api/src/execution/f1-dispatch-reconciliation.integration.test.ts\" \"apps/api/src/execution/f1-dispatch-runtime.integration.test.ts\" \"apps/api/src/execution/f1-reclaim-runtime.integration.test.ts\" \"apps/api/src/ops/f1-observability.integration.test.ts\" \"apps/api/src/security/tenant-isolation.integration.test.ts\""
+    "testintegration": "vitest run src/**/*.integration.test.ts"
   },
   "dependencies": {
     "@bull-board/api": "7.1.5",
-    "@bull-board/fastify": "7.2.1",
+    "@bull-board/fastify": "7.1.5",
     "@bull-board/nestjs": "7.1.5",
     "@nestjs/common": "11.1.24",
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "11.1.24",
-    "@nestjs/platform-express": "11.1.25",
+    "@nestjs/platform-express": "11.1.24",
     "@nestjs/platform-fastify": "11.1.24",
     "@nestjs/swagger": "11.4.4",
     "@octo/config": "workspace:*",
@@ -29,7 +29,7 @@
     "@octo/queue": "workspace:*",
     "@octo/runtime-state": "workspace:*",
     "@octo/security": "workspace:*",
-    "bullmq": "5.78.0",
+    "bullmq": "5.77.7",
     "drizzle-orm": "0.45.2",
     "fastify": "5.8.5",
     "ioredis": "5.11.0",
@@ -42,7 +42,7 @@
     "@nestjs/testing": "11.1.24",
     "@types/express": "5.0.6",
     "@types/node": "25.9.1",
-    "typescript": "6.0.3",
+    "typescript": "5.9.3",
     "vitest": "4.1.8"
   }
 }
