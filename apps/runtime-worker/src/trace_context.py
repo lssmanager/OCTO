@@ -22,7 +22,7 @@ USAGE:
           ...
 """
 
-from opentelemetry import trace, propagate
+from opentelemetry import propagate, trace
 from opentelemetry.context import Context
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
@@ -35,7 +35,8 @@ def resume_trace_from_job(job_data: dict) -> Context:
 
     Args:
         job_data: The BullMQ job's data dict.
-                  Must contain _traceparent (and optionally _tracestate).
+                  Accepts canonical traceparent/tracestate keys and keeps the
+                  legacy underscored aliases as a backward-compatible fallback.
 
     Returns:
         An OTel Context with the remote span set as parent.
@@ -43,9 +44,12 @@ def resume_trace_from_job(job_data: dict) -> Context:
     """
     carrier: dict[str, str] = {}
 
-    if traceparent := job_data.get("_traceparent"):
+    traceparent = job_data.get("traceparent") or job_data.get("_traceparent")
+    tracestate = job_data.get("tracestate") or job_data.get("_tracestate")
+
+    if traceparent:
         carrier["traceparent"] = traceparent
-    if tracestate := job_data.get("_tracestate"):
+    if tracestate:
         carrier["tracestate"] = tracestate
 
     if not carrier:
