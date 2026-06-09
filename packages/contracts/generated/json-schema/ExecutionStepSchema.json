@@ -42,13 +42,11 @@
     "status": {
       "type": "string",
       "enum": [
-        "PENDING",
-        "RUNNING",
-        "SUCCEEDED",
-        "FAILED",
-        "TIMED_OUT",
-        "CANCELLED",
-        "SKIPPED"
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "skipped"
       ]
     },
     "inputJson": {

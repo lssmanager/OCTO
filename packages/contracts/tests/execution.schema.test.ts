@@ -18,9 +18,17 @@ describe('ExecutionSchema', () => {
 
 describe('ExecutionStepSchema', () => {
   const base = {
-    id: 'step_1', tenantId: 'tenant_1', executionId: 'exec_1', stepIndex: 1, stepType: 'tool', status: 'RUNNING', startedAt: '2026-05-23T10:00:00Z',
+    id: 'step_1', tenantId: 'tenant_1', executionId: 'exec_1', stepIndex: 1, stepType: 'llm_call', status: 'running', startedAt: '2026-05-23T10:00:00Z',
   };
   it('accepts valid step', () => expect(() => ExecutionStepSchema.parse(base)).not.toThrow());
+  it('accepts only canonical lowercase F1 step statuses', () => {
+    for (const status of ['pending', 'running', 'completed', 'failed', 'skipped']) {
+      expect(() => ExecutionStepSchema.parse({ ...base, status })).not.toThrow();
+    }
+    for (const legacyStatus of ['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'TIMED_OUT', 'CANCELLED', 'SKIPPED']) {
+      expect(() => ExecutionStepSchema.parse({ ...base, status: legacyStatus })).toThrow();
+    }
+  });
   it('rejects non-integer stepIndex', () => expect(() => ExecutionStepSchema.parse({ ...base, stepIndex: 1.5 })).toThrow());
   it('rejects invalid datetime', () => expect(() => ExecutionStepSchema.parse({ ...base, startedAt: 'bad-date' })).toThrow());
   it('accepts nullable output/error fields', () => expect(() => ExecutionStepSchema.parse({ ...base, outputJson: null, errorCode: null, errorMessage: null, endedAt: null })).not.toThrow());

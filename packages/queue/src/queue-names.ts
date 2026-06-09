@@ -2,48 +2,65 @@
  * Canonical queue names for the OCTO system.
  * All queue consumers must import from here — never hardcode strings.
  *
- * Naming convention: octo-<domain>
- * BullMQ 5.x prohibits colons (:) in queue names — they are reserved
+ * Naming convention: dotted domain names with no colons.
+ * BullMQ 5.x prohibits colons (:) in queue names because they are reserved
  * as Redis key separators used internally by BullMQ.
- *
- * F0: health (validation that BullMQ works)
- * F1+: execution, delegation, tool, memory (activated in future phases)
- *
- * PATCH 3: Added MONITORED_QUEUES — the ordered list of queues exposed
- * in BullBoard and QueueMetricsService. Derived from QUEUE_NAMES so
- * there is a single source of truth for every queue string in the system.
  */
 export const QUEUE_NAMES = {
   /** F0: Validates BullMQ connectivity. Used in health checks. */
   HEALTH: 'octo-health',
-  /** F1: Agent execution jobs — main orchestration queue. */
-  EXECUTION: 'octo-execution',
-  /** F4: Hierarchical delegation between agents. */
-  DELEGATION: 'octo-delegation',
-  /** F3: Tool invocation jobs. */
-  TOOL: 'octo-tool',
-  /** F3: Memory read/write operations. */
-  MEMORY: 'octo-memory',
-  /** F1: Dead-letter queue for failed executions. */
-  DLQ_EXECUTION: 'octo-dlq-execution',
-  /** F3: Dead-letter queue for failed tool invocations. */
-  DLQ_TOOL: 'octo-dlq-tool',
+  /** F1: Control-plane dispatch queue for execution jobs. */
+  EXECUTION_DISPATCH: 'execution.dispatch',
+  /** F1: Retry scheduling queue for failed executions. */
+  EXECUTION_RETRY: 'execution.retry',
+  /** F1: Reclaim queue for stale runtime ownership recovery. */
+  EXECUTION_RECLAIM: 'execution.reclaim',
+  /** F1: Cancellation queue for in-flight executions. */
+  EXECUTION_CANCEL: 'execution.cancel',
+  /** F1: Resume queue for approved / resumed executions. */
+  EXECUTION_RESUME: 'execution.resume',
+  /** F1: Runtime-worker execution queue. */
+  RUNTIME_EXECUTE: 'runtime.execute',
+  /** F1: Async tool result fan-in queue. */
+  TOOL_ASYNC_RESULT: 'tool.async.result',
+  /** F1: Operational reprocessor for dead-letter jobs. */
+  OPS_DLQ_REPROCESS: 'ops.dlq.reprocess',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
+export const DLQ_SOURCE_QUEUE_KEYS = [
+  'EXECUTION_DISPATCH',
+  'EXECUTION_RETRY',
+  'EXECUTION_RECLAIM',
+  'EXECUTION_CANCEL',
+  'EXECUTION_RESUME',
+  'RUNTIME_EXECUTE',
+  'TOOL_ASYNC_RESULT',
+] as const satisfies readonly (keyof typeof QUEUE_NAMES)[];
+
+export type DlqSourceQueueKey = (typeof DLQ_SOURCE_QUEUE_KEYS)[number];
+export type SourceQueueName = (typeof QUEUE_NAMES)[DlqSourceQueueKey];
+export type DlqQueueName = `${SourceQueueName}.dlq`;
+
 /**
  * Ordered list of all operational queues monitored by BullBoard and
- * QueueMetricsService. Derived from QUEUE_NAMES — never edited manually.
- *
- * Excludes HEALTH (infra validation only, not an operational queue).
- * Add new domain queues here as they are activated in F1+.
+ * QueueMetricsService. Excludes HEALTH (infra validation only).
  */
-export const MONITORED_QUEUES: QueueName[] = [
-  QUEUE_NAMES.EXECUTION,
-  QUEUE_NAMES.DELEGATION,
-  QUEUE_NAMES.TOOL,
-  QUEUE_NAMES.MEMORY,
-  QUEUE_NAMES.DLQ_EXECUTION,
-  QUEUE_NAMES.DLQ_TOOL,
+export const MONITORED_QUEUES: string[] = [
+  QUEUE_NAMES.EXECUTION_DISPATCH,
+  QUEUE_NAMES.EXECUTION_RETRY,
+  QUEUE_NAMES.EXECUTION_RECLAIM,
+  QUEUE_NAMES.EXECUTION_CANCEL,
+  QUEUE_NAMES.EXECUTION_RESUME,
+  QUEUE_NAMES.RUNTIME_EXECUTE,
+  QUEUE_NAMES.TOOL_ASYNC_RESULT,
+  QUEUE_NAMES.OPS_DLQ_REPROCESS,
+  `${QUEUE_NAMES.EXECUTION_DISPATCH}.dlq`,
+  `${QUEUE_NAMES.EXECUTION_RETRY}.dlq`,
+  `${QUEUE_NAMES.EXECUTION_RECLAIM}.dlq`,
+  `${QUEUE_NAMES.EXECUTION_CANCEL}.dlq`,
+  `${QUEUE_NAMES.EXECUTION_RESUME}.dlq`,
+  `${QUEUE_NAMES.RUNTIME_EXECUTE}.dlq`,
+  `${QUEUE_NAMES.TOOL_ASYNC_RESULT}.dlq`,
 ];

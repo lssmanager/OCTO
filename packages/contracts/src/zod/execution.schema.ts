@@ -33,15 +33,15 @@ export const ExecutionSchema = z
   })
   .strict();
 
-export const ExecutionStepStatusSchema = z.enum([
-  'PENDING',
-  'RUNNING',
-  'SUCCEEDED',
-  'FAILED',
-  'TIMED_OUT',
-  'CANCELLED',
-  'SKIPPED',
-]);
+const ExecutionStepStatusValues = [
+  'pending',
+  'running',
+  'completed',
+  'failed',
+  'skipped',
+] as const;
+
+export const ExecutionStepStatusSchema = z.enum(ExecutionStepStatusValues);
 
 export const ExecutionStepSchema = z
   .object({
