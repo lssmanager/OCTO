@@ -30,6 +30,8 @@ COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --frozen-lockfile
 COPY --from=pruner /app/out/full/ .
+# Ensure the public directory exists even when the app has no committed public assets.
+RUN mkdir -p /app/apps/web/public
 # Next.js standalone output requiere NEXT_TELEMETRY_DISABLED en build
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm turbo build --filter=@octo/web
