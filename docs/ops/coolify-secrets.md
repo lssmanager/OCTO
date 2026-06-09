@@ -83,6 +83,11 @@ gate falla ante un token de repositorio y ante variables genéricas como
 | `POSTGRES_PASSWORD` | ✅ Environment Variable | Credencial de base de datos |
 | `LOG_LEVEL` | ✅ Environment Variable | Configuración runtime |
 | `DB_POOL_MAX` | ✅ Environment Variable | Configuración runtime |
+| `RUNTIME_POSTGRES_PASSWORD` | ✅ Environment Variable | Credencial del rol runtime PostgreSQL |
+| `RUNTIME_DATABASE_URL` | ✅ Environment Variable | Credencial/DSN del rol runtime PostgreSQL |
+| `OPENAI_API_KEY` | ✅ Environment Variable | API key de proveedor LLM para LiteLLM |
+| `JWT_SIGNING_KEYS` | ✅ Environment Variable | Material criptográfico de firma JWT |
+| `SOURCE_COMMIT` | ✅ Build Variable | Metadato de build, no es secret |
 | `BUILD_VERSION` | ✅ Build Variable | Metadato de build, no es secret |
 | `BUILD_COMMIT` | ✅ Build Variable | Metadato de build, no es secret |
 | `BUILD_PHASE` | ✅ Build Variable | Metadato de build, no es secret |
@@ -130,6 +135,11 @@ Si estás en el recurso Docker Compose F1, deja como Build Variables solo:
 - `BUILD_COMMIT`
 - `BUILD_PHASE`
 - `BUILD_TIME`
+
+Todas las demás variables de Coolify deben quedar como Environment Variables de
+runtime, incluyendo configuración no secreta (`LOG_LEVEL`, `DB_POOL_MAX`,
+`LITELLM_HEALTH_TIMEOUT_MS`, `WEB_API_URL`) y especialmente cualquier
+`*_URL`, `*_PASSWORD`, `*_SECRET`, `*_KEY` o `*_TOKEN`.
 
 Si una variable sensible aparece tanto en Runtime como en Build, elimina la
 marca de Build y consérvala solo en Runtime.
