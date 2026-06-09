@@ -6,10 +6,10 @@
 # F1 public surface: Next.js web console on port 3000 plus API on port 3001.
 # The web root renders the Agent Graph Console; API remains under /api/*.
 #
-# SECURITY: los secretos de runtime evitan assertions `${VAR:?required}` en
-# compose para que Coolify no tenga que promoverlos a Build Variables. Esto
-# reduce exposición por Docker history / build args y mantiene los secretos en
-# el plano de runtime siempre que sea posible.
+# SECURITY: los secretos de runtime siguen fuera de build args. En compose se
+# referencian con interpolación explícita `${VAR}` o `${VAR:-default}` para que
+# Coolify los materialice dentro de cada servicio; las entradas YAML nulas
+# (`KEY:`) resultaron frágiles para bootstrap de infra como PostgreSQL.
 #
 # ADR F0-014 (Dockerfile strategy), F0-016 (env config), F0-004 (database)
 # Principios Arquitectónicos OCTO: #1 (Control/Execution plane separation),
@@ -27,7 +27,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-octo}
       POSTGRES_USER: ${POSTGRES_USER:-octo}
-      POSTGRES_PASSWORD:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - octo_postgres_data:/var/lib/postgresql/data
     networks:
@@ -51,7 +51,7 @@ services:
     image: redis:7.4.2-alpine3.21
     container_name: octo-redis
     environment:
-      REDIS_PASSWORD:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     command:
       - sh
       - -ec
@@ -86,9 +86,9 @@ services:
       context: .
       dockerfile: docker/migrate.Dockerfile
     environment:
-      DATABASE_URL:
+      DATABASE_URL: ${DATABASE_URL}
       RUNTIME_POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-octo_runtime}
-      RUNTIME_POSTGRES_PASSWORD:
+      RUNTIME_POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,17 +111,17 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3001}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      DATABASE_URL:
+      DATABASE_URL: ${DATABASE_URL}
       DB_POOL_MAX: ${DB_POOL_MAX:-20}
-      REDIS_URL:
-      JWT_SECRET:
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
-      LITELLM_MASTER_KEY:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       LITELLM_HEALTH_ENDPOINT: ${LITELLM_HEALTH_ENDPOINT:-/health/readiness}
       LITELLM_HEALTH_TIMEOUT_MS: ${LITELLM_HEALTH_TIMEOUT_MS:-5000}
       RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000}
-      INTERNAL_SECRET:
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-octo-api}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
@@ -218,13 +218,13 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: '8000'
-      INTERNAL_SECRET:
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
       API_URL: ${API_URL:-http://api:3001/api}
-      RUNTIME_DATABASE_URL:
-      REDIS_URL:
+      RUNTIME_DATABASE_URL: ${RUNTIME_DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
       REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-10}
       LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
-      LITELLM_MASTER_KEY:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       LITELLM_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
       LITELLM_API_KEY: ${LITELLM_MASTER_KEY:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
@@ -275,8 +275,8 @@ services:
       dockerfile: docker/outbox-publisher-worker.Dockerfile
     container_name: octo-outbox-publisher-worker
     environment:
-      DATABASE_URL:
-      REDIS_URL:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
       OUTBOX_STREAM_KEY: ${OUTBOX_STREAM_KEY:-octo.events}
       OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-100}
       OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-500}
@@ -307,9 +307,9 @@ services:
       dockerfile: docker/scheduler-worker.Dockerfile
     container_name: octo-scheduler-worker
     environment:
-      REDIS_URL:
-      DATABASE_URL:
-      INTERNAL_SECRET:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL}
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
       RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute}
       EXECUTION_LEASE_SECONDS: ${EXECUTION_LEASE_SECONDS:-90}
       WORKER_CONCURRENCY: ${SCHEDULER_WORKER_CONCURRENCY:-5}
@@ -340,8 +340,8 @@ services:
       dockerfile: docker/reclaimer-worker.Dockerfile
     container_name: octo-reclaimer-worker
     environment:
-      REDIS_URL:
-      DATABASE_URL:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL}
       RECLAIM_INTERVAL_MS: ${RECLAIM_INTERVAL_MS:-15000}
       LEASE_TIMEOUT_MS: ${LEASE_TIMEOUT_MS:-30000}
     depends_on:
@@ -379,9 +379,9 @@ services:
     image: ghcr.io/berriai/litellm:main-v1.61.7@sha256:0f7f39f40bf6ba4cc802b991ce8c4eb2fa41c8a25b821e1d2d5197229cad27fe
     container_name: octo-litellm
     environment:
-      LITELLM_MASTER_KEY:
-      OPENAI_API_KEY:
-      DATABASE_URL:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DATABASE_URL: ${DATABASE_URL}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     volumes:
       - ./docker/litellm/config.yaml:/app/config.yaml:ro
