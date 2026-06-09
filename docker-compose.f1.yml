@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-octo}
       POSTGRES_USER: ${POSTGRES_USER:-octo}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-octo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-octo} -d ${POSTGRES_DB:-octo}']
       interval: 10s
@@ -17,8 +17,20 @@ services:
 
   redis:
     image: redis:7.4.2-alpine3.21
+    command: >-
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test:
+        [
+          'CMD',
+          'redis-cli',
+          '-a',
+          '${REDIS_PASSWORD:?REDIS_PASSWORD is required}',
+          '--no-auth-warning',
+          'ping',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -104,12 +116,22 @@ services:
       context: .
       dockerfile: docker/runtime-worker.Dockerfile
     environment:
+      NODE_ENV: ${NODE_ENV:-production}
       REDIS_URL: ${REDIS_URL}
+      API_URL: ${API_URL:-http://api:3001/api}
       # Required for F1 durable execution writes; use a least-privilege runtime role.
-      DATABASE_URL: ${DATABASE_URL}
+      RUNTIME_DATABASE_URL: ${RUNTIME_DATABASE_URL:?RUNTIME_DATABASE_URL is required}
       INTERNAL_SECRET: ${INTERNAL_SECRET:?INTERNAL_SECRET is required}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
+      LITELLM_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
     ports: ['8000:8000']
     depends_on:
+      api:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
       redis:
@@ -155,7 +177,7 @@ services:
     restart: unless-stopped
     networks: [octonet]
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://localhost:3010/health/live >/dev/null || exit 1']
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3010/health/ready >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -178,6 +200,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      runtime-worker:
+        condition: service_healthy
     read_only: true
     security_opt: ['no-new-privileges:true']
     cap_drop: ['ALL']
@@ -185,7 +209,7 @@ services:
     restart: unless-stopped
     networks: [octonet]
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://localhost:3003/health/live >/dev/null || exit 1']
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3003/health/ready >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -211,7 +235,13 @@ services:
     restart: unless-stopped
     networks: [octonet]
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://localhost:3011/health/ready >/dev/null || exit 1']
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'fetch("http://localhost:3011/health/ready").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -32,6 +32,17 @@ execution and `/models` endpoints require `X-Internal-Secret` matching
 `RUNTIME_API_SECRET`; only `/health/live` remains unauthenticated for container
 liveness.
 
+## Local infra compose
+
+`docker/compose.dev.yml` is the host-local stores-only compose used for local
+application development.
+
+- PostgreSQL, `redis-queue` and `redis-cache` bind only to `127.0.0.1`.
+- `POSTGRES_PASSWORD`, `REDIS_QUEUE_PASSWORD`, and `REDIS_CACHE_PASSWORD` are
+  required; the file no longer falls back to weak store secrets.
+- Local DSNs must include the corresponding password, for example
+  `redis://:${REDIS_QUEUE_PASSWORD}@localhost:6380`.
+
 ## Local debug override
 
 For host-side smoke tests or one-off local debugging, add the explicit debug
@@ -64,6 +75,8 @@ Do not use `docker-compose.debug.yml` in Coolify or production deployments.
 
 - `pnpm docker:build:f1`
 - `pnpm docker:verify-hardening`
+- `pnpm docker:smoke:f1-images`
+- `pnpm docker:verify:f1-images`
 - `pnpm compose:network-policy`
 - `trivy image --exit-code 1 --severity HIGH,CRITICAL octo/api:sha-local`
 - `syft octo/api:sha-local -o cyclonedx-json > sbom-api.json`
