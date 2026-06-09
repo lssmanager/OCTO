@@ -144,7 +144,7 @@ services:
       - octonet
     healthcheck:
       # Path correcto: incluye global prefix 'api' (main.ts: app.setGlobalPrefix('api'))
-      test: ['CMD', 'curl', '-f', 'http://localhost:3001/api/health/live']
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3001/api/health/live >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -247,12 +247,22 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      litellm:
+        condition: service_healthy
+      api:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     networks:
       - octonet
     healthcheck:
-      test: ['CMD-SHELL', 'curl -f http://localhost:8000/health/live']
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          'import urllib.request; urllib.request.urlopen("http://localhost:8000/health/live", timeout=3)',
+        ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -284,7 +294,7 @@ services:
     expose:
       - '3010'
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3010/health/ready']
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3010/health/ready >/dev/null || exit 1']
       interval: 20s
       timeout: 5s
       retries: 5
@@ -317,7 +327,7 @@ services:
     ports:
       - '127.0.0.1:${SCHEDULER_HEALTH_PORT:-3003}:3003'
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3003/health/ready']
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3003/health/ready >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -370,7 +380,7 @@ services:
     container_name: octo-litellm
     environment:
       - "LITELLM_MASTER_KEY"
-      - "OPENAI_API_KEY=${OPENAI_API_KEY:-sk-local-fake-openai-key}"
+      - "OPENAI_API_KEY"
       - "DATABASE_URL"
       - "OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}"
     volumes:
