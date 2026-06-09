@@ -1,0 +1,73 @@
+rule_files:
+  - ../rules/octo-f1.rules.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'octo_execution_dlq_total'
+        values: '0 3 6 9 12 15 18 21 24 27 30 33 36'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: OctoDLQGrowthCritical
+        exp_alerts:
+          - exp_labels: { severity: critical, team: platform-reliability }
+  - interval: 1m
+    input_series:
+      - series: 'octo_rls_violation_total{table="executions"}'
+        values: '0 1 1 1'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: OctoRLSViolationDetected
+        exp_alerts:
+          - exp_labels: { severity: critical, team: security, table: executions }
+  - interval: 1m
+    input_series:
+      - series: 'octo_litellm_circuit_open_gauge'
+        values: '0 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OctoCircuitBreakerOpen
+        exp_alerts:
+          - exp_labels: { severity: high, team: ai-runtime }
+  - interval: 1m
+    input_series:
+      - series: 'octo_execution_active_gauge'
+        values: '1 1 1 1 1'
+      - series: 'octo_worker_heartbeat_age_seconds'
+        values: '0 130 130 130 130'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: OctoWorkerHeartbeatStale
+        exp_alerts:
+          - exp_labels: { severity: critical, team: platform-reliability }
+  - interval: 1m
+    input_series:
+      - series: 'octo_litellm_tokens_output_total'
+        values: '0 100 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500'
+      - series: 'octo_persisted_step_tokens_output_total'
+        values: '0 99 198 297 396 495 594 693 792 891 990 1089 1188 1287 1386 1485'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OctoTokenAccountingDrift
+        exp_alerts:
+          - exp_labels: { severity: high, team: ai-runtime }
+  - interval: 1m
+    input_series:
+      - series: 'octo_litellm_request_total{status="error"}'
+        values: '0 5 10 15 20 25 30'
+      - series: 'octo_litellm_request_total{status="ok"}'
+        values: '0 20 40 60 80 100 120'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: OctoLiteLLM5xxHigh
+        exp_alerts:
+          - exp_labels: { severity: high, team: ai-runtime }
+  - interval: 1m
+    input_series:
+      - series: 'octo_queue_oldest_job_age_seconds{queue_name="execution.dispatch"}'
+        values: '30 70 70 70 70'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: OctoQueueOldestJobAge
+        exp_alerts:
+          - exp_labels: { severity: high, team: platform-reliability, queue_name: execution.dispatch }
