@@ -17,6 +17,38 @@
 
 services:
   # ────────────────────────────────────────────────────────────────
+  # PREFLIGHT — validación temprana de runtime env para Coolify.
+  # Falla antes de arrancar infraestructura si faltan secretos o si los
+  # DSN internos no coinciden con postgres/redis/litellm del compose.
+  # ────────────────────────────────────────────────────────────────
+  config-preflight:
+    image: node:22.22.2-alpine3.22
+    container_name: octo-config-preflight
+    working_dir: /workspace
+    command: ['sh', '/workspace/scripts/validate-compose-env.sh']
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-octo}
+      POSTGRES_USER: ${POSTGRES_USER:-octo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+      REDIS_URL: ${REDIS_URL:-}
+      RUNTIME_POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-octo_runtime}
+      RUNTIME_POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-}
+      RUNTIME_DATABASE_URL: ${RUNTIME_DATABASE_URL:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OCTO_TEST_LLM_FAKE: ${OCTO_TEST_LLM_FAKE:-false}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
+    volumes:
+      - ./scripts/validate-compose-env.sh:/workspace/scripts/validate-compose-env.sh:ro
+    networks:
+      - octonet
+    restart: 'no'
+
+  # ────────────────────────────────────────────────────────────────
   # INFRASTRUCTURE — PostgreSQL
   # Sistema de registro (Principio Arquitectónico #12).
   # Todos los writes de orquestación pasan por aquí.
@@ -24,10 +56,13 @@ services:
   postgres:
     image: postgres:16.6-alpine3.21
     container_name: octo-postgres
+    depends_on:
+      config-preflight:
+        condition: service_completed_successfully
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-octo}
       POSTGRES_USER: ${POSTGRES_USER:-octo}
-      POSTGRES_PASSWORD:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     volumes:
       - octo_postgres_data:/var/lib/postgresql/data
     networks:
@@ -50,8 +85,11 @@ services:
   redis:
     image: redis:7.4.2-alpine3.21
     container_name: octo-redis
+    depends_on:
+      config-preflight:
+        condition: service_completed_successfully
     environment:
-      REDIS_PASSWORD:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     command:
       - sh
       - -ec
@@ -86,10 +124,12 @@ services:
       context: .
       dockerfile: docker/migrate.Dockerfile
     environment:
-      DATABASE_URL:
+      DATABASE_URL: ${DATABASE_URL:-}
       RUNTIME_POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-octo_runtime}
-      RUNTIME_POSTGRES_PASSWORD:
+      RUNTIME_POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-}
     depends_on:
+      config-preflight:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     networks:
@@ -111,17 +151,17 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3001}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      DATABASE_URL:
+      DATABASE_URL: ${DATABASE_URL:-}
       DB_POOL_MAX: ${DB_POOL_MAX:-20}
-      REDIS_URL:
-      JWT_SECRET:
+      REDIS_URL: ${REDIS_URL:-}
+      JWT_SECRET: ${JWT_SECRET:-}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
-      LITELLM_MASTER_KEY:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       LITELLM_HEALTH_ENDPOINT: ${LITELLM_HEALTH_ENDPOINT:-/health/readiness}
       LITELLM_HEALTH_TIMEOUT_MS: ${LITELLM_HEALTH_TIMEOUT_MS:-5000}
       RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000}
-      INTERNAL_SECRET:
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-octo-api}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
@@ -132,6 +172,8 @@ services:
     ports:
       - '${PORT:-3001}:3001'
     depends_on:
+      config-preflight:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -180,6 +222,8 @@ services:
     ports:
       - '${WEB_PORT:-3000}:3000'
     depends_on:
+      config-preflight:
+        condition: service_completed_successfully
       api:
         condition: service_healthy
     networks:
@@ -218,13 +262,13 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: '8000'
-      INTERNAL_SECRET:
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-}
       API_URL: ${API_URL:-http://api:3001/api}
-      RUNTIME_DATABASE_URL:
-      REDIS_URL:
+      RUNTIME_DATABASE_URL: ${RUNTIME_DATABASE_URL:-}
+      REDIS_URL: ${REDIS_URL:-}
       REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-10}
       LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
-      LITELLM_MASTER_KEY:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       LITELLM_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
       LITELLM_API_KEY: ${LITELLM_MASTER_KEY:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
@@ -243,6 +287,8 @@ services:
     expose:
       - '8000'
     depends_on:
+      config-preflight:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -275,14 +321,16 @@ services:
       dockerfile: docker/outbox-publisher-worker.Dockerfile
     container_name: octo-outbox-publisher-worker
     environment:
-      DATABASE_URL:
-      REDIS_URL:
+      DATABASE_URL: ${DATABASE_URL:-}
+      REDIS_URL: ${REDIS_URL:-}
       OUTBOX_STREAM_KEY: ${OUTBOX_STREAM_KEY:-octo.events}
       OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-100}
       OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-500}
       OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-10}
       OUTBOX_PUBLISHER_PORT: ${OUTBOX_PUBLISHER_PORT:-3010}
     depends_on:
+      config-preflight:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -307,13 +355,15 @@ services:
       dockerfile: docker/scheduler-worker.Dockerfile
     container_name: octo-scheduler-worker
     environment:
-      REDIS_URL:
-      DATABASE_URL:
-      INTERNAL_SECRET:
+      REDIS_URL: ${REDIS_URL:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-}
       RUNTIME_WORKER_URL: ${RUNTIME_WORKER_URL:-http://runtime-worker:8000/api/v1/execute}
       EXECUTION_LEASE_SECONDS: ${EXECUTION_LEASE_SECONDS:-90}
       WORKER_CONCURRENCY: ${SCHEDULER_WORKER_CONCURRENCY:-5}
     depends_on:
+      config-preflight:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -340,11 +390,13 @@ services:
       dockerfile: docker/reclaimer-worker.Dockerfile
     container_name: octo-reclaimer-worker
     environment:
-      REDIS_URL:
-      DATABASE_URL:
+      REDIS_URL: ${REDIS_URL:-}
+      DATABASE_URL: ${DATABASE_URL:-}
       RECLAIM_INTERVAL_MS: ${RECLAIM_INTERVAL_MS:-15000}
       LEASE_TIMEOUT_MS: ${LEASE_TIMEOUT_MS:-30000}
     depends_on:
+      config-preflight:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -379,15 +431,17 @@ services:
     image: ghcr.io/berriai/litellm:main-v1.61.7@sha256:0f7f39f40bf6ba4cc802b991ce8c4eb2fa41c8a25b821e1d2d5197229cad27fe
     container_name: octo-litellm
     environment:
-      LITELLM_MASTER_KEY:
-      OPENAI_API_KEY:
-      DATABASE_URL:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DATABASE_URL: ${DATABASE_URL:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     volumes:
       - ./docker/litellm/config.yaml:/app/config.yaml:ro
     expose:
       - '4000'
     depends_on:
+      config-preflight:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     networks:
