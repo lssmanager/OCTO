@@ -148,6 +148,13 @@
       "when": 1780876800001,
       "tag": "202606080002_f1_runtime_contract_drift",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1780963200000,
+      "tag": "202606090001_f2_runtime_projections",
+      "breakpoints": true
     }
   ]
 }
