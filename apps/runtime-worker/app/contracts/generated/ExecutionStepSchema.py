@@ -10,13 +10,11 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
 class Status(StrEnum):
-    pending = 'PENDING'
-    running = 'RUNNING'
-    succeeded = 'SUCCEEDED'
-    failed = 'FAILED'
-    timed_out = 'TIMED_OUT'
-    cancelled = 'CANCELLED'
-    skipped = 'SKIPPED'
+    pending = 'pending'
+    running = 'running'
+    completed = 'completed'
+    failed = 'failed'
+    skipped = 'skipped'
 
 
 class ExecutionStepSchema(BaseModel):
