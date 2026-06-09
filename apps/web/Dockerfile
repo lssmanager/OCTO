@@ -15,7 +15,10 @@ WORKDIR /app
 # Stage 1: pruner — sub-repo mínimo para @octo/web
 # ─────────────────────────────────────────────
 FROM base AS pruner
-RUN pnpm add -g turbo@2.3.0
+# Use the same turbo version pinned in the monorepo root and install it via
+# npm, which is already available in this stage and behaves more predictably
+# than pnpm global installs in constrained container builders like Coolify.
+RUN npm install -g turbo@2.9.16
 COPY . .
 RUN turbo prune @octo/web --docker
 
