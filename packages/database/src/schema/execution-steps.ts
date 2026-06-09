@@ -16,10 +16,6 @@ export const stepStatusEnum = pgEnum('step_status', [
   'completed',
   'failed',
   'skipped',
-  'QUEUED',
-  'RUNNING',
-  'SUCCEEDED',
-  'FAILED',
 ]);
 
 export const stepTypeEnum = pgEnum('step_type', [
