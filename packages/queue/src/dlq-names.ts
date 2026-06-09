@@ -1,35 +1,35 @@
 /**
- * Dead Letter Queue names — auto-derived from QUEUE_NAMES.
+ * Dead-letter queue names derived from active F1 source queues.
  *
- * For every queue in QUEUE_NAMES, a corresponding DLQ is created
- * with the prefix `dlq:`. Adding a new queue to QUEUE_NAMES
- * automatically produces its DLQ here — no manual update required.
- *
- * Example:
- *   QUEUE_NAMES.EXECUTION = 'octo:execution'
- *   DLQ_NAMES.EXECUTION   = 'dlq:octo:execution'
+ * BullMQ queue names must stay colon-free, so DLQs use the suffix `.dlq`
+ * instead of the legacy `dlq:` prefix.
  */
-import { QUEUE_NAMES } from './queue-names';
-import type { QueueName } from './queue-names';
+import {
+  DLQ_SOURCE_QUEUE_KEYS,
+  QUEUE_NAMES,
+  type DlqQueueName,
+  type DlqSourceQueueKey,
+  type QueueName,
+} from './queue-names';
 
 export type DlqNames = {
-  readonly [K in keyof typeof QUEUE_NAMES]: `dlq:${(typeof QUEUE_NAMES)[K]}`;
+  readonly [K in DlqSourceQueueKey]: `${(typeof QUEUE_NAMES)[K]}.dlq`;
 };
 
 export const DLQ_NAMES = Object.fromEntries(
-  Object.entries(QUEUE_NAMES).map(([key, value]) => [key, `dlq:${value}`])
+  DLQ_SOURCE_QUEUE_KEYS.map((key) => [key, `${QUEUE_NAMES[key]}.dlq`])
 ) as DlqNames;
 
 export type DlqName = DlqNames[keyof DlqNames];
 
 /**
  * Returns the DLQ name for a given source queue name.
- * Throws if the source queue has no corresponding DLQ entry.
+ * Throws if the source queue is not DLQ-backed in F1.
  */
 export function getDlqName(sourceQueue: QueueName): DlqName {
-  const entry = Object.entries(QUEUE_NAMES).find(([, v]) => v === sourceQueue);
-  if (!entry) {
+  const key = DLQ_SOURCE_QUEUE_KEYS.find((candidate) => QUEUE_NAMES[candidate] === sourceQueue);
+  if (!key) {
     throw new Error(`[octo:dlq] No DLQ mapping found for queue: ${sourceQueue}`);
   }
-  return DLQ_NAMES[entry[0] as keyof DlqNames];
+  return DLQ_NAMES[key] as DlqQueueName;
 }
