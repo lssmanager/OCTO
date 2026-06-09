@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-promtool check rules infra/prometheus/rules/octo-f1.yml
+node scripts/observability/check-prometheus-rule-layout.mjs
+promtool check rules infra/prometheus/rules/*.rules.yml
