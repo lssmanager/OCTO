@@ -57,6 +57,7 @@
     "f1:runtime-handoff-smoke": "bash scripts/f1-runtime-handoff-smoke.sh",
     "f1:queue-workers-smoke": "bash scripts/f1-queue-workers-smoke.sh",
     "f1:coolify-public-smoke": "bash scripts/f1-coolify-public-smoke.sh",
+    "compose:validate-env": "sh scripts/validate-compose-env.sh",
     "compose:network-policy": "python3 scripts/check-compose-network-policy.py",
     "f1:self-test-gates": "bash scripts/self-test-f1-verify-mode.sh && node scripts/verify-integration-scope.mjs && node scripts/self-test-boundary-lint.mjs",
     "f1:tooling-gate": "node scripts/verify-f1-tooling.mjs",
