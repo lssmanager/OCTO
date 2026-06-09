@@ -36,10 +36,9 @@ export BUILD_VERSION="${BUILD_VERSION:-sha-local}"
 export BUILD_COMMIT="${BUILD_COMMIT:-local}"
 export BUILD_PHASE="${BUILD_PHASE:-F1}"
 export BUILD_TIME="${BUILD_TIME:-local}"
-export DATABASE_URL="${DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}}"
 export RUNTIME_DATABASE_URL="${RUNTIME_DATABASE_URL:-postgresql://${RUNTIME_POSTGRES_USER}:${RUNTIME_POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}}"
-export REDIS_URL="${REDIS_URL:-redis://:${REDIS_PASSWORD}@127.0.0.1:6379}"
-export API_URL="${API_URL:-http://127.0.0.1:3001/api}"
+export F1_HOST_DATABASE_URL="${F1_HOST_DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}}"
+export F1_HOST_REDIS_URL="${F1_HOST_REDIS_URL:-redis://:${REDIS_PASSWORD}@127.0.0.1:6379}"
 export RUNTIME_PUBLIC_URL="${RUNTIME_PUBLIC_URL:-http://127.0.0.1:8000}"
 export SCHEDULER_PUBLIC_URL="${SCHEDULER_PUBLIC_URL:-http://127.0.0.1:3003}"
 export OUTBOX_PUBLIC_URL="${OUTBOX_PUBLIC_URL:-http://127.0.0.1:3010}"
@@ -67,6 +66,11 @@ log "starting F1 image smoke stack"
   reclaimer-worker
 
 log "running queue/workers smoke against built images"
+API_URL="${API_URL:-http://127.0.0.1:3001/api}" \
+RUNTIME_PUBLIC_URL="$RUNTIME_PUBLIC_URL" \
+SCHEDULER_PUBLIC_URL="$SCHEDULER_PUBLIC_URL" \
+OUTBOX_PUBLIC_URL="$OUTBOX_PUBLIC_URL" \
+RECLAIMER_PUBLIC_URL="$RECLAIMER_PUBLIC_URL" \
 bash scripts/f1-queue-workers-smoke.sh
 
 log "F1 image startup smoke passed"
