@@ -80,7 +80,7 @@ function buildBullJobOptions(opts?: AddJobOptions, defaultPolicy?: RetryPolicy):
 function adaptJob<T>(bullJob: BullJob<AnyData>, meta: OctoJobMeta): IJob<T> {
   return {
     id: bullJob.id ?? '',
-    data: bullJob.data as OctoJobPayload<T>,
+    data: bullJob.data as unknown as OctoJobPayload<T>,
     meta,
     attemptsMade: bullJob.attemptsMade,
     timestamp: bullJob.timestamp,
@@ -108,7 +108,7 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
   }
 
   async add(jobName: string, payload: OctoJobPayload<T>, opts?: AddJobOptions): Promise<string> {
-    const data: AnyData = injectTraceparent(payload as AnyData);
+    const data: AnyData = injectTraceparent(payload as unknown as AnyData);
     const jobOpts = buildBullJobOptions(opts, this.defaultPolicy);
     const job = await this.bull.add(jobName, data, jobOpts);
     logger.debug({ jobId: job.id, queueName: this.name, jobName }, 'job enqueued');
@@ -120,7 +120,7 @@ export class BullMQQueue<T = AnyData> implements IQueue<T> {
   ): Promise<string[]> {
     const bullJobs = jobs.map(({ name, payload, opts }) => ({
       name,
-      data: injectTraceparent(payload as AnyData) as AnyData,
+      data: injectTraceparent(payload as unknown as AnyData),
       opts: buildBullJobOptions(opts, this.defaultPolicy),
     }));
     const results = await this.bull.addBulk(bullJobs);
