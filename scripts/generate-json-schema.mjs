@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
-const contracts = await import(path.join(root, 'packages/contracts/dist/index.mjs'));
+const legacyContracts = await import(path.join(root, 'packages/contracts/dist/index.mjs'));
+const f2Contracts = await import(path.join(root, 'packages/contracts/dist/f2/index.mjs'));
+const contracts = {
+  ...legacyContracts,
+  ...f2Contracts,
+};
 const { z } = await import(path.join(root, 'packages/contracts/node_modules/zod/index.js'));
 const outDir = path.join(root, 'packages/contracts/generated/json-schema');
 const generatedDir = path.join(root, 'packages/contracts/generated');
@@ -27,8 +32,33 @@ const required = [
   'ToolExecutionRequestSchema',
   'ToolExecutionResultSchema',
   'ExecutionContextSchema',
+  'ExecutionRuntimeProjectionSchema',
+  'ExecutionTimelineEntrySchema',
+  'ToolInvocationProjectionSchema',
+  'WorkerRuntimeProjectionSchema',
+  'QueueRuntimeProjectionSchema',
+  'ExecutionCostProjectionSchema',
+  'OutboxRuntimeProjectionSchema',
+  'RuntimeOverviewSchema',
+  'ExecutionRuntimeDetailSchema',
+  'ReplayExecutionRequestSchema',
+  'ReplayExecutionAcceptedSchema',
+  'ExecutionCheckpointSummarySchema',
+  'LinkedReplayExecutionSchema',
+  'ExecutionCheckpointsResponseSchema',
+  'ExecutionReplaysResponseSchema',
 ];
-const optional = ['RetryPolicySchema'];
+const optional = [
+  'RetryPolicySchema',
+  'PaginatedExecutionRuntimeProjectionSchema',
+  'ExecutionTimelineResponseSchema',
+  'ExecutionToolInvocationsResponseSchema',
+  'QueueRuntimeProjectionListSchema',
+  'WorkerRuntimeProjectionListSchema',
+  'OutboxRuntimeProjectionListSchema',
+  'RuntimeProjectionDeltaEnvelopeSchema',
+  'RuntimeProjectionDeltaPayloadSchema',
+];
 
 await fs.mkdir(outDir, { recursive: true });
 await fs.mkdir(generatedDir, { recursive: true });
