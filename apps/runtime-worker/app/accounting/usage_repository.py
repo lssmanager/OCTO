@@ -94,13 +94,13 @@ class ExecutionUsageRepository:
                     ) VALUES (
                       gen_random_uuid()::text,
                       $1,
-                      'Execution',
+                      'execution',
                       $2,
                       'LLMUsageRecorded',
                       (
                         SELECT COALESCE(MAX(sequence),0)+1
                         FROM outbox_events
-                        WHERE tenant_id=$1 AND aggregate_type='Execution' AND aggregate_id=$2
+                        WHERE tenant_id=$1 AND aggregate_type='execution' AND aggregate_id=$2
                       ),
                       $3::jsonb
                     )
