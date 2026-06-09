@@ -24,6 +24,12 @@ para secretos como `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `DATABASE_URL`,
 `REDIS_URL`, `RUNTIME_DATABASE_URL`, `JWT_SECRET`, `LITELLM_MASTER_KEY` e
 `INTERNAL_SECRET`.
 
+Además, los bloques `environment:` del compose usan formato **mapa YAML** en
+lugar de listas `- VAR=...` para evitar el fallo de parseo observado en Coolify
+con entradas pass-through y secretos de runtime. El objetivo es mantener los
+secretos fuera del plano de build sin introducir estructuras que el parser de
+Coolify reserialice de forma incorrecta.
+
 Objetivo de seguridad:
 
 - evitar que Coolify fuerce secretos sensibles al plano de build

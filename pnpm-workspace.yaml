@@ -73,4 +73,4 @@ minimumReleaseAgeExclude:
   # OPS-2026-06 / owner: OCTO Platform. Temporary exact BullMQ pin for the F1 queue
   # worker close gate while Redis/BullMQ smoke tests remain version-locked; remove
   # after the next successful F1 close-gate dependency refresh or by 2026-07-15.
-  - 'bullmq@5.77.7'
+  - 'bullmq@5.78.0'
