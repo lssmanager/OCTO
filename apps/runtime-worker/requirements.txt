@@ -36,5 +36,7 @@ opentelemetry-instrumentation-httpx==0.63b1
 # ── JSON schema validation ───────────────────────────────────────────
 jsonschema==4.26.0
 
-# ── LiteLLM proxy client (F2: real LLM calls) ─────────────────────
-# litellm==1.55.0  # Uncomment in F2 when wiring real execution
+# ── LiteLLM proxy client (F1/F2) ────────────────────────────────────
+# apps/runtime-worker/app/adapters/llm/litellm_adapter.py imports AsyncOpenAI
+# exclusively as the typed HTTP client to the LiteLLM proxy boundary.
+openai==2.8.0
