@@ -15,9 +15,8 @@
  *   The Fastify plugin registers a preHandler hook that always validates
  *   X-Internal-Secret with the canonical INTERNAL_SECRET configuration.
  */
+import { createRequire } from 'node:module';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
-import { createBullBoard } from '@bull-board/api';
 import { FastifyAdapter as BullBoardFastifyAdapter } from '@bull-board/fastify';
 import { Queue } from 'bullmq';
 import { createBullMqConnection, MONITORED_QUEUES } from '@octo/queue';
@@ -28,6 +27,25 @@ import {
 } from './internal-secret.config';
 
 export const BULLBOARD_BASEPATH = '/admin/queues/board';
+
+type BullBoardApiModule = {
+  createBullBoard: (options: {
+    queues: unknown[];
+    serverAdapter: BullBoardFastifyAdapter;
+  }) => void;
+  BullMQAdapter: new (queue: Queue) => unknown;
+};
+
+const bullBoardApiRequire = createRequire(require.resolve('@bull-board/fastify'));
+
+function loadBullBoardApi(): BullBoardApiModule {
+  // Resolve the API package from the Fastify adapter installation so the
+  // queue adapters and server adapter always share the same upstream version,
+  // even when pnpm keeps multiple Bull Board copies in the workspace.
+  return bullBoardApiRequire('@bull-board/api') as BullBoardApiModule;
+}
+
+const { createBullBoard, BullMQAdapter } = loadBullBoardApi();
 
 export class FastifyBullBoardPlugin {
   static async register(app: NestFastifyApplication): Promise<void> {

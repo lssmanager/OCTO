@@ -44,7 +44,7 @@ export type { WithTraceparent } from './traceparent';
 
 // Queue names + DLQ names
 export { QUEUE_NAMES } from './queue-names';
-export type { QueueName } from './queue-names';
+export type { QueueName, MonitoredQueueName } from './queue-names';
 export { DLQ_NAMES } from './dlq-names';
 
 // MONITORED_QUEUES — re-exported from queue-names (local source of truth)

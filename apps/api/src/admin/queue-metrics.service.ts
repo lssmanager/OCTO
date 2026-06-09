@@ -14,7 +14,11 @@
  */
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Queue, type ConnectionOptions } from 'bullmq';
-import { createBullMqConnection, MONITORED_QUEUES, type QueueName } from '@octo/queue';
+import {
+  createBullMqConnection,
+  MONITORED_QUEUES,
+  type MonitoredQueueName,
+} from '@octo/queue';
 
 export interface QueueMetricsSnapshot {
   queue: string;
@@ -30,7 +34,7 @@ export interface QueueMetricsSnapshot {
 @Injectable()
 export class QueueMetricsService implements OnModuleDestroy {
   private readonly connection: ConnectionOptions & { quit?: () => Promise<string> };
-  private readonly queues: Map<QueueName, Queue>;
+  private readonly queues: Map<MonitoredQueueName, Queue>;
 
   constructor() {
     // PATCH 9: single REDIS_URL — same source of truth as all workers.
@@ -42,8 +46,11 @@ export class QueueMetricsService implements OnModuleDestroy {
 
     // PATCH 3: names from registry — no magic strings.
     // All Queue instances share the same BullMQ-compatible connection.
-    this.queues = new Map(
-      MONITORED_QUEUES.map((name) => [name, new Queue(name, { connection: this.connection })])
+    this.queues = new Map<MonitoredQueueName, Queue>(
+      MONITORED_QUEUES.map((name): [MonitoredQueueName, Queue] => [
+        name,
+        new Queue(name, { connection: this.connection }),
+      ])
     );
   }
 

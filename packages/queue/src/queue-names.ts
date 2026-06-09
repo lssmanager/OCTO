@@ -42,12 +42,13 @@ export const DLQ_SOURCE_QUEUE_KEYS = [
 export type DlqSourceQueueKey = (typeof DLQ_SOURCE_QUEUE_KEYS)[number];
 export type SourceQueueName = (typeof QUEUE_NAMES)[DlqSourceQueueKey];
 export type DlqQueueName = `${SourceQueueName}.dlq`;
+export type MonitoredQueueName = QueueName | DlqQueueName;
 
 /**
  * Ordered list of all operational queues monitored by BullBoard and
  * QueueMetricsService. Excludes HEALTH (infra validation only).
  */
-export const MONITORED_QUEUES: string[] = [
+export const MONITORED_QUEUES = [
   QUEUE_NAMES.EXECUTION_DISPATCH,
   QUEUE_NAMES.EXECUTION_RETRY,
   QUEUE_NAMES.EXECUTION_RECLAIM,
@@ -63,4 +64,4 @@ export const MONITORED_QUEUES: string[] = [
   `${QUEUE_NAMES.EXECUTION_RESUME}.dlq`,
   `${QUEUE_NAMES.RUNTIME_EXECUTE}.dlq`,
   `${QUEUE_NAMES.TOOL_ASYNC_RESULT}.dlq`,
-];
+] as const satisfies readonly MonitoredQueueName[];
