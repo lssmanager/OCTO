@@ -7,8 +7,18 @@ import {
   index,
   uniqueIndex,
   type AnyPgColumn,
+  pgEnum,
 } from 'drizzle-orm/pg-core';
 import { executions } from './executions';
+
+export const checkpointSourceEnum = pgEnum('checkpoint_source', [
+  'input',
+  'loop',
+  'tool',
+  'approval',
+  'reclaim',
+  'final',
+]);
 
 export const executionCheckpoints = pgTable(
   'execution_checkpoints',
@@ -19,7 +29,7 @@ export const executionCheckpoints = pgTable(
       .notNull()
       .references(() => executions.id, { onDelete: 'cascade' }),
     stepIndex: integer('step_index').notNull(),
-    source: text('source').notNull().default('runtime'),
+    source: checkpointSourceEnum('source').notNull().default('input'),
     parentCheckpointId: text('parent_checkpoint_id').references(
       (): AnyPgColumn => executionCheckpoints.id
     ),
