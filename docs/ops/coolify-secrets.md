@@ -16,6 +16,25 @@
 **Regla absoluta:** ningún secret, credencial, o token debe aparecer
 jamás como Build Variable en Coolify.
 
+## Nota para recursos Docker Compose
+
+El `docker-compose.yml` canónico de F1 evita assertions del tipo
+`${VAR:?required}` para secretos de runtime y usa pass-through/runtime expansion
+para secretos como `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `DATABASE_URL`,
+`REDIS_URL`, `RUNTIME_DATABASE_URL`, `JWT_SECRET`, `LITELLM_MASTER_KEY` e
+`INTERNAL_SECRET`.
+
+Objetivo de seguridad:
+
+- evitar que Coolify fuerce secretos sensibles al plano de build
+- reducir exposición a `docker history --no-trunc` y build args
+- mantener alineación con MITRE ATT&CK T1552.007 y D3FEND `D3-CTS` / `D3-CS`
+  para transmisión acotada y scrubbing de credenciales
+
+En un recurso Docker Compose F1 sano, los secrets deben quedar como
+**Environment Variables de runtime**, mientras que solo los metadatos de build
+pueden vivir como **Build Variables**.
+
 ## Gate bloqueante de CI/CD
 
 El workflow `Secret Scan` es una puerta **bloqueante** para merge a `main` y
@@ -69,15 +88,18 @@ gate falla ante un token de repositorio y ante variables genéricas como
 
 ### Paso 1 — Identificar Build Variables actuales
 
-1. Abre Coolify → selecciona la aplicación **OCTO API**.
+1. Abre Coolify → selecciona la aplicación o recurso compose de OCTO.
 2. Ve a **Environment Variables**.
 3. Busca el toggle o etiqueta **"Build Variable"** / **"Build time"**
    junto a cada variable.
 4. Identifica cuáles de las siguientes están marcadas como Build Variable:
    - `DATABASE_URL`
    - `REDIS_URL`
-   - `DB_POOL_MAX`
-   - `LOG_LEVEL`
+   - `REDIS_PASSWORD`
+   - `JWT_SECRET`
+   - `LITELLM_MASTER_KEY`
+   - `INTERNAL_SECRET`
+   - `POSTGRES_PASSWORD`
    - Cualquier otra variable que contenga password, secret, key, token, o url.
 
 ### Paso 2 — Convertir a Environment Variable (runtime)
@@ -93,16 +115,25 @@ Para **cada una** de las variables identificadas en el paso 1:
 > una Environment Variable — se inyecta como `-e VAR=value` en `docker run`,
 > no como `--build-arg VAR=value` en `docker build`.
 
-### Paso 3 — Eliminar duplicados en Build Variables
+### Paso 3 — Dejar solo metadatos en Build Variables
 
-Si la variable aparece en ambos lugares (Build + Runtime), elimina
-la entrada de Build Variables. Solo debe existir en Environment Variables.
+Si estás en el recurso Docker Compose F1, deja como Build Variables solo:
 
-### Paso 4 — Redeploy
+- `SOURCE_COMMIT`
+- `BUILD_VERSION`
+- `BUILD_COMMIT`
+- `BUILD_PHASE`
+- `BUILD_TIME`
 
-1. En Coolify → OCTO API → haz clic en **Deploy**.
-2. Espera a que el build complete.
-3. Verifica que la API responde: `curl https://<tu-dominio>/api/health/live`
+Si una variable sensible aparece tanto en Runtime como en Build, elimina la
+marca de Build y consérvala solo en Runtime.
+
+### Paso 4 — Reload compose y redeploy
+
+1. En Coolify → recurso OCTO → haz clic en **Load Compose File**.
+2. Confirma que el compose carga sin pedir secrets en build time.
+3. Haz clic en **Deploy**.
+4. Verifica que la superficie pública responde según el contrato F1.
 
 ### Paso 5 — Verificación post-fix
 
@@ -110,7 +141,7 @@ Ejecuta en el servidor donde corre Docker:
 
 ```bash
 # Obtén el ID de la imagen recién construida
-docker images | grep octo-api
+docker images | grep octo
 
 # Verifica que ninguna credencial aparece en el historial de capas
 scripts/audit-docker-history-secrets.sh --image <IMAGE_ID>
@@ -135,6 +166,7 @@ debes repetir el procedimiento.
 
 Solo metadatos de build que no contienen información sensible:
 
+- `SOURCE_COMMIT`
 - `BUILD_VERSION`
 - `BUILD_COMMIT`
 - `BUILD_PHASE`
@@ -193,7 +225,7 @@ Build Variables) on the compose resource:
 | Variable | Required guidance |
 |---|---|
 | `POSTGRES_PASSWORD` | Strong generated database password. |
-| `REDIS_PASSWORD` | Strong generated Redis password; compose injects it into `REDIS_URL`. |
+| `REDIS_PASSWORD` | Strong generated Redis password; compose injects it into runtime service env. |
 | `JWT_SECRET` | Strong HMAC secret for compatibility with F1 smoke JWT generation. |
 | `JWT_SIGNING_KEYS` | Preferred key-store JSON when using explicit signing keys; must align with `JWT_SECRET`/`JWT_KID` used by smoke credentials. |
 | `RUNTIME_POSTGRES_PASSWORD` | Runtime-worker least-privilege database role password, distinct from `POSTGRES_PASSWORD`. |
