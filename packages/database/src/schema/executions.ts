@@ -36,6 +36,13 @@ export const triggerSourceEnum = pgEnum('trigger_source', [
   'replay',
 ]);
 
+export const executionSourceEnum = pgEnum('execution_source', ['live', 'replay']);
+
+export const replayExecutionModeEnum = pgEnum('replay_execution_mode', [
+  'read_only',
+  'resume_live',
+]);
+
 export const executions = pgTable(
   'executions',
   {
@@ -67,11 +74,14 @@ export const executions = pgTable(
     idempotencyKey: text('idempotency_key'),
     triggerSource: triggerSourceEnum('trigger_source').notNull().default('api'),
     triggerRef: text('trigger_ref'),
+    source: executionSourceEnum('source').notNull().default('live'),
     status: executionStatusEnum('status').notNull().default('pending'),
     attempt: integer('attempt').notNull().default(0),
     queueJobId: text('queue_job_id'),
     workerId: text('worker_id'),
+    dispatchedAt: timestamp('dispatched_at', { withTimezone: true }),
     heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }),
+    lastHeartbeatAt: timestamp('last_heartbeat_at', { withTimezone: true }),
     reclaimedAt: timestamp('reclaimed_at', { withTimezone: true }),
     task: jsonb('task').notNull().default({}),
     governance: jsonb('governance').notNull().default({}),
@@ -83,8 +93,15 @@ export const executions = pgTable(
     costUsd: jsonb('cost_usd'),
     checkpoint: jsonb('checkpoint'),
     lastCheckpointId: text('last_checkpoint_id'),
+    replayOfExecutionId: text('replay_of_execution_id'),
+    replayFromCheckpointId: text('replay_from_checkpoint_id'),
+    replayMode: replayExecutionModeEnum('replay_mode'),
+    replayReason: text('replay_reason'),
     startedAt: timestamp('started_at'),
     completedAt: timestamp('completed_at'),
+    // F2 keeps finishedAt distinct from the legacy completedAt alias to support
+    // operator-facing latency slices without changing F1 semantics in-place.
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -92,10 +109,13 @@ export const executions = pgTable(
     agentIdx: index('executions_agent_id_idx').on(t.agentId),
     tenantIdx: index('executions_tenant_id_idx').on(t.tenantId),
     statusIdx: index('executions_status_idx').on(t.status),
+    sourceIdx: index('executions_source_idx').on(t.source),
     traceIdx: index('executions_trace_id_idx').on(t.traceId),
     createdIdx: index('executions_created_at_idx').on(t.createdAt),
+    dispatchedIdx: index('executions_dispatched_at_idx').on(t.dispatchedAt),
     tenantStatusIdx: index('executions_tenant_status_idx').on(t.tenantId, t.status),
     workerIdx: index('executions_worker_id_idx').on(t.workerId),
+    replayOfExecutionIdx: index('executions_replay_of_execution_idx').on(t.replayOfExecutionId),
     leaseIdx: index('idx_executions_lease').on(t.status, t.leaseExpiresAt),
     leaseTokenIdx: index('idx_executions_lease_token').on(
       t.tenantId,
