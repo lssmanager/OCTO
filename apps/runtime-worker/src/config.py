@@ -10,6 +10,8 @@ Variable names are UPPER_CASE env var names mapped to snake_case fields.
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+POSTGRES_DSN_PATTERN = r"^postgres(?:ql)?://"
+
 
 class Settings(BaseSettings):
     """Typed, validated settings for the OCTO Runtime Worker."""
@@ -50,8 +52,8 @@ class Settings(BaseSettings):
     # RUNTIME_DATABASE_URL is the production/F1-close credential. DATABASE_URL
     # is accepted only as a legacy local/test fallback outside production and the
     # close gate. Code should read the resolved ``runtime_db_dsn`` property.
-    runtime_database_url: str | None = Field(default=None, pattern=r"^postgresql://")
-    database_url: str | None = Field(default=None, pattern=r"^postgresql://")
+    runtime_database_url: str | None = Field(default=None, pattern=POSTGRES_DSN_PATTERN)
+    database_url: str | None = Field(default=None, pattern=POSTGRES_DSN_PATTERN)
 
     # ── Redis (BullMQ transport) ───────────────────────────────────────────────
     redis_url: str = Field(pattern=r"^redis://")
