@@ -5,14 +5,14 @@
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
-    "typecheck": "pnpm --filter @octo/contracts build && pnpm --filter @octo/config build && pnpm --filter @octo/observability build && pnpm --filter @octo/security build && pnpm --filter @octo/queue build && pnpm --filter @octo/events build && pnpm --filter @octo/database build && tsc --noEmit",
+    "typecheck": "pnpm --filter @octo/contracts build && pnpm --filter @octo/config build && pnpm --filter @octo/observability build && pnpm --filter @octo/security build && pnpm --filter @octo/queue build && pnpm --filter @octo/runtime-state build && pnpm --filter @octo/events build && pnpm --filter @octo/database build && tsc --noEmit",
     "start": "node dist/main",
     "start:prod": "node dist/main",
     "test": "vitest run",
     "testintegration": "vitest run src/**/*.integration.test.ts"
   },
   "dependencies": {
-    "@bull-board/api": "7.1.5",
+    "@bull-board/api": "7.2.1",
     "@bull-board/fastify": "7.2.1",
     "@bull-board/nestjs": "7.1.5",
     "@nestjs/common": "11.1.24",

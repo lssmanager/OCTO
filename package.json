@@ -61,7 +61,8 @@
     "compose:network-policy": "python3 scripts/check-compose-network-policy.py",
     "f1:self-test-gates": "bash scripts/self-test-f1-verify-mode.sh && node scripts/verify-integration-scope.mjs && node scripts/self-test-boundary-lint.mjs",
     "f1:tooling-gate": "node scripts/verify-f1-tooling.mjs",
-    "f1:tooling-gate:self-test": "node scripts/verify-f1-tooling.mjs --self-test"
+    "f1:tooling-gate:self-test": "node scripts/verify-f1-tooling.mjs --self-test",
+    "packaging:check": "node scripts/verify-workspace-packaging.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.60.1",
