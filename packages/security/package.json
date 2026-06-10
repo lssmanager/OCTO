@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --external @nestjs/common --external @nestjs/core --external @nestjs/core/guards --external reflect-metadata",
+    "build": "tsup src/index.ts --format cjs,esm --dts --external @nestjs/common --external @nestjs/core --external @nestjs/core/guards --external reflect-metadata --clean",
     "dev": "tsup src/index.ts --format cjs,esm --dts --external @nestjs/common --external @nestjs/core --external @nestjs/core/guards --external reflect-metadata --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
@@ -32,5 +32,8 @@
     "rimraf": "6.1.3",
     "tsup": "8.5.1",
     "typescript": "5.9.3"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }

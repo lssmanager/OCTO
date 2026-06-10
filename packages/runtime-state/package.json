@@ -2,15 +2,22 @@
   "name": "@octo/runtime-state",
   "version": "0.1.0",
   "private": true,
-  "description": "Execution state machine — single source of truth for all status transitions.",
-  "main": "./src/index.ts",
+  "description": "Execution state machine \u2014 single source of truth for all status transitions.",
+  "main": "./dist/index.js",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check:deps": "depcruise --config .dependency-cruiser.cjs src"
+    "check:deps": "depcruise --config .dependency-cruiser.cjs src",
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean --external @octo/contracts --external @octo/database --external drizzle-orm",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch --clean --external @octo/contracts --external @octo/database --external drizzle-orm",
+    "clean": "rimraf dist"
   },
   "dependencies": {
     "@octo/contracts": "workspace:*",
@@ -21,6 +28,13 @@
     "@types/node": "25.9.1",
     "dependency-cruiser": "17.4.3",
     "typescript": "5.9.3",
-    "vitest": "4.1.8"
-  }
+    "vitest": "4.1.8",
+    "rimraf": "6.1.3",
+    "tsup": "8.5.1"
+  },
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ]
 }
