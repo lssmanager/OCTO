@@ -7,10 +7,7 @@ import { executions, toolInvocations } from './schema';
 describe('F1 reclaim runtime schema smoke', () => {
   it('keeps reclaim columns and stable tool-call identity in schema and migration', () => {
     const migration = readFileSync(
-      join(
-        process.cwd(),
-        'packages/database/migrations/202606080001_f1_reclaim_runtime_hardening.sql'
-      ),
+      join(__dirname, '..', 'migrations', '202606080001_f1_reclaim_runtime_hardening.sql'),
       'utf8'
     );
 

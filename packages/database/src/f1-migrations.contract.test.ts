@@ -241,6 +241,16 @@ describe('F1 database migrations contract', () => {
     expect(sql).not.toContain('ALTER TYPE "public"."step_status" ADD VALUE \'QUEUED\';');
   });
 
+  it('restores reclaimed_at before the worker heartbeat migration indexes it', () => {
+    const sql = readMigration('202605280002_worker_heartbeats.sql');
+    const addColumn = 'ALTER TABLE "executions"\n  ADD COLUMN IF NOT EXISTS "reclaimed_at" TIMESTAMPTZ;';
+    const index = 'CREATE INDEX IF NOT EXISTS idx_executions_tenant_reclaimed';
+
+    expect(sql).toContain(addColumn);
+    expect(sql).toContain(index);
+    expect(sql.indexOf(addColumn)).toBeLessThan(sql.indexOf(index));
+  });
+
   it('enforces the F1 runtime worker least-privilege database role', () => {
     const sql = readMigration('202605300002_f1_runtime_db_role.sql');
     const contract = readRuntimeWriteContract();

@@ -47,6 +47,9 @@ CREATE INDEX IF NOT EXISTS worker_heartbeats_last_heartbeat_idx
 CREATE INDEX IF NOT EXISTS worker_heartbeats_type_last_heartbeat_idx
   ON worker_heartbeats (worker_type, last_heartbeat_at);
 --> statement-breakpoint
+ALTER TABLE "executions"
+  ADD COLUMN IF NOT EXISTS "reclaimed_at" TIMESTAMPTZ;
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_executions_tenant_updated
   ON executions (tenant_id, updated_at DESC);
 --> statement-breakpoint
