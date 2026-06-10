@@ -15,7 +15,7 @@
     "@bull-board/api": "7.2.1",
     "@bull-board/fastify": "7.2.1",
     "@bull-board/nestjs": "7.1.5",
-    "@nestjs/common": "11.1.24",
+    "@nestjs/common": "11.1.26",
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "11.1.24",
     "@nestjs/platform-express": "11.1.25",
