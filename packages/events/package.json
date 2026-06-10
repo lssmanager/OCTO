@@ -5,7 +5,9 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "pnpm --filter @octo/contracts build && tsup src/index.ts --format cjs,esm --dts --external @octo/contracts --clean",
+    "build": "pnpm run build:deps && pnpm run build:self",
+    "build:deps": "pnpm --filter '@octo/events^...' build",
+    "build:self": "tsup src/index.ts --format cjs,esm --dts --external @octo/contracts --clean",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch --external @octo/contracts",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist",
