@@ -158,9 +158,9 @@ The LiteLLM compose service is declared in `docker-compose.yml` and mirrored in
 `docker-compose.f1.yml`, uses the pinned
 `ghcr.io/berriai/litellm:main-v1.61.7@sha256:0f7f39f40bf6ba4cc802b991ce8c4eb2fa41c8a25b821e1d2d5197229cad27fe`
 image, mounts `docker/litellm/config.yaml`, and exposes port `4000` only as the
-LiteLLM gateway. Its Docker healthcheck uses `/health/readiness` with a 30s
-`start_period`; if production startup timing exceeds that, capture the first
-successful readiness latency before changing the value. The API readiness payload
+LiteLLM gateway. Its Docker healthcheck uses `/health/liveliness` with a Python
+stdlib probe so Compose only gates on the proxy process being alive and does not
+depend on curl being installed in the pinned image. The API readiness payload
 should show `checks.litellm.status: ok`, `endpoint: /health/readiness`,
 `latencyMs`, and LiteLLM metadata such as `upstreamStatus`, `db`, or
 `litellmVersion` when the proxy returns JSON. If LiteLLM returns HTTP 200 with
