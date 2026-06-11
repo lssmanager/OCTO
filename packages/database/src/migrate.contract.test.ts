@@ -13,4 +13,17 @@ describe('standalone migration runner contract', () => {
     expect(source).toContain("format('%I.%I', $1::text, required.table_name)");
     expect(source).not.toContain("format('%I.%I', $1, required.table_name)");
   });
+
+  it('re-applies the runtime table drift repair before checking bootstrap grants', () => {
+    const source = readMigrateSource();
+
+    expect(source).toContain(
+      "const RUNTIME_TABLE_DRIFT_REPAIR_MIGRATION = '202606110002_repair_missing_f1_runtime_tables'"
+    );
+    expect(source).toContain(".split('--> statement-breakpoint')");
+    expect(source).toContain('await applyRuntimeTableDriftRepair(sql);');
+    expect(source.indexOf('await applyRuntimeTableDriftRepair(sql);')).toBeLessThan(
+      source.indexOf('const missingRuntimeTables')
+    );
+  });
 });
