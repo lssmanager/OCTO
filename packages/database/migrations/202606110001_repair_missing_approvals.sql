@@ -56,14 +56,14 @@ UPDATE "approvals" SET "reason" = '' WHERE "reason" IS NULL;
 UPDATE "approvals" SET "payload_json" = '{}'::jsonb WHERE "payload_json" IS NULL;
 --> statement-breakpoint
 -- If a prior drifted table existed with rows but without the required parent
--- references, those rows cannot satisfy the canonical F1 contract or the
--- foreign keys below. Remove only those unrecoverable drift rows before
--- restoring NOT NULL constraints so long-lived Coolify volumes can heal.
+-- identifiers, those rows cannot satisfy NOT NULL runtime contracts. Remove only
+-- those unrecoverable rows here. Do not probe parent tables in this cleanup:
+-- drifted Coolify volumes have failed this repair at the parent-existence
+-- subqueries even though the subsequent NOT VALID FKs can safely protect new
+-- writes without validating historical data.
 DELETE FROM "approvals"
 WHERE "execution_id" IS NULL
-  OR "step_id" IS NULL
-  OR NOT EXISTS (SELECT 1 FROM "executions" WHERE "executions"."id" = "approvals"."execution_id")
-  OR NOT EXISTS (SELECT 1 FROM "execution_steps" WHERE "execution_steps"."id" = "approvals"."step_id");
+  OR "step_id" IS NULL;
 --> statement-breakpoint
 ALTER TABLE "approvals" ALTER COLUMN "tenant_id" SET NOT NULL;
 --> statement-breakpoint
@@ -93,7 +93,7 @@ DO $$ BEGIN
   ) THEN
     ALTER TABLE "approvals"
       ADD CONSTRAINT "approvals_execution_fk"
-      FOREIGN KEY ("execution_id") REFERENCES "executions"("id") ON DELETE CASCADE;
+      FOREIGN KEY ("execution_id") REFERENCES "executions"("id") ON DELETE CASCADE NOT VALID;
   END IF;
 END $$;
 --> statement-breakpoint
@@ -109,15 +109,33 @@ DO $$ BEGIN
   ) THEN
     ALTER TABLE "approvals"
       ADD CONSTRAINT "approvals_step_fk"
-      FOREIGN KEY ("step_id") REFERENCES "execution_steps"("id") ON DELETE RESTRICT;
+      FOREIGN KEY ("step_id") REFERENCES "execution_steps"("id") ON DELETE RESTRICT NOT VALID;
   END IF;
 END $$;
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "approvals_tenant_id_id_unique" ON "approvals" ("tenant_id", "id");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_approvals_tenant_status_timeout" ON "approvals" ("tenant_id", "status", "timeout_at");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_approvals_tenant_execution" ON "approvals" ("tenant_id", "execution_id");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_approvals_execution_status" ON "approvals" ("execution_id", "status");
+--> statement-breakpoint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'approvals_execution_tenant_fk' AND conrelid = 'public.approvals'::regclass) THEN
+    ALTER TABLE "approvals"
+      ADD CONSTRAINT "approvals_execution_tenant_fk"
+      FOREIGN KEY ("tenant_id", "execution_id") REFERENCES "executions" ("tenant_id", "id")
+      ON DELETE CASCADE NOT VALID;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'approvals_step_tenant_fk' AND conrelid = 'public.approvals'::regclass) THEN
+    ALTER TABLE "approvals"
+      ADD CONSTRAINT "approvals_step_tenant_fk"
+      FOREIGN KEY ("tenant_id", "step_id") REFERENCES "execution_steps" ("tenant_id", "id")
+      ON DELETE RESTRICT NOT VALID;
+  END IF;
+END $$;
 --> statement-breakpoint
 ALTER TABLE "approvals" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -140,14 +158,20 @@ END $$;
 DO $$ BEGIN
   IF to_regclass('public.tool_invocations') IS NOT NULL THEN
     ALTER TABLE "tool_invocations" ADD COLUMN IF NOT EXISTS "approval_id" TEXT;
-    UPDATE "tool_invocations"
-      SET "approval_id" = NULL
-      WHERE "approval_id" IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM "approvals" WHERE "approvals"."id" = "tool_invocations"."approval_id");
+    -- Keep historical approval_id values untouched. The repaired FK is NOT VALID,
+    -- so it protects future writes without requiring a scan of possibly drifted
+    -- historical tool_invocations rows.
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_approval_fk' AND conrelid = 'public.tool_invocations'::regclass) THEN
       ALTER TABLE "tool_invocations"
         ADD CONSTRAINT "tool_invocations_approval_fk"
-        FOREIGN KEY ("approval_id") REFERENCES "approvals"("id") ON DELETE SET NULL;
+        FOREIGN KEY ("approval_id") REFERENCES "approvals"("id") ON DELETE SET NULL NOT VALID;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_approval_tenant_fk' AND conrelid = 'public.tool_invocations'::regclass) THEN
+      ALTER TABLE "tool_invocations"
+        ADD CONSTRAINT "tool_invocations_approval_tenant_fk"
+        FOREIGN KEY ("tenant_id", "approval_id") REFERENCES "approvals" ("tenant_id", "id")
+        ON DELETE SET NULL ("approval_id") NOT VALID;
     END IF;
   END IF;
 END $$;
