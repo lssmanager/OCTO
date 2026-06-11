@@ -62,7 +62,7 @@ async function bootstrapRuntimeRole(sql: ReturnType<typeof postgres>): Promise<v
   const missingRuntimeTables = await sql.unsafe<{ table_name: string }[]>(
     `SELECT required.table_name
      FROM (VALUES ${F1_RUNTIME_TABLE_VALUES_SQL}) AS required(table_name)
-     WHERE to_regclass(format('%I.%I', $1, required.table_name)) IS NULL
+     WHERE to_regclass(format('%I.%I', $1::text, required.table_name)) IS NULL
      ORDER BY required.table_name`,
     [schemaName]
   );
