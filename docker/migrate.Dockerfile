@@ -32,6 +32,10 @@ RUN npm install -g pnpm@11.2.2 \
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder --chown=octo:octo /app /app
+# pnpm creates transient _tmp_* files in the current working directory when
+# running scripts. WORKDIR creates /app as root-owned, so make the directory
+# itself writable by the non-root runtime user, not only its copied contents.
+RUN chown octo:octo /app
 USER octo
 HEALTHCHECK NONE
 CMD ["pnpm","db:migrate"]
