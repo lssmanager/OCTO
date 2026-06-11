@@ -251,6 +251,20 @@ describe('F1 database migrations contract', () => {
     expect(sql.indexOf(addColumn)).toBeLessThan(sql.indexOf(index));
   });
 
+  it('repairs missing approvals without validating historical parent drift', () => {
+    const sql = readMigration('202606110001_repair_missing_approvals.sql');
+
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "approvals"');
+    expect(sql).toContain('DELETE FROM "approvals"\nWHERE "execution_id" IS NULL\n  OR "step_id" IS NULL;');
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "approvals_tenant_id_id_unique"');
+    expect(sql).toContain('"approvals_execution_tenant_fk"');
+    expect(sql).toContain('"approvals_step_tenant_fk"');
+    expect(sql).toContain('"tool_invocations_approval_tenant_fk"');
+    expect(sql).toContain('NOT VALID');
+    expect(sql).not.toContain('NOT EXISTS (SELECT 1 FROM "executions"');
+    expect(sql).not.toContain('NOT EXISTS (SELECT 1 FROM "execution_steps"');
+  });
+
   it('enforces the F1 runtime worker least-privilege database role', () => {
     const sql = readMigration('202605300002_f1_runtime_db_role.sql');
     const contract = readRuntimeWriteContract();
