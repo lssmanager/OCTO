@@ -1,10 +1,33 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
-import type { OutboxPublisherDb, OutboxRow } from '@octo/events';
 import { db, withTenantTx } from './client';
 import { outboxEvents, outboxPublishDlq } from './schema';
 
-function mapOutboxRow(row: any): OutboxRow {
+export interface PostgresOutboxRow {
+  id: string;
+  tenantId: string;
+  aggregateType: string;
+  aggregateId: string;
+  eventType: string;
+  sequence: number;
+  payloadJson: Record<string, unknown>;
+  publishAttempts: number;
+  occurredAt?: string;
+  createdAt?: Date;
+}
+
+export interface PostgresOutboxPublisherDb {
+  tryAdvisoryLock: (id: number) => Promise<boolean>;
+  fetchUnpublished: (limit: number) => Promise<PostgresOutboxRow[]>;
+  markPublished: (id: string, tenantId?: string) => Promise<void>;
+  recordFailure: (id: string, error: string, tenantId?: string) => Promise<number>;
+  moveToDlq: (row: PostgresOutboxRow, error: string, attempts: number) => Promise<void>;
+  pendingCount: () => Promise<number>;
+  oldestUnpublishedAgeMs?: () => Promise<number>;
+  dlqTotal?: () => Promise<number>;
+}
+
+function mapOutboxRow(row: any): PostgresOutboxRow {
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -18,14 +41,14 @@ function mapOutboxRow(row: any): OutboxRow {
   };
 }
 
-export function createPostgresOutboxPublisherDb(): OutboxPublisherDb {
+export function createPostgresOutboxPublisherDb(): PostgresOutboxPublisherDb {
   return {
     async tryAdvisoryLock(id: number): Promise<boolean> {
       const result = await db.execute(sql`SELECT pg_try_advisory_lock(${id}) AS locked`);
       return Boolean((result as any).rows?.[0]?.locked);
     },
 
-    async fetchUnpublished(limit: number): Promise<OutboxRow[]> {
+    async fetchUnpublished(limit: number): Promise<PostgresOutboxRow[]> {
       const rows = await db.transaction(async (tx) => {
         const result = await tx.execute(sql`
           SELECT id, tenant_id, aggregate_type, aggregate_id, event_type, sequence, payload_json, publish_attempts, created_at
@@ -70,7 +93,7 @@ export function createPostgresOutboxPublisherDb(): OutboxPublisherDb {
       });
     },
 
-    async moveToDlq(row: OutboxRow, error: string, attempts: number): Promise<void> {
+    async moveToDlq(row: PostgresOutboxRow, error: string, attempts: number): Promise<void> {
       await withTenantTx(row.tenantId, async (tx) => {
         await tx.insert(outboxPublishDlq).values({
           id: randomUUID(),

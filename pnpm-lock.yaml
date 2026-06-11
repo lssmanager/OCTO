@@ -557,9 +557,6 @@ importers:
 
   packages/database:
     dependencies:
-      '@octo/events':
-        specifier: workspace:*
-        version: link:../events
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(postgres@3.4.5)
