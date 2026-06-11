@@ -81,19 +81,28 @@ ALTER TABLE "approvals" ALTER COLUMN "reason" SET NOT NULL;
 --> statement-breakpoint
 ALTER TABLE "approvals" ALTER COLUMN "payload_json" SET NOT NULL;
 --> statement-breakpoint
+-- Long-lived drifted databases may also be missing parent uniqueness or may
+-- have old constraint names. The repair should not abort deployment on those
+-- catalog defects: keep the additive NOT VALID protections when PostgreSQL can
+-- install them, otherwise emit a NOTICE and allow the rest of the repair to run.
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM pg_constraint c
     JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
-    WHERE c.conrelid = 'public.approvals'::regclass
+    WHERE c.conrelid = to_regclass('public.approvals')
       AND c.contype = 'f'
-      AND c.confrelid = 'public.executions'::regclass
+      AND c.confrelid = to_regclass('public.executions')
       AND a.attname = 'execution_id'
   ) THEN
-    ALTER TABLE "approvals"
-      ADD CONSTRAINT "approvals_execution_fk"
-      FOREIGN KEY ("execution_id") REFERENCES "executions"("id") ON DELETE CASCADE NOT VALID;
+    BEGIN
+      ALTER TABLE "approvals"
+        ADD CONSTRAINT "approvals_execution_fk"
+        FOREIGN KEY ("execution_id") REFERENCES "executions"("id") ON DELETE CASCADE NOT VALID;
+    EXCEPTION
+      WHEN duplicate_object OR invalid_foreign_key OR undefined_table OR undefined_column THEN
+        RAISE NOTICE 'Skipping approvals_execution_fk repair: %', SQLERRM;
+    END;
   END IF;
 END $$;
 --> statement-breakpoint
@@ -102,14 +111,19 @@ DO $$ BEGIN
     SELECT 1
     FROM pg_constraint c
     JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
-    WHERE c.conrelid = 'public.approvals'::regclass
+    WHERE c.conrelid = to_regclass('public.approvals')
       AND c.contype = 'f'
-      AND c.confrelid = 'public.execution_steps'::regclass
+      AND c.confrelid = to_regclass('public.execution_steps')
       AND a.attname = 'step_id'
   ) THEN
-    ALTER TABLE "approvals"
-      ADD CONSTRAINT "approvals_step_fk"
-      FOREIGN KEY ("step_id") REFERENCES "execution_steps"("id") ON DELETE RESTRICT NOT VALID;
+    BEGIN
+      ALTER TABLE "approvals"
+        ADD CONSTRAINT "approvals_step_fk"
+        FOREIGN KEY ("step_id") REFERENCES "execution_steps"("id") ON DELETE RESTRICT NOT VALID;
+    EXCEPTION
+      WHEN duplicate_object OR invalid_foreign_key OR undefined_table OR undefined_column THEN
+        RAISE NOTICE 'Skipping approvals_step_fk repair: %', SQLERRM;
+    END;
   END IF;
 END $$;
 --> statement-breakpoint
@@ -122,18 +136,28 @@ CREATE INDEX IF NOT EXISTS "idx_approvals_tenant_execution" ON "approvals" ("ten
 CREATE INDEX IF NOT EXISTS "idx_approvals_execution_status" ON "approvals" ("execution_id", "status");
 --> statement-breakpoint
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'approvals_execution_tenant_fk' AND conrelid = 'public.approvals'::regclass) THEN
-    ALTER TABLE "approvals"
-      ADD CONSTRAINT "approvals_execution_tenant_fk"
-      FOREIGN KEY ("tenant_id", "execution_id") REFERENCES "executions" ("tenant_id", "id")
-      ON DELETE CASCADE NOT VALID;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'approvals_execution_tenant_fk' AND conrelid = to_regclass('public.approvals')) THEN
+    BEGIN
+      ALTER TABLE "approvals"
+        ADD CONSTRAINT "approvals_execution_tenant_fk"
+        FOREIGN KEY ("tenant_id", "execution_id") REFERENCES "executions" ("tenant_id", "id")
+        ON DELETE CASCADE NOT VALID;
+    EXCEPTION
+      WHEN duplicate_object OR invalid_foreign_key OR undefined_table OR undefined_column THEN
+        RAISE NOTICE 'Skipping approvals_execution_tenant_fk repair: %', SQLERRM;
+    END;
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'approvals_step_tenant_fk' AND conrelid = 'public.approvals'::regclass) THEN
-    ALTER TABLE "approvals"
-      ADD CONSTRAINT "approvals_step_tenant_fk"
-      FOREIGN KEY ("tenant_id", "step_id") REFERENCES "execution_steps" ("tenant_id", "id")
-      ON DELETE RESTRICT NOT VALID;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'approvals_step_tenant_fk' AND conrelid = to_regclass('public.approvals')) THEN
+    BEGIN
+      ALTER TABLE "approvals"
+        ADD CONSTRAINT "approvals_step_tenant_fk"
+        FOREIGN KEY ("tenant_id", "step_id") REFERENCES "execution_steps" ("tenant_id", "id")
+        ON DELETE RESTRICT NOT VALID;
+    EXCEPTION
+      WHEN duplicate_object OR invalid_foreign_key OR undefined_table OR undefined_column THEN
+        RAISE NOTICE 'Skipping approvals_step_tenant_fk repair: %', SQLERRM;
+    END;
   END IF;
 END $$;
 --> statement-breakpoint
@@ -161,17 +185,27 @@ DO $$ BEGIN
     -- Keep historical approval_id values untouched. The repaired FK is NOT VALID,
     -- so it protects future writes without requiring a scan of possibly drifted
     -- historical tool_invocations rows.
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_approval_fk' AND conrelid = 'public.tool_invocations'::regclass) THEN
-      ALTER TABLE "tool_invocations"
-        ADD CONSTRAINT "tool_invocations_approval_fk"
-        FOREIGN KEY ("approval_id") REFERENCES "approvals"("id") ON DELETE SET NULL NOT VALID;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_approval_fk' AND conrelid = to_regclass('public.tool_invocations')) THEN
+      BEGIN
+        ALTER TABLE "tool_invocations"
+          ADD CONSTRAINT "tool_invocations_approval_fk"
+          FOREIGN KEY ("approval_id") REFERENCES "approvals"("id") ON DELETE SET NULL NOT VALID;
+      EXCEPTION
+        WHEN duplicate_object OR invalid_foreign_key OR undefined_table OR undefined_column THEN
+          RAISE NOTICE 'Skipping tool_invocations_approval_fk repair: %', SQLERRM;
+      END;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_approval_tenant_fk' AND conrelid = 'public.tool_invocations'::regclass) THEN
-      ALTER TABLE "tool_invocations"
-        ADD CONSTRAINT "tool_invocations_approval_tenant_fk"
-        FOREIGN KEY ("tenant_id", "approval_id") REFERENCES "approvals" ("tenant_id", "id")
-        ON DELETE SET NULL ("approval_id") NOT VALID;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tool_invocations_approval_tenant_fk' AND conrelid = to_regclass('public.tool_invocations')) THEN
+      BEGIN
+        ALTER TABLE "tool_invocations"
+          ADD CONSTRAINT "tool_invocations_approval_tenant_fk"
+          FOREIGN KEY ("tenant_id", "approval_id") REFERENCES "approvals" ("tenant_id", "id")
+          ON DELETE SET NULL ("approval_id") NOT VALID;
+      EXCEPTION
+        WHEN duplicate_object OR invalid_foreign_key OR undefined_table OR undefined_column THEN
+          RAISE NOTICE 'Skipping tool_invocations_approval_tenant_fk repair: %', SQLERRM;
+      END;
     END IF;
   END IF;
 END $$;
