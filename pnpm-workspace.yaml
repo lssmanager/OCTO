@@ -7,7 +7,7 @@ settings:
 
 overrides:
   uuid: '11.1.1'
-  glob: '11.1.0'
+  glob: '13.0.6'
   lodash: '4.18.1'
   picomatch: '4.0.4'
   path-to-regexp: '8.4.0'
@@ -50,6 +50,12 @@ allowBuilds:
   protobufjs: true
   sharp: true
   unrs-resolver: true
+
+ignoredDeprecatedDependencies:
+  # drizzle-kit 0.31.10 is current but still pulls these deprecated @esbuild-kit packages.
+  # Keep them explicit so install output only reports actionable deprecations.
+  - '@esbuild-kit/core-utils@3.3.2'
+  - '@esbuild-kit/esm-loader@2.6.5'
 
 minimumReleaseAgeExclude:
   # SECURITY-2026-06 / owner: OCTO Security. Temporary exception for a coordinated

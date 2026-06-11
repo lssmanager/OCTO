@@ -35,6 +35,8 @@ const F1_RUNTIME_TABLES = [
   'worker_heartbeats',
 ] as const;
 
+const F1_RUNTIME_TABLE_VALUES_SQL = F1_RUNTIME_TABLES.map((table) => `('${table}')`).join(', ');
+
 function assertIdentifier(value: string, label: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
     throw new Error(`${label} must be a PostgreSQL identifier (got ${value})`);
@@ -56,6 +58,24 @@ async function bootstrapRuntimeRole(sql: ReturnType<typeof postgres>): Promise<v
 
   assertIdentifier(runtimeRole, 'RUNTIME_POSTGRES_USER');
   assertIdentifier(schemaName, 'RUNTIME_POSTGRES_SCHEMA');
+
+  const missingRuntimeTables = await sql.unsafe<{ table_name: string }[]>(
+    `SELECT required.table_name
+     FROM (VALUES ${F1_RUNTIME_TABLE_VALUES_SQL}) AS required(table_name)
+     WHERE to_regclass(format('%I.%I', $1, required.table_name)) IS NULL
+     ORDER BY required.table_name`,
+    [schemaName]
+  );
+
+  if (missingRuntimeTables.length > 0) {
+    const missingRuntimeTableNames = missingRuntimeTables
+      .map((row) => `${schemaName}.${row.table_name}`)
+      .join(', ');
+
+    throw new Error(
+      `F1 runtime DB role bootstrap cannot grant privileges because required tables are missing: ${missingRuntimeTableNames}. Run the latest migrations or repair schema drift before starting runtime services.`
+    );
+  }
 
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('octo.runtime_role', ${runtimeRole}, true)`;
