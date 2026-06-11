@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "pnpm build && node dist/migrate.js",
+    "db:migrate": "pnpm run build:deps && pnpm run build:self && node dist/migrate.js",
     "db:studio": "drizzle-kit studio",
     "db:push": "drizzle-kit push",
     "clean": "rimraf dist"
