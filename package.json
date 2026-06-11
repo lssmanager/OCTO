@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.2.2",
+  "packageManager": "pnpm@11.5.3",
   "scripts": {
     "dev": "cross-env TURBO_TELEMETRY_DISABLED=1 turbo dev",
     "build": "cross-env TURBO_TELEMETRY_DISABLED=1 turbo build",
@@ -89,6 +89,6 @@
   },
   "engines": {
     "node": ">=22.22.1",
-    "pnpm": ">=11.2.2 <12"
+    "pnpm": ">=11.5.3 <12"
   }
 }
