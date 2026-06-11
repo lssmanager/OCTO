@@ -5,7 +5,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "pnpm run build:deps && pnpm run build:self",
+    "build": "pnpm run build:self",
     "build:deps": "pnpm --filter '@octo/events^...' build",
     "build:self": "tsup src/index.ts --format cjs,esm --dts --external @octo/contracts --clean",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch --external @octo/contracts",
