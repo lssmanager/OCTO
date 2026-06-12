@@ -28,7 +28,8 @@ start, the preflight container validates:
 - `RUNTIME_POSTGRES_USER` differs from `POSTGRES_USER`
 - `RUNTIME_POSTGRES_PASSWORD` differs from `POSTGRES_PASSWORD`
 - `REDIS_URL` is present, valid, points to `redis`, and uses the same password as `REDIS_PASSWORD`
-- `JWT_SECRET`, `LITELLM_MASTER_KEY`, and `INTERNAL_SECRET` are present
+- `JWT_SECRET`, `JWT_SIGNING_KEYS`, `LITELLM_MASTER_KEY`, and `INTERNAL_SECRET` are present when `NODE_ENV=production`
+- `JWT_SIGNING_KEYS` is valid JSON, is a non-empty array, and contains exactly one active key
 - `JWT_SECRET` and `INTERNAL_SECRET` are at least 32 characters
 - `OPENAI_API_KEY` is present unless `OCTO_TEST_LLM_FAKE=true`
 - `LITELLM_BASE_URL` points to the internal compose hostname `litellm`
@@ -54,6 +55,7 @@ Variables before deploy:
 - `REDIS_PASSWORD`
 - `REDIS_URL`
 - `JWT_SECRET`
+- `JWT_SIGNING_KEYS`
 - `LITELLM_MASTER_KEY`
 - `INTERNAL_SECRET`
 - `OPENAI_API_KEY` unless fake LLM mode is intentional
@@ -67,6 +69,7 @@ RUNTIME_POSTGRES_USER=octo_runtime
 DATABASE_URL=postgresql://octo:<POSTGRES_PASSWORD>@postgres:5432/octo
 RUNTIME_DATABASE_URL=postgresql://octo_runtime:<RUNTIME_POSTGRES_PASSWORD>@postgres:5432/octo
 REDIS_URL=redis://:<REDIS_PASSWORD>@redis:6379
+JWT_SIGNING_KEYS=[{"kid":"api-hs256","algorithm":"HS256","isActive":true,"secret":"<JWT_SECRET>"}]
 LITELLM_BASE_URL=http://litellm:4000
 ```
 
