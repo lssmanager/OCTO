@@ -49,7 +49,7 @@ export async function upsertWorkerHeartbeat(db: Db, input: WorkerHeartbeatInput)
       ${input.error ?? null},
       now()
     )
-    ON CONFLICT (worker_type, instance_id)
+    ON CONFLICT (id)
     DO UPDATE SET
       status = EXCLUDED.status,
       last_heartbeat_at = now(),
