@@ -12,6 +12,7 @@
 // Never imports NestJS — intentionally standalone to keep startup isolation.
 // ADR F0-004 (database layer), F0-014 (Dockerfile strategy)
 
+import { readFileSync } from 'node:fs';
 import path from 'path';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -23,6 +24,7 @@ const RETRY_DELAY_MS = 3_000;
 // Migrations folder is at packages/database/migrations — resolved relative
 // to this file's compiled location (packages/database/dist/migrate.js).
 const MIGRATIONS_FOLDER = path.join(__dirname, '..', 'migrations');
+const RUNTIME_TABLE_DRIFT_REPAIR_MIGRATION = '202606110002_repair_missing_f1_runtime_tables';
 
 const F1_RUNTIME_TABLES = [
   'approvals',
@@ -36,6 +38,32 @@ const F1_RUNTIME_TABLES = [
 ] as const;
 
 const F1_RUNTIME_TABLE_VALUES_SQL = F1_RUNTIME_TABLES.map((table) => `('${table}')`).join(', ');
+
+async function applyRuntimeTableDriftRepair(sql: ReturnType<typeof postgres>): Promise<void> {
+  const repairMigrationPath = path.join(
+    MIGRATIONS_FOLDER,
+    `${RUNTIME_TABLE_DRIFT_REPAIR_MIGRATION}.sql`
+  );
+  const repairSql = readFileSync(repairMigrationPath, 'utf8');
+  const statements = repairSql
+    .split('--> statement-breakpoint')
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+
+  log('info', 'runtime_table_drift_repair_start', {
+    migration: RUNTIME_TABLE_DRIFT_REPAIR_MIGRATION,
+    statements: statements.length,
+  });
+
+  for (const statement of statements) {
+    await sql.unsafe(statement);
+  }
+
+  log('info', 'runtime_table_drift_repair_complete', {
+    migration: RUNTIME_TABLE_DRIFT_REPAIR_MIGRATION,
+    statements: statements.length,
+  });
+}
 
 function assertIdentifier(value: string, label: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
@@ -59,10 +87,15 @@ async function bootstrapRuntimeRole(sql: ReturnType<typeof postgres>): Promise<v
   assertIdentifier(runtimeRole, 'RUNTIME_POSTGRES_USER');
   assertIdentifier(schemaName, 'RUNTIME_POSTGRES_SCHEMA');
 
+  // Drizzle can report migrations_complete on long-lived databases whose journal
+  // already contains old F1 migrations even if the actual runtime tables drifted
+  // away. Re-apply the additive repair before validating grant preconditions.
+  await applyRuntimeTableDriftRepair(sql);
+
   const missingRuntimeTables = await sql.unsafe<{ table_name: string }[]>(
     `SELECT required.table_name
      FROM (VALUES ${F1_RUNTIME_TABLE_VALUES_SQL}) AS required(table_name)
-     WHERE to_regclass(format('%I.%I', $1, required.table_name)) IS NULL
+     WHERE to_regclass(format('%I.%I', $1::text, required.table_name)) IS NULL
      ORDER BY required.table_name`,
     [schemaName]
   );

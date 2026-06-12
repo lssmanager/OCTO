@@ -252,6 +252,34 @@ describe('F1 database migrations contract', () => {
     expect(sql.indexOf(addColumn)).toBeLessThan(sql.indexOf(index));
   });
 
+  it('repairs drifted databases missing every F1 runtime table', () => {
+    const sql = readMigration('202606110002_repair_missing_f1_runtime_tables.sql');
+
+    for (const table of [
+      'executions',
+      'execution_steps',
+      'execution_checkpoints',
+      'execution_checkpoint_writes',
+      'tool_invocations',
+      'approvals',
+      'outbox_events',
+      'worker_heartbeats',
+    ]) {
+      expect(sql).toContain(`CREATE TABLE IF NOT EXISTS "${table}"`);
+    }
+
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "agent_versions"');
+    expect(sql).toContain('ALTER TABLE "executions" ADD COLUMN IF NOT EXISTS "lease_token" TEXT');
+    expect(sql).toContain(
+      'ALTER TABLE "tool_invocations" ADD COLUMN IF NOT EXISTS "semantic_tool_call_key" TEXT'
+    );
+    expect(sql).toContain(
+      'ALTER TABLE "outbox_events" ADD COLUMN IF NOT EXISTS "dead_lettered_at" TIMESTAMPTZ'
+    );
+    expect(sql).toContain('ALTER TABLE "executions" FORCE ROW LEVEL SECURITY');
+    expect(sql).toContain('tenant_isolation_');
+  });
+
   it('repairs missing approvals without validating historical parent drift', () => {
     const sql = readMigration('202606110001_repair_missing_approvals.sql');
 

@@ -56,6 +56,7 @@ const adminPassword = process.env.POSTGRES_PASSWORD;
 const runtimePassword = process.env.RUNTIME_POSTGRES_PASSWORD;
 const redisPassword = process.env.REDIS_PASSWORD;
 const fakeMode = process.env.OCTO_TEST_LLM_FAKE === 'true';
+const nodeEnv = process.env.NODE_ENV || 'production';
 
 function fail(message) {
   console.error(`compose-env-preflight: ${message}`);
@@ -110,6 +111,21 @@ if (!['http:', 'https:'].includes(litellmUrl.protocol)) {
 }
 if (litellmUrl.hostname !== 'litellm') {
   fail('LITELLM_BASE_URL must use the internal compose hostname litellm');
+}
+
+if (nodeEnv === 'production' && process.env.JWT_SIGNING_KEYS) {
+  const signingKeys = process.env.JWT_SIGNING_KEYS;
+  try {
+    const parsed = JSON.parse(signingKeys);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      fail('JWT_SIGNING_KEYS must be a non-empty JSON array when set');
+    }
+    if (parsed.filter((key) => key && key.isActive === true).length !== 1) {
+      fail('JWT_SIGNING_KEYS must contain exactly one active key when set');
+    }
+  } catch (error) {
+    fail(`JWT_SIGNING_KEYS must be valid JSON when set: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 if (!fakeMode && !process.env.OPENAI_API_KEY) {

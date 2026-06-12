@@ -31,12 +31,14 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-octo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: ${DATABASE_URL:-}
       REDIS_URL: ${REDIS_URL:-}
       RUNTIME_POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-octo_runtime}
       RUNTIME_POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-}
       RUNTIME_DATABASE_URL: ${RUNTIME_DATABASE_URL:-}
       JWT_SECRET: ${JWT_SECRET:-}
+      JWT_SIGNING_KEYS: ${JWT_SIGNING_KEYS:-}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       INTERNAL_SECRET: ${INTERNAL_SECRET:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -97,7 +99,7 @@ services:
         exec redis-server
         --appendonly yes
         --maxmemory 256mb
-        --maxmemory-policy allkeys-lru
+        --maxmemory-policy noeviction
         --requirepass "$${REDIS_PASSWORD}"
     volumes:
       - octo_redis_data:/data
@@ -149,12 +151,15 @@ services:
     container_name: octo-api
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: ${PORT:-3001}
+      # Keep the API container port fixed. Coolify may inject PORT=3000 for the
+      # public web service, but api healthchecks and internal DNS require 3001.
+      PORT: '3001'
       LOG_LEVEL: ${LOG_LEVEL:-info}
       DATABASE_URL: ${DATABASE_URL:-}
       DB_POOL_MAX: ${DB_POOL_MAX:-20}
       REDIS_URL: ${REDIS_URL:-}
       JWT_SECRET: ${JWT_SECRET:-}
+      JWT_SIGNING_KEYS: ${JWT_SIGNING_KEYS:-}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
@@ -170,7 +175,7 @@ services:
       BUILD_PHASE: ${BUILD_PHASE:-F1}
       BUILD_TIME: ${BUILD_TIME:-local}
     ports:
-      - '${PORT:-3001}:3001'
+      - '${API_PORT:-3001}:3001'
     depends_on:
       config-preflight:
         condition: service_completed_successfully
@@ -447,7 +452,13 @@ services:
     networks:
       - octonet
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:4000/health/readiness']
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          'import urllib.request; urllib.request.urlopen("http://localhost:4000/health/liveliness", timeout=3)',
+        ]
       interval: 30s
       timeout: 10s
       retries: 5
