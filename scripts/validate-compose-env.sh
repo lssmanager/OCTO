@@ -21,9 +21,6 @@ require_non_empty REDIS_URL
 require_non_empty RUNTIME_POSTGRES_PASSWORD
 require_non_empty RUNTIME_DATABASE_URL
 require_non_empty JWT_SECRET
-if [ "${NODE_ENV:-production}" = "production" ]; then
-  require_non_empty JWT_SIGNING_KEYS
-fi
 require_non_empty LITELLM_MASTER_KEY
 require_non_empty INTERNAL_SECRET
 
@@ -116,21 +113,18 @@ if (litellmUrl.hostname !== 'litellm') {
   fail('LITELLM_BASE_URL must use the internal compose hostname litellm');
 }
 
-if (nodeEnv === 'production') {
+if (nodeEnv === 'production' && process.env.JWT_SIGNING_KEYS) {
   const signingKeys = process.env.JWT_SIGNING_KEYS;
-  if (!signingKeys) {
-    fail('JWT_SIGNING_KEYS is required when NODE_ENV=production');
-  }
   try {
     const parsed = JSON.parse(signingKeys);
     if (!Array.isArray(parsed) || parsed.length === 0) {
-      fail('JWT_SIGNING_KEYS must be a non-empty JSON array');
+      fail('JWT_SIGNING_KEYS must be a non-empty JSON array when set');
     }
     if (parsed.filter((key) => key && key.isActive === true).length !== 1) {
-      fail('JWT_SIGNING_KEYS must contain exactly one active key');
+      fail('JWT_SIGNING_KEYS must contain exactly one active key when set');
     }
   } catch (error) {
-    fail(`JWT_SIGNING_KEYS must be valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+    fail(`JWT_SIGNING_KEYS must be valid JSON when set: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

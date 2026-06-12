@@ -28,9 +28,9 @@ start, the preflight container validates:
 - `RUNTIME_POSTGRES_USER` differs from `POSTGRES_USER`
 - `RUNTIME_POSTGRES_PASSWORD` differs from `POSTGRES_PASSWORD`
 - `REDIS_URL` is present, valid, points to `redis`, and uses the same password as `REDIS_PASSWORD`
-- `JWT_SECRET`, `JWT_SIGNING_KEYS`, `LITELLM_MASTER_KEY`, and `INTERNAL_SECRET` are present when `NODE_ENV=production`
-- `JWT_SIGNING_KEYS` is valid JSON, is a non-empty array, and contains exactly one active key
+- `JWT_SECRET`, `LITELLM_MASTER_KEY`, and `INTERNAL_SECRET` are present
 - `JWT_SECRET` and `INTERNAL_SECRET` are at least 32 characters
+- `JWT_SIGNING_KEYS`, when set in production, is valid JSON, is a non-empty array, and contains exactly one active key
 - `OPENAI_API_KEY` is present unless `OCTO_TEST_LLM_FAKE=true`
 - `LITELLM_BASE_URL` points to the internal compose hostname `litellm`
 
@@ -55,7 +55,7 @@ Variables before deploy:
 - `REDIS_PASSWORD`
 - `REDIS_URL`
 - `JWT_SECRET`
-- `JWT_SIGNING_KEYS`
+- `JWT_SIGNING_KEYS` (recommended; otherwise API falls back to strong `JWT_SECRET`)
 - `LITELLM_MASTER_KEY`
 - `INTERNAL_SECRET`
 - `OPENAI_API_KEY` unless fake LLM mode is intentional

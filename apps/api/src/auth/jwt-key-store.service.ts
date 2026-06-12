@@ -14,8 +14,6 @@ const DEFAULT_HS256_KID = 'dev-hs256';
 const MIN_PRODUCTION_HS256_SECRET_LENGTH = 32;
 const UNSAFE_PRODUCTION_SECRET_MESSAGE =
   'AUTH_CONFIG_INVALID: published or development JWT signing secrets must not be used in production';
-const PRODUCTION_FALLBACK_DISABLED_MESSAGE =
-  'AUTH_CONFIG_INVALID: JWT_SIGNING_KEYS is required in production; JWT_SECRET fallback is disabled';
 
 @Injectable()
 export class JwtKeyStoreService {
@@ -41,10 +39,6 @@ export class JwtKeyStoreService {
   private loadKeys(): JwtKeyConfig[] {
     const raw = process.env['JWT_SIGNING_KEYS'];
     if (raw) return JSON.parse(raw) as JwtKeyConfig[];
-
-    if (this.isProduction()) {
-      throw new Error(PRODUCTION_FALLBACK_DISABLED_MESSAGE);
-    }
 
     const secret = process.env['JWT_SECRET'];
     if (!secret) throw new Error('AUTH_CONFIG_INVALID: JWT_SIGNING_KEYS or JWT_SECRET is required');
