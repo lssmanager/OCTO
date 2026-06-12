@@ -151,7 +151,9 @@ services:
     container_name: octo-api
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: ${PORT:-3001}
+      # Keep the API container port fixed. Coolify may inject PORT=3000 for the
+      # public web service, but api healthchecks and internal DNS require 3001.
+      PORT: '3001'
       LOG_LEVEL: ${LOG_LEVEL:-info}
       DATABASE_URL: ${DATABASE_URL:-}
       DB_POOL_MAX: ${DB_POOL_MAX:-20}
@@ -173,7 +175,7 @@ services:
       BUILD_PHASE: ${BUILD_PHASE:-F1}
       BUILD_TIME: ${BUILD_TIME:-local}
     ports:
-      - '${PORT:-3001}:3001'
+      - '${API_PORT:-3001}:3001'
     depends_on:
       config-preflight:
         condition: service_completed_successfully
