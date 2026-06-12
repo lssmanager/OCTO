@@ -14,8 +14,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'path';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { readMigrationFiles, type MigrationConfig } from 'drizzle-orm/migrator';
 import postgres from 'postgres';
 
 const MAX_RETRIES = 10;
@@ -25,6 +24,8 @@ const RETRY_DELAY_MS = 3_000;
 // to this file's compiled location (packages/database/dist/migrate.js).
 const MIGRATIONS_FOLDER = path.join(__dirname, '..', 'migrations');
 const RUNTIME_TABLE_DRIFT_REPAIR_MIGRATION = '202606110002_repair_missing_f1_runtime_tables';
+const DRIZZLE_MIGRATIONS_SCHEMA = 'drizzle';
+const DRIZZLE_MIGRATIONS_TABLE = '__drizzle_migrations';
 
 const F1_RUNTIME_TABLES = [
   'approvals',
@@ -68,6 +69,88 @@ async function applyRuntimeTableDriftRepair(sql: ReturnType<typeof postgres>): P
 function assertIdentifier(value: string, label: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
     throw new Error(`${label} must be a PostgreSQL identifier (got ${value})`);
+  }
+}
+
+function quoteIdentifier(value: string): string {
+  assertIdentifier(value, 'PostgreSQL identifier');
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function migrationRequiresAutocommit(statements: string[]): boolean {
+  return statements.some((statement) => /\bALTER\s+TYPE\s+[^;]+\s+ADD\s+VALUE\b/i.test(statement));
+}
+
+async function migrateWithoutGlobalTransaction(
+  sql: ReturnType<typeof postgres>,
+  config: MigrationConfig
+): Promise<void> {
+  const migrationsSchema = config.migrationsSchema ?? DRIZZLE_MIGRATIONS_SCHEMA;
+  const migrationsTable = config.migrationsTable ?? DRIZZLE_MIGRATIONS_TABLE;
+  const quotedSchema = quoteIdentifier(migrationsSchema);
+  const quotedTable = quoteIdentifier(migrationsTable);
+  const migrations = readMigrationFiles(config);
+
+  await sql.unsafe(`CREATE SCHEMA IF NOT EXISTS ${quotedSchema}`);
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS ${quotedSchema}.${quotedTable} (
+      id SERIAL PRIMARY KEY,
+      hash text NOT NULL,
+      created_at bigint
+    )
+  `);
+
+  const dbMigrations = await sql.unsafe<{ id: number; hash: string; created_at: string }[]>(
+    `SELECT id, hash, created_at
+     FROM ${quotedSchema}.${quotedTable}
+     ORDER BY created_at DESC
+     LIMIT 1`
+  );
+  const lastDbMigration = dbMigrations[0];
+
+  for (const migration of migrations) {
+    if (lastDbMigration && Number(lastDbMigration.created_at) >= migration.folderMillis) {
+      continue;
+    }
+
+    const statements = migration.sql
+      .map((statement) => statement.trim())
+      .filter((statement) => statement.length > 0);
+    const requiresAutocommit = migrationRequiresAutocommit(statements);
+
+    log('info', 'migration_apply_start', {
+      createdAt: migration.folderMillis,
+      requiresAutocommit,
+      statements: statements.length,
+    });
+
+    if (requiresAutocommit) {
+      for (const statement of statements) {
+        await sql.unsafe(statement);
+      }
+
+      await sql.unsafe(
+        `INSERT INTO ${quotedSchema}.${quotedTable} ("hash", "created_at") VALUES ($1, $2)`,
+        [migration.hash, migration.folderMillis]
+      );
+    } else {
+      await sql.begin(async (tx) => {
+        for (const statement of statements) {
+          await tx.unsafe(statement);
+        }
+
+        await tx.unsafe(
+          `INSERT INTO ${quotedSchema}.${quotedTable} ("hash", "created_at") VALUES ($1, $2)`,
+          [migration.hash, migration.folderMillis]
+        );
+      });
+    }
+
+    log('info', 'migration_apply_complete', {
+      createdAt: migration.folderMillis,
+      requiresAutocommit,
+      statements: statements.length,
+    });
   }
 }
 
@@ -354,8 +437,7 @@ async function run(): Promise<void> {
 
   // ── Run migrations ────────────────────────────────────────────────────────
   try {
-    const db = drizzle(sql);
-    await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+    await migrateWithoutGlobalTransaction(sql, { migrationsFolder: MIGRATIONS_FOLDER });
     log('info', 'migrations_complete', { migrationsFolder: MIGRATIONS_FOLDER });
     await bootstrapRuntimeRole(sql);
   } catch (err) {
