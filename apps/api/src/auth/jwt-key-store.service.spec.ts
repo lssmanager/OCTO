@@ -26,12 +26,20 @@ describe('JwtKeyStoreService', () => {
     expect(keyStore.getVerificationKey('dev-hs256', 'HS256')).toBeNull();
   });
 
-  it('rejects JWT_SECRET fallback mode entirely in production', () => {
+  it('uses a strong JWT_SECRET fallback in production when JWT_SIGNING_KEYS is absent', () => {
     process.env.NODE_ENV = 'production';
     delete process.env.JWT_SIGNING_KEYS;
     process.env.JWT_SECRET = 'test-secret-test-secret-test-secret';
+    process.env.JWT_KID = 'prod-fallback-hs256';
 
-    expect(() => new JwtKeyStoreService()).toThrow(/JWT_SIGNING_KEYS is required in production/);
+    const keyStore = new JwtKeyStoreService();
+
+    expect(keyStore.getVerificationKey('prod-fallback-hs256', 'HS256')).toMatchObject({
+      kid: 'prod-fallback-hs256',
+      algorithm: 'HS256',
+      isActive: true,
+      secret: 'test-secret-test-secret-test-secret',
+    });
   });
 
   it('accepts explicit production JWT_SIGNING_KEYS with an active HS256 key', () => {

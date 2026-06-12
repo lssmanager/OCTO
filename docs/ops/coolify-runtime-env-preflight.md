@@ -30,6 +30,7 @@ start, the preflight container validates:
 - `REDIS_URL` is present, valid, points to `redis`, and uses the same password as `REDIS_PASSWORD`
 - `JWT_SECRET`, `LITELLM_MASTER_KEY`, and `INTERNAL_SECRET` are present
 - `JWT_SECRET` and `INTERNAL_SECRET` are at least 32 characters
+- `JWT_SIGNING_KEYS`, when set in production, is valid JSON, is a non-empty array, and contains exactly one active key
 - `OPENAI_API_KEY` is present unless `OCTO_TEST_LLM_FAKE=true`
 - `LITELLM_BASE_URL` points to the internal compose hostname `litellm`
 
