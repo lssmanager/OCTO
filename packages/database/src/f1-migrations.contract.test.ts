@@ -329,4 +329,21 @@ describe('F1 database migrations contract', () => {
       expect(sql).not.toMatch(new RegExp(`GRANT\\s+[^;]*\\b${table}\\b`, 'i'));
     }
   });
+
+  it('repairs legacy worker heartbeat enum values for all F1 workers', () => {
+    const repairSql = readMigration('202606110002_repair_missing_f1_runtime_tables.sql');
+    const enumRepairSql = readMigration('202606120001_repair_worker_heartbeat_enum_values.sql');
+
+    for (const workerType of [
+      'runtime-worker',
+      'scheduler-worker',
+      'reclaimer-worker',
+      'outbox-publisher-worker',
+    ]) {
+      expect(repairSql).toContain(`ALTER TYPE worker_type ADD VALUE IF NOT EXISTS '${workerType}'`);
+      expect(enumRepairSql).toContain(
+        `ALTER TYPE worker_type ADD VALUE IF NOT EXISTS '${workerType}'`
+      );
+    }
+  });
 });
