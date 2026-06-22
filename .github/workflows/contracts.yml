@@ -18,7 +18,7 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
       TURBO_TELEMETRY_DISABLED: ${{ env.TURBO_TELEMETRY_DISABLED }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
