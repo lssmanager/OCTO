@@ -330,6 +330,15 @@ describe('F1 database migrations contract', () => {
     }
   });
 
+  it('runs SQL migrations without a global transaction so PostgreSQL enum repairs can deploy', () => {
+    const migrateSource = readFileSync(join(__dirname, 'migrate.ts'), 'utf8');
+
+    expect(migrateSource).toContain('async function migrateWithoutGlobalTransaction');
+    expect(migrateSource).toContain('readMigrationFiles(config)');
+    expect(migrateSource).toContain('migrationRequiresAutocommit');
+    expect(migrateSource).not.toContain('drizzle-orm/postgres-js/migrator');
+  });
+
   it('repairs legacy worker heartbeat enum values for all F1 workers', () => {
     const repairSql = readMigration('202606110002_repair_missing_f1_runtime_tables.sql');
     const enumRepairSql = readMigration('202606120001_repair_worker_heartbeat_enum_values.sql');
