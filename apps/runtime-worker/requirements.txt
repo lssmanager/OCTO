@@ -9,7 +9,7 @@ python-multipart==0.0.32
 
 # ── Config & validation ─────────────────────────────────────────────
 pydantic==2.13.4
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2
 
 # ── Structured logging ─────────────────────────────────────────────
 structlog==26.1.0
