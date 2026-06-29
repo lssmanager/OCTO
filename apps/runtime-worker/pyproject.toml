@@ -20,7 +20,7 @@ dependencies = [
     "opentelemetry-sdk==1.42.1",
     "opentelemetry-exporter-otlp-proto-http==1.42.1",
     "opentelemetry-instrumentation-fastapi==0.63b1",
-    "opentelemetry-instrumentation-httpx==0.63b1",
+    "opentelemetry-instrumentation-httpx==0.64b0",
     "python-multipart==0.0.32",
     "jsonschema==4.26.0",
 ]
