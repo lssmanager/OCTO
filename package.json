@@ -67,7 +67,7 @@
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.60.1",
     "@typescript-eslint/parser": "8.60.1",
-    "@vitest/coverage-v8": "4.1.8",
+    "@vitest/coverage-v8": "4.1.10",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "cross-env": "10.1.0",
