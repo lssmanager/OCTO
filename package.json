@@ -67,7 +67,7 @@
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "8.60.1",
     "@typescript-eslint/parser": "8.60.1",
-    "@vitest/coverage-v8": "4.1.8",
+    "@vitest/coverage-v8": "4.1.10",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "cross-env": "10.1.0",
@@ -84,7 +84,7 @@
     "tsx": "4.22.4",
     "turbo": "2.9.16",
     "typescript": "5.9.3",
-    "vitest": "4.1.8",
+    "vitest": "4.1.10",
     "zod-to-json-schema": "3.25.2"
   },
   "engines": {
