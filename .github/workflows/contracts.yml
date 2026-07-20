@@ -30,7 +30,7 @@ jobs:
         run: HUSKY=0 pnpm install --frozen-lockfile
       - name: F1 tooling reproducibility gate
         run: pnpm f1:tooling-gate
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install Python deps
