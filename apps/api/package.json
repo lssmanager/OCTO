@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@bull-board/api": "7.2.1",
-    "@bull-board/fastify": "7.2.1",
+    "@bull-board/fastify": "8.0.0",
     "@bull-board/nestjs": "7.1.5",
     "@nestjs/common": "11.1.24",
     "@nestjs/config": "4.0.4",
